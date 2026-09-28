@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import fictif from '../../exemples/profil-fictif.json';
 import { creerFausseBase } from '../aides/fausseBase.js';
 import { demarrer } from '../../src/interface/app.js';
@@ -84,5 +84,16 @@ describe('demarrer', () => {
     Object.defineProperty(evt, 'dataTransfer', { value: { types: ['Files'] } });
     document.dispatchEvent(evt);
     expect(evt.defaultPrevented).toBe(true);
+  });
+
+  it('transmet la capacité sample au contrôleur', async () => {
+    const db = creerFausseBase();
+    const sample = Object.assign(async () => ({}), { json: vi.fn(async () => ({})), limits: async () => ({}) });
+    const racine = document.createElement('div');
+    const app = await demarrer(racine, { use: async nom => (nom === 'db' ? db : nom === 'sample' ? sample : null) }, { horloge });
+    await app.actions.importerProfil(JSON.stringify(fictif));
+    await app.actions.creerFiche({ format: 'reel', date_heure: '2026-09-28T10:00:00.000Z' });
+    await app.actions.evaluerFiche(app.etat.lire().ficheOuverte);
+    expect(sample.json).toHaveBeenCalledTimes(1);
   });
 });

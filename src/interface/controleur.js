@@ -1,7 +1,12 @@
 import {
   nouvelId, nouvelleFiche, modifierFiche as appliquer, peutPasserA, changerStatut as appliquerStatut, deplacerFiche as deplacer,
+  appliquerEvaluation,
 } from '../logique/fiche.js';
 import { ajouterJours, ajouterMois, debutJour, debutSemaine, semainesDuMois } from '../logique/dates.js';
+import { verifierRegles } from '../logique/regles-score.js';
+import { composerScore } from '../logique/score.js';
+import { fichesDeLaSemaine } from '../logique/controle.js';
+import { construirePrompt, validerReponse, messageErreurSample, CODES_INDISPONIBLES } from '../claude/evaluation.js';
 
 const MESSAGES_TELEVERSEMENT = {
   too_large: 'Fichier trop lourd (20 Mo au maximum).',
@@ -30,7 +35,15 @@ export function fusionnerInstantane(recues, locales, estEnAttente) {
   return resultat;
 }
 
-export function creerControleur({ etat, depot, enregistreur, assets, horloge, idAleatoire = nouvelId }) {
+async function chargerImageParDefaut(id) {
+  const reponse = await fetch(`/_blob/${id}`);
+  if (!reponse.ok) throw new Error(`Visuel introuvable (${reponse.status})`);
+  return reponse.blob();
+}
+
+const INDISPONIBLE = { ok: false, raison: 'L’évaluation par Claude n’est pas disponible dans cette vue.', indisponible: true };
+
+export function creerControleur({ etat, depot, enregistreur, assets, horloge, idAleatoire = nouvelId, sample = null, chargerImage = chargerImageParDefaut }) {
   const trouver = id => etat.lire().fiches.find(f => f.id === id);
   const fuseau = () => etat.lire().profil.regles_studio.fuseau;
   const remplacer = f => etat.modifier({ fiches: etat.lire().fiches.map(x => (x.id === f.id ? f : x)) });
@@ -62,10 +75,68 @@ export function creerControleur({ etat, depot, enregistreur, assets, horloge, id
     etat.modifier({ vue, ancre });
   }
 
+  const evaluationsEnCours = new Set();
+
+  async function evaluerContenu(fiche, { signal, fichesSemaine = [] } = {}) {
+    if (!sample) return INDISPONIBLE;
+    const { profil } = etat.lire();
+    const verification = verifierRegles(fiche, profil.regles_studio);
+    let images;
+    if (fiche.visuel && fiche.visuel_type === 'image') {
+      try {
+        const limites = await sample.limits();
+        if (limites?.images) images = await chargerImage(fiche.visuel);
+      } catch {
+        images = undefined;
+      }
+    }
+    const prompt = construirePrompt({ fiche, profil, verification, fichesSemaine, avecImage: !!images });
+    let brute;
+    try {
+      brute = await sample.json(prompt, images ? { signal, images } : { signal });
+    } catch (e) {
+      if (e?.code === 'cancelled') return { ok: false, annule: true };
+      return { ok: false, raison: messageErreurSample(e), indisponible: CODES_INDISPONIBLES.has(e?.code) };
+    }
+    const reponse = validerReponse(brute);
+    if (!reponse.ok) return { ok: false, raison: 'La réponse de Claude était incomplète : réessaie. Rien n’a été modifié.' };
+    const score = composerScore({ fiche, verification, jugement: reponse.jugement, versionProfil: profil.version, maintenant: horloge() });
+    return { ok: true, score, jugement: reponse.jugement };
+  }
+
+  async function evaluerFiche(id, { signal } = {}) {
+    if (!sample) return INDISPONIBLE;
+    if (evaluationsEnCours.has(id)) return { ok: false, raison: 'Une évaluation est déjà en cours pour cette fiche.' };
+    const f = trouver(id);
+    if (!f) return { ok: false, raison: 'Fiche introuvable.' };
+    evaluationsEnCours.add(id);
+    try {
+      const { fiches, profil } = etat.lire();
+      const fz = profil.regles_studio.fuseau;
+      const semaine = fichesDeLaSemaine(fiches, debutSemaine(f.date_heure, fz), fz);
+      const resultat = await evaluerContenu(f, { signal, fichesSemaine: semaine });
+      if (!resultat.ok) return resultat;
+      const actuelle = trouver(id);
+      if (!actuelle) return { ok: false, raison: 'La fiche a été supprimée pendant l’évaluation.' };
+      const g = appliquerEvaluation(actuelle, {
+        score: resultat.score,
+        variantes: resultat.jugement.captions,
+        suggestions: { accroches: resultat.jugement.accroches, hashtags: resultat.jugement.hashtags },
+        recommandations: resultat.jugement.recommandations,
+      }, horloge());
+      remplacer(g);
+      await ecrireMaintenant(g);
+      return { ok: true, fiche: g };
+    } finally {
+      evaluationsEnCours.delete(id);
+    }
+  }
+
   return {
     ouvrirFiche: id => etat.modifier({ ficheOuverte: id, erreur: null }),
     fermerPanneau,
     modifierFiche,
+    evaluerFiche,
 
     async creerFiche({ format, date_heure }) {
       await fermerPanneau();
