@@ -9,6 +9,7 @@ const actionsFactices = () => ({
   modifierFiche: vi.fn(), fermerPanneau: vi.fn(), supprimerFiche: vi.fn(),
   changerStatut: vi.fn(async () => ({ ok: false, raison: 'Ajoute un visuel avant de valider.' })),
   televerserVisuel: vi.fn(async () => ({ ok: true, id: 'as1', type: 'image' })),
+  evaluationDisponible: vi.fn(() => true),
 });
 const saisir = (el, valeur, evenement = 'input') => { el.value = valeur; el.dispatchEvent(new Event(evenement, { bubbles: true })); };
 const bouton = (racine, texte) => [...racine.querySelectorAll('button')].find(b => b.textContent === texte);
@@ -138,6 +139,12 @@ describe('évaluation dans le panneau', () => {
 
   it('masque « Évaluer » sans la capacité sample', () => {
     const p = panneauFiche(fiche(), fictif, actionsFactices(), { assets: true, sample: false });
+    expect(bouton(p, 'Évaluer')).toBeUndefined();
+  });
+
+  it('masque « Évaluer » si l’évaluation a été mémorisée comme indisponible', () => {
+    const actions = { ...actionsFactices(), evaluationDisponible: vi.fn(() => false) };
+    const p = panneauFiche(fiche(), fictif, actions, { assets: true, sample: true });
     expect(bouton(p, 'Évaluer')).toBeUndefined();
   });
 

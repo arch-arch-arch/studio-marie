@@ -18,7 +18,7 @@ export function panneauFiche(fiche, profil, actions, capacites) {
   const afficher = texte => { message.replaceChildren(texte ?? ''); };
   let elementStatut = null;
   let elementScore = null;
-  let evaluationDisponible = capacites.sample === true;
+  let evaluationDisponible = capacites.sample === true && (actions.evaluationDisponible?.() ?? true);
   let controleurEvaluation = null;
   const remplacerScore = () => {
     const nouveau = sectionScore();

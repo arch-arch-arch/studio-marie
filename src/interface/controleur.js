@@ -77,9 +77,10 @@ export function creerControleur({ etat, depot, enregistreur, assets, horloge, id
   }
 
   const evaluationsEnCours = new Set();
+  let evaluationIndisponible = false;
 
   async function evaluerContenu(fiche, { signal, fichesSemaine = [] } = {}) {
-    if (!sample) return INDISPONIBLE;
+    if (!sample) { evaluationIndisponible = true; return INDISPONIBLE; }
     const { profil } = etat.lire();
     const verification = verifierRegles(fiche, profil.regles_studio);
     let images;
@@ -103,7 +104,9 @@ export function creerControleur({ etat, depot, enregistreur, assets, horloge, id
       brute = await sample.json(prompt, images ? { signal, images } : { signal });
     } catch (e) {
       if (e?.code === 'cancelled') return { ok: false, annule: true };
-      return { ok: false, raison: messageErreurSample(e), indisponible: CODES_INDISPONIBLES.has(e?.code) };
+      const indisponible = CODES_INDISPONIBLES.has(e?.code);
+      if (indisponible) evaluationIndisponible = true;
+      return { ok: false, raison: messageErreurSample(e), indisponible };
     }
     const reponse = validerReponse(brute);
     if (!reponse.ok) return { ok: false, raison: 'La réponse de Claude était incomplète : réessaie. Rien n’a été modifié.' };
@@ -216,6 +219,7 @@ export function creerControleur({ etat, depot, enregistreur, assets, horloge, id
     fermerPanneau,
     modifierFiche,
     evaluerFiche,
+    evaluationDisponible: () => !evaluationIndisponible,
     importerReference,
     verifierReference,
     arreterReference: () => controleurReference?.abort(),

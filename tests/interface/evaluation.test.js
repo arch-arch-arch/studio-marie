@@ -82,7 +82,9 @@ describe('evaluerFiche', () => {
 
   it('signale une évaluation indisponible', async () => {
     const { actions } = await monter({ sample: fauxSample(async () => { throw { code: 'not_granted', message: 'x' }; }) });
+    expect(actions.evaluationDisponible()).toBe(true);
     expect(await actions.evaluerFiche('f1')).toMatchObject({ ok: false, indisponible: true });
+    expect(actions.evaluationDisponible()).toBe(false);
     const sansSample = await monter({ sample: null });
     expect(await sansSample.actions.evaluerFiche('f1')).toEqual({ ok: false, raison: 'L’évaluation par Claude n’est pas disponible dans cette vue.', indisponible: true });
   });
