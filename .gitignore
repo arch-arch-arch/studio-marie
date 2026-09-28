@@ -1,0 +1,22 @@
+# Secrets (tokens Meta / Instagram)
+.env
+.env.*
+*.key
+secrets/
+
+# Node / Python
+node_modules/
+__pycache__/
+*.pyc
+.venv/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Médias bruts (ne jamais versionner les contenus)
+media/
+
+# Données réelles de la créatrice (ne jamais versionner)
+*profil_marque*.json
+data/

@@ -1,0 +1,46 @@
+# Studio Contenu
+
+Outil de planification, de génération et de pilotage de contenu Instagram.
+
+## Objectif
+
+Aider la créatrice à savoir **quoi poster** et à **organiser et publier** avec régularité,
+au service de trois objectifs : tunnel vers ses plateformes, croissance d'audience
+et image de marque.
+
+## Approche retenue : hybride, puis automatique
+
+**Phase 1, hybride (en cours de conception)**
+
+- **Studio Contenu** : page web privée (hébergée sur claude.ai) avec des données partagées.
+  - Profil de marque (persona, niche, piliers, ton, limites Instagram)
+  - Calendrier jour / semaine / mois, avec les statuts Idée → Brouillon → Validé → Programmé → Publié
+  - Fiche contenu : caption, hashtags, recommandations et score sur 100
+    (Tunnel · Croissance · Marque · Conformité Instagram)
+  - Bulletin tendances hebdomadaire
+- **Veille hebdo** : tâche Claude programmée qui recherche les tendances Instagram
+  et dépose des idées en brouillon dans le calendrier.
+- **Publication** : manuelle via Meta Business Suite.
+
+**Phase 2, automatique (plus tard)**
+
+- `publisher/` : module qui publie les fiches « Validé » via l'API officielle
+  Instagram (compte Créateur).
+
+## Structure
+
+```
+docs/superpowers/specs/   Spécifications de conception (design docs)
+publisher/                Phase 2 : module de publication automatique
+```
+
+## Statut
+
+- [x] Choix de l'approche (hybride, puis automatique)
+- [x] Architecture d'ensemble validée
+- [ ] Conception détaillée (données, score, veille, interface)
+- [ ] Spec écrite et validée
+- [ ] Plan d'implémentation
+- [ ] Construction de la phase 1
+
+> ⚠️ Dépôt **privé** : ne jamais y commiter de tokens, de mots de passe ni de médias.
