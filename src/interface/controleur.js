@@ -152,11 +152,15 @@ export function creerControleur({ etat, depot, enregistreur, assets, horloge, id
     if (!verification.ok) return verification;
     try {
       await depot.remplacerReference(verification.items, etat.lire().reference ?? []);
-      await depot.effacerResultatReference();
-      return { ok: true, erreurs: [], nombre: verification.items.length };
     } catch {
       return { ok: false, erreurs: ['L’import a échoué : la base du studio ne répond pas. Réessaie dans un instant.'] };
     }
+    try {
+      await depot.effacerResultatReference();
+    } catch {
+      return { ok: true, erreurs: ['Jeu importé, mais l’ancien bilan n’a pas pu être effacé.'], nombre: verification.items.length };
+    }
+    return { ok: true, erreurs: [], nombre: verification.items.length };
   }
 
   async function verifierReference() {

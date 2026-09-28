@@ -110,6 +110,18 @@ describe('jeu de référence (contrôleur)', () => {
     expect(etat.lire().erreur).toBeNull();
   });
 
+  it('importe quand même si l’ancien bilan n’a pas pu être effacé, avec un message dédié', async () => {
+    const db = creerFausseBase();
+    const depot = { ...creerDepot(db), effacerResultatReference: async () => { throw new Error('boom'); } };
+    const etat = creerEtat({ profil: { ...fictif, version: 1 }, fiches: [], vue: 'profil', ancre: T, ficheOuverte: null, erreur: null, sauvegarde: 'ok', reference: [], resultatReference: null, verificationReference: null });
+    depot.ecouterReference(reference => etat.modifier({ reference }));
+    const actions = creerControleur({ etat, depot, enregistreur: creerEnregistreur(f => depot.enregistrerFiche(f), 600), assets: null, horloge: () => T, sample: null });
+    expect(await actions.importerReference(JSON.stringify(jeu))).toEqual({
+      ok: true, erreurs: ['Jeu importé, mais l’ancien bilan n’a pas pu être effacé.'], nombre: 6,
+    });
+    expect(etat.lire().reference).toHaveLength(6);
+  });
+
   it('affiche un message clair et n’enregistre rien si l’évaluation lève une exception inattendue', async () => {
     const sample = Object.assign(vi.fn(), { limits: async () => ({}), json: vi.fn(async () => note(9)) });
     const { db, etat, actions } = monter(sample);
@@ -160,6 +172,15 @@ describe('jeu de référence (vue Profil)', () => {
     await vi.waitFor(() => expect(a.importerReference).toHaveBeenCalledWith(JSON.stringify(jeu)));
   });
 
+  it('affiche les erreurs sous le message de réussite quand l’import réussit avec un avertissement', async () => {
+    const a = { ...actions(), importerReference: vi.fn(async () => ({ ok: true, erreurs: ['Jeu importé, mais l’ancien bilan n’a pas pu être effacé.'], nombre: 6 })) };
+    const el = vueProfil(etatVue(), a, { sample: true });
+    el.querySelector('#reference-json').value = JSON.stringify(jeu);
+    [...el.querySelectorAll('button')].find(b => b.textContent === 'Importer ce jeu').click();
+    await vi.waitFor(() => expect(el.textContent).toContain('6 contenus importés.'));
+    expect(el.textContent).toContain('Jeu importé, mais l’ancien bilan n’a pas pu être effacé.');
+  });
+
   it('désactive « Importer ce jeu » pendant une vérification', () => {
     const el = vueProfil(etatVue({ reference: items, verificationReference: { fait: 1, total: 6 } }), actions(), { sample: true });
     const importer = [...el.querySelectorAll('button')].find(b => b.textContent === 'Importer ce jeu');
@@ -195,5 +216,14 @@ describe('jeu de référence (stabilité de la vue Profil dans l’application)'
     zone.value = JSON.stringify(jeu);
     [...racine.querySelectorAll('button')].find(b => b.textContent === 'Importer ce jeu').click();
     await vi.waitFor(() => expect(racine.textContent).toContain('6 contenus importés.'));
+  });
+
+  it('garde le profil collé intact quand une fiche arrive pendant qu’on est sur l’onglet Profil', async () => {
+    const { db, racine } = await demarrerAvecProfil();
+    const zone = racine.querySelector('#profil-json');
+    zone.value = 'texte collé dans le profil';
+    await db.doc('fiches/x').set({ date_heure: T, format: 'reel' });
+    expect(racine.querySelector('#profil-json')).toBe(zone);
+    expect(zone.value).toBe('texte collé dans le profil');
   });
 });

@@ -65,7 +65,10 @@ export function creerRendu(racine, actions, capacites, horloge) {
     tete.replaceChildren(...barre(e, actions));
     const e2 = { ...e, maintenant: horloge() };
     const estVueProfil = !e.profil || e.vue === 'profil';
-    if (memo.profil !== e.profil || memo.fiches !== e.fiches || memo.vue !== e.vue || memo.ancre !== e.ancre) {
+    const reconstructionRequise = estVueProfil
+      ? (memo.profil !== e.profil || memo.vue !== e.vue || memo.ancre !== e.ancre)
+      : (memo.profil !== e.profil || memo.fiches !== e.fiches || memo.vue !== e.vue || memo.ancre !== e.ancre);
+    if (reconstructionRequise) {
       elementVue = contenuVue(e2, actions, capacites);
       vue.replaceChildren(elementVue);
     } else if (estVueProfil && (memo.reference !== e.reference || memo.resultatReference !== e.resultatReference || memo.verificationReference !== e.verificationReference)) {

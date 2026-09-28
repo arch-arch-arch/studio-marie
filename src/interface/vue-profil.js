@@ -44,8 +44,12 @@ function sectionReference(initial, actions, capacites) {
     erreurs.replaceChildren();
     message.textContent = '';
     const r = await actions.importerReference(zone.value);
-    if (!r.ok) erreurs.replaceChildren(...r.erreurs.map(m => h('li', {}, m)));
-    else message.textContent = `${r.nombre} contenus importés.`;
+    if (!r.ok) {
+      erreurs.replaceChildren(...r.erreurs.map(m => h('li', {}, m)));
+      return;
+    }
+    message.textContent = `${r.nombre} contenus importés.`;
+    if (r.erreurs.length) erreurs.replaceChildren(...r.erreurs.map(m => h('li', {}, m)));
   }
 
   function mettreAJour({ reference, resultatReference, verificationReference }) {
