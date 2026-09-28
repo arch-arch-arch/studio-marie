@@ -40,4 +40,8 @@ describe('creneauxLibres', () => {
     const reels = ['2026-09-30', '2026-10-02', '2026-10-03', '2026-10-04'].map(j => fiche('reel', j, '18:00'));
     expect(creneauxLibres(reels, R, LUNDI).map(c => c.format)).toEqual(['carrousel', 'carrousel']);
   });
+  it('écarte les créneaux déjà passés quand on donne l’heure actuelle', () => {
+    expect(creneauxLibres([], R, LUNDI, '2026-10-01T14:00:00.000Z')).toEqual([]);
+    expect(creneauxLibres([], R, LUNDI, '2026-09-29T09:59:00.000Z').map(c => c.date_heure)).toEqual(['2026-09-29T10:00:00.000Z', '2026-10-01T10:00:00.000Z']);
+  });
 });
