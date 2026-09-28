@@ -30,17 +30,28 @@ et image de marque.
 ## Structure
 
 ```
-docs/superpowers/specs/   Spécifications de conception (design docs)
-publisher/                Phase 2 : module de publication automatique
+docs/superpowers/specs/   Spécifications de conception
+docs/superpowers/plans/   Plans d'implémentation
+exemples/                 Profil fictif et fixtures (aucune donnée réelle)
+scripts/build.mjs         Assemble dist/studio.html
+src/logique/              Règles métier pures (testées)
+src/donnees/              Accès à la base du studio
+src/interface/            Vues et panneau de fiche
+tests/                    Tests Vitest
+publisher/                Phase 2 : publication automatique
 ```
+
+Commandes : `npm test` (tests) et `npm run build` (page à publier).
 
 ## Statut
 
 - [x] Choix de l'approche (hybride, puis automatique)
 - [x] Architecture d'ensemble validée
-- [ ] Conception détaillée (données, score, veille, interface)
-- [ ] Spec écrite et validée
-- [ ] Plan d'implémentation
-- [ ] Construction de la phase 1
+- [x] Conception détaillée (données, score, veille, interface)
+- [x] Spec écrite et validée
+- [x] Plan 1 : fondations et calendrier (studio de test publié)
+- [ ] Plan 2 : évaluation par Claude et studio réel
+- [ ] Plan 3 : veille hebdo
+- [ ] Plan 4 : relevés de stats et tableau de bord
 
 > ⚠️ Dépôt **privé** : ne jamais y commiter de tokens, de mots de passe ni de médias.

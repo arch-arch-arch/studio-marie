@@ -148,16 +148,16 @@ Tout est dans la base partagée du studio. Les dates sont stockées en UTC et af
 
 | Collection | Contenu |
 |---|---|
-| `profil` | Un seul document : le profil de marque importé (JSON) et son numéro de `version`. Chaque score garde la version utilisée. |
+| `profil` | Document `profil/courant` : le profil de marque importé (JSON, avec un bloc `regles_studio` lisible par la machine, voir `exemples/profil-fictif.json`) et son numéro de `version`. Les versions précédentes sont archivées dans `profil_archives/v<n>`. Chaque score garde la version utilisée. |
 | `fiches` | Un document par contenu (voir le détail ci-dessous). |
 | `bulletins` | Un document par semaine ISO : rétrospective, tendances, alertes, identifiants des idées créées, sources, erreurs, date de génération. |
 | `stats_contenu` | Deux relevés par fiche publiée (**48 h** et **7 jours**) : vues, nouveaux abonnés, partages et envois, sauvegardes, visites du profil, clics sur la porte. Le taux d'abonnés par vue est calculé, pas saisi. |
 | `releves_compte` | Un relevé par semaine, le dimanche : abonnés, vues moyennes des stories, clics sur la porte. La croissance nette est calculée. |
 
 **Champs d'une fiche :**
-- **type de contenu** : `format`, `pilier`, `format_valide`, `role_caption`, `cta` (booléen), `ragebait` (booléen) ;
+- **type de contenu** : `format`, `pilier`, `format_valide`, `role_caption`, `cta` (booléen), `ragebait` (booléen), `porte` (booléen, story qui mène à la porte) ;
 - **planification** : `date_heure` (UTC) et `statut` : Idée → Brouillon → Validé → Programmé → Publié ;
-- **contenu** : `visuel` (identifiant du fichier stocké), `accroche`, `caption`, `variantes`, `hashtags`, `geotag` (niveau ville) ;
+- **contenu** : `visuel` (identifiant du fichier stocké), `visuel_type` (`image` ou `video`), `accroche`, `caption`, `variantes`, `hashtags`, `geotag` (niveau ville) ;
 - **score** : `total`, `criteres`, `conformite` (état et causes), `version_profil`, `evalue_le`, `empreinte` ;
 - **recommandations** ;
 - **origine** : `manuelle`, `veille` ou `banque`, avec l'identifiant du bulletin quand l'idée vient de la veille ;

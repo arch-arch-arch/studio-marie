@@ -20,3 +20,10 @@ media/
 # Données réelles de la créatrice (ne jamais versionner)
 *profil_marque*.json
 data/
+
+# Espace de travail des sous-agents (non versionné)
+.superpowers/
+
+# Build et adresses locales des studios
+dist/
+.studio.local.json
