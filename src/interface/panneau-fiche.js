@@ -15,16 +15,18 @@ export function panneauFiche(fiche, profil, actions, capacites) {
   const message = h('p', { class: 'panneau-message', role: 'status' });
   const afficher = texte => { message.replaceChildren(texte ?? ''); };
   let elementStatut = null;
+  const appliquerStatutRenvoye = statut => {
+    if (statut == null || statut === brouillon.statut) return;
+    brouillon = { ...brouillon, statut };
+    const nouvelElement = sectionStatut();
+    elementStatut.replaceWith(nouvelElement);
+    elementStatut = nouvelElement;
+    afficher('La fiche est repassée en Brouillon : réévalue-la.');
+  };
   const changer = changements => {
     brouillon = { ...brouillon, ...changements };
     const resultat = actions.modifierFiche(id, changements);
-    if (resultat != null && resultat.statut !== brouillon.statut) {
-      brouillon = { ...brouillon, statut: resultat.statut };
-      const nouvelElement = sectionStatut();
-      elementStatut.replaceWith(nouvelElement);
-      elementStatut = nouvelElement;
-      afficher('La fiche est repassée en Brouillon : réévalue-la.');
-    }
+    if (resultat != null) appliquerStatutRenvoye(resultat.statut);
   };
 
   const champ = (libelle, controle) => h('label', { class: 'champ' }, h('span', { class: 'champ-libelle' }, libelle), controle);
@@ -55,6 +57,7 @@ export function panneauFiche(fiche, profil, actions, capacites) {
     brouillon = { ...brouillon, visuel: resultat.id, visuel_type: resultat.type };
     construire();
     afficher('Visuel ajouté.');
+    appliquerStatutRenvoye(resultat.statut);
   }
 
   const sectionStatut = () => h('div', { class: 'statuts', role: 'group', 'aria-label': 'Statut' },

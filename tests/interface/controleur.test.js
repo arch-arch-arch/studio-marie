@@ -101,8 +101,17 @@ describe('creerControleur', () => {
     const assets = { upload: vi.fn(async () => ({ id: 'asset1', url: '/_blob/asset1' })) };
     const avec = monter({ assets });
     await avec.actions.creerFiche({ format: 'reel', date_heure: '2026-09-28T10:00:00.000Z' });
-    expect(await avec.actions.televerserVisuel('f1', { type: 'video/mp4' })).toEqual({ ok: true, id: 'asset1', type: 'video' });
+    expect(await avec.actions.televerserVisuel('f1', { type: 'video/mp4' })).toEqual({ ok: true, id: 'asset1', type: 'video', statut: 'idee' });
     expect(avec.etat.lire().fiches[0]).toMatchObject({ visuel: 'asset1', visuel_type: 'video' });
+  });
+
+  it('signale qu’une fiche supprimée entre-temps ne peut plus recevoir de visuel', async () => {
+    const assets = { upload: vi.fn(async () => ({ id: 'asset1', url: '/_blob/asset1' })) };
+    const avec = monter({ assets });
+    await avec.actions.creerFiche({ format: 'reel', date_heure: '2026-09-28T10:00:00.000Z' });
+    await avec.actions.supprimerFiche('f1');
+    expect(await avec.actions.televerserVisuel('f1', { type: 'video/mp4' }))
+      .toEqual({ ok: false, raison: 'La fiche n’existe plus : le visuel n’a pas été rattaché.' });
   });
 
   it('importe un profil depuis du texte et signale le JSON invalide', async () => {

@@ -104,8 +104,9 @@ export function creerControleur({ etat, depot, enregistreur, assets, horloge, id
       try {
         const resultat = await assets.upload(fichier);
         const type = fichier.type?.startsWith('video/') ? 'video' : 'image';
-        modifierFiche(id, { visuel: resultat.id, visuel_type: type });
-        return { ok: true, id: resultat.id, type };
+        const g = modifierFiche(id, { visuel: resultat.id, visuel_type: type });
+        if (g == null) return { ok: false, raison: 'La fiche n’existe plus : le visuel n’a pas été rattaché.' };
+        return { ok: true, id: resultat.id, type, statut: g.statut };
       } catch (e) {
         return { ok: false, raison: `Échec du téléversement (${e?.code ?? 'erreur inconnue'}).` };
       }

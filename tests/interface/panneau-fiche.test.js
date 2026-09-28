@@ -82,6 +82,21 @@ describe('panneauFiche', () => {
     expect(actions.televerserVisuel).not.toHaveBeenCalled();
   });
 
+  it('rétrograde l’affichage en Brouillon quand le téléversement d’un visuel change le statut en base', async () => {
+    const f = fiche({ statut: 'valide' });
+    const actions = actionsFactices();
+    actions.televerserVisuel = vi.fn(async () => ({ ok: true, id: 'as2', type: 'image', statut: 'brouillon' }));
+    const p = panneauFiche(f, fictif, actions, { assets: true });
+    const entree = p.querySelector('input[type="file"]');
+    Object.defineProperty(entree, 'files', { value: [{ type: 'image/png' }] });
+    entree.dispatchEvent(new Event('change', { bubbles: true }));
+    await vi.waitFor(() => {
+      const brouillonBouton = bouton(p, 'Brouillon');
+      expect(brouillonBouton.getAttribute('aria-pressed')).toBe('true');
+    });
+    expect(p.querySelector('.panneau-message').textContent).toBe('La fiche est repassée en Brouillon : réévalue-la.');
+  });
+
   it('rétrograde l’affichage en Brouillon quand modifierFiche renvoie un nouveau statut, sans perdre le focus de la caption', () => {
     const f = fiche({ statut: 'valide' });
     const actions = actionsFactices();
