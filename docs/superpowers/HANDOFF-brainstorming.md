@@ -113,8 +113,9 @@ Révisée à partir du profil de marque réel (fourni par Jean, conservé hors d
 
 ## Reste à faire
 
-1. Faire relire et valider la spec `docs/superpowers/specs/2026-09-27-studio-contenu-design.md`.
-2. Passer au skill `writing-plans`.
+1. Plan 2 : évaluation par Claude (`sample`), règles calculées, verrou de conformité, jeu de référence ; ajouter `regles_studio` au profil réel (hors dépôt) et publier le studio réel.
+2. Plan 3 : veille hebdo (consignes `src/claude/veille.md`, routine cloud, vue Bulletin).
+3. Plan 4 : relevés de stats et tableau de bord.
 
 ## Contraintes
 
