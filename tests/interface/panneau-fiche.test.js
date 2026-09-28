@@ -209,4 +209,50 @@ describe('évaluation dans le panneau', () => {
     });
     expect(p.querySelector('.panneau-message').textContent).toBe('La fiche est repassée en Brouillon : réévalue-la.');
   });
+
+  it('« Utiliser » affiche « repassée en Brouillon » quand modifierFiche renvoie un nouveau statut', () => {
+    const f = { ...evaluee(), statut: 'valide' };
+    const actions = { ...actionsFactices(), modifierFiche: vi.fn(() => ({ ...f, statut: 'brouillon' })) };
+    const p = panneauFiche(f, fictif, actions, { assets: true, sample: true });
+    const utiliserCaption = [...p.querySelectorAll('.suggestion button')][0];
+    utiliserCaption.click();
+    const brouillonBouton = bouton(p, 'Brouillon');
+    expect(brouillonBouton.getAttribute('aria-pressed')).toBe('true');
+    expect(p.querySelector('.panneau-message').textContent).toBe('La fiche est repassée en Brouillon : réévalue-la.');
+  });
+
+  it('« Utiliser » garde le même nœud de caption, mis à jour et focus', () => {
+    const actions = actionsFactices();
+    const p = panneauFiche(evaluee(), fictif, actions, { assets: true, sample: true });
+    document.body.appendChild(p);
+    const caption = p.querySelector('textarea[name="caption"]');
+    const utiliserCaption = [...p.querySelectorAll('.suggestion button')][0];
+    utiliserCaption.click();
+    expect(p.querySelector('textarea[name="caption"]')).toBe(caption);
+    expect(caption.value).toBe('Variante A');
+    expect(document.activeElement).toBe(caption);
+    document.body.removeChild(p);
+  });
+
+  it('affiche un message d’échec et remet « Évaluer » quand evaluerFiche rejette', async () => {
+    const actions = { ...actionsFactices(), evaluerFiche: vi.fn(async () => { throw new Error('réseau coupé'); }) };
+    const p = panneauFiche(fiche(), fictif, actions, { assets: true, sample: true });
+    bouton(p, 'Évaluer').click();
+    await vi.waitFor(() => expect(p.querySelector('.panneau-message').textContent).toBe('L’évaluation a échoué : réessaie. Rien n’a été modifié.'));
+    expect(bouton(p, 'Évaluer')).toBeDefined();
+  });
+
+  it('ignore un second clic sur « Évaluer » pendant une évaluation en cours', () => {
+    const actions = { ...actionsFactices(), evaluerFiche: vi.fn(() => new Promise(() => {})) };
+    const p = panneauFiche(fiche(), fictif, actions, { assets: true, sample: true });
+    bouton(p, 'Évaluer').click();
+    bouton(p, 'Évaluation…').click();
+    expect(actions.evaluerFiche).toHaveBeenCalledTimes(1);
+  });
+
+  it('affiche un titre « Alertes » avant la liste des alertes', () => {
+    const p = panneauFiche(evaluee(), fictif, actionsFactices(), { assets: true, sample: true });
+    const titres = [...p.querySelectorAll('h4')].map(el => el.textContent);
+    expect(titres).toContain('Alertes');
+  });
 });

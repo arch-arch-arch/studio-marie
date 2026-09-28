@@ -27,10 +27,19 @@ export function panneauFiche(fiche, profil, actions, capacites) {
   };
 
   async function evaluer() {
+    if (controleurEvaluation) return;
     controleurEvaluation = new AbortController();
     remplacerScore();
     afficher('Évaluation en cours : cela peut prendre jusqu’à une minute.');
-    const resultat = await actions.evaluerFiche(id, { signal: controleurEvaluation.signal });
+    let resultat;
+    try {
+      resultat = await actions.evaluerFiche(id, { signal: controleurEvaluation.signal });
+    } catch {
+      controleurEvaluation = null;
+      remplacerScore();
+      afficher('L’évaluation a échoué : réessaie. Rien n’a été modifié.');
+      return;
+    }
     controleurEvaluation = null;
     if (resultat.ok) {
       const { score, variantes, suggestions, recommandations } = resultat.fiche;
@@ -45,10 +54,16 @@ export function panneauFiche(fiche, profil, actions, capacites) {
     afficher(resultat.annule ? 'Évaluation arrêtée.' : resultat.raison);
   }
 
-  const utiliser = (changements, messageFait) => {
-    changer(changements);
-    construire();
+  const SELECTEURS_CHAMP = { caption: 'textarea[name="caption"]', accroche: 'textarea[name="accroche"]', hashtags: 'input[name="hashtags"]' };
+  const valeurChamp = champ => (champ === 'hashtags' ? formaterHashtags(brouillon.hashtags) : brouillon[champ]);
+
+  const utiliser = (changements, messageFait, champ) => {
     afficher(messageFait);
+    changer(changements);
+    const controle = racine.querySelector(SELECTEURS_CHAMP[champ]);
+    if (controle) controle.value = valeurChamp(champ);
+    remplacerScore();
+    controle?.focus();
   };
 
   const appliquerStatutRenvoye = statut => {
@@ -165,7 +180,7 @@ export function panneauFiche(fiche, profil, actions, capacites) {
       enfants.push(h('p', { class: `conformite conformite-${etat}` },
         `Conformité : ${LIBELLES_CONFORMITE[etat] ?? 'non évaluée'}.`, causes.length ? ` ${causes.join(' ; ')}` : ''));
       enfants.push(h('ul', { class: 'criteres' }, (s.criteres ?? []).map(c => h('li', {}, `${c.nom} : ${c.points}/${c.max}. ${c.phrase ?? ''}`))));
-      if (s.alertes?.length) enfants.push(h('ul', { class: 'alertes' }, s.alertes.map(a => h('li', {}, a))));
+      if (s.alertes?.length) enfants.push(h('h4', {}, 'Alertes'), h('ul', { class: 'alertes' }, s.alertes.map(a => h('li', {}, a))));
     }
     if (brouillon.recommandations?.length) {
       enfants.push(h('h4', {}, 'Recommandations'), h('ol', { class: 'recommandations' }, brouillon.recommandations.map(r => h('li', {}, r))));
@@ -173,16 +188,16 @@ export function panneauFiche(fiche, profil, actions, capacites) {
     if (brouillon.variantes?.length) {
       enfants.push(h('h4', {}, 'Captions proposées'), h('ul', { class: 'suggestions' }, brouillon.variantes.map(v => h('li', { class: 'suggestion' },
         h('span', { class: 'suggestion-role' }, LIBELLES_ROLE[v.role] ?? v.role), h('span', { class: 'suggestion-texte' }, v.texte),
-        h('button', { type: 'button', class: 'bouton-lien', onclick: () => utiliser({ caption: v.texte }, 'Caption remplacée.') }, 'Utiliser')))));
+        h('button', { type: 'button', class: 'bouton-lien', onclick: () => utiliser({ caption: v.texte }, 'Caption remplacée.', 'caption') }, 'Utiliser')))));
     }
     if (brouillon.suggestions?.accroches?.length) {
       enfants.push(h('h4', {}, 'Accroches proposées'), h('ul', { class: 'suggestions' }, brouillon.suggestions.accroches.map(a => h('li', { class: 'suggestion' },
         h('span', { class: 'suggestion-texte' }, a),
-        h('button', { type: 'button', class: 'bouton-lien', onclick: () => utiliser({ accroche: a }, 'Accroche remplacée.') }, 'Utiliser')))));
+        h('button', { type: 'button', class: 'bouton-lien', onclick: () => utiliser({ accroche: a }, 'Accroche remplacée.', 'accroche') }, 'Utiliser')))));
     }
     if (brouillon.suggestions?.hashtags?.length) {
       enfants.push(h('p', { class: 'suggestion-hashtags' }, formaterHashtags(brouillon.suggestions.hashtags), ' ',
-        h('button', { type: 'button', class: 'bouton-lien', onclick: () => utiliser({ hashtags: brouillon.suggestions.hashtags }, 'Hashtags remplacés.') }, 'Utiliser ces hashtags')));
+        h('button', { type: 'button', class: 'bouton-lien', onclick: () => utiliser({ hashtags: brouillon.suggestions.hashtags }, 'Hashtags remplacés.', 'hashtags') }, 'Utiliser ces hashtags')));
     }
     if (evaluationDisponible) {
       enfants.push(controleurEvaluation
