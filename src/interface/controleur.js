@@ -77,6 +77,7 @@ export function creerControleur({ etat, depot, enregistreur, assets, horloge, id
   }
 
   const evaluationsEnCours = new Set();
+  const supprimeesPendantSession = new Set();
   let evaluationIndisponible = false;
 
   async function evaluerContenu(fiche, { signal, fichesSemaine = [] } = {}) {
@@ -114,6 +115,13 @@ export function creerControleur({ etat, depot, enregistreur, assets, horloge, id
     return { ok: true, score, jugement: reponse.jugement };
   }
 
+  function verrouillerSiRouge(g) {
+    if (g.statut !== 'valide' && g.statut !== 'programme') return g;
+    const { profil } = etat.lire();
+    const { conformite } = verifierRegles(g, profil.regles_studio);
+    return conformite.etat === 'rouge' ? { ...g, statut: 'brouillon' } : g;
+  }
+
   async function evaluerFiche(id, { signal } = {}) {
     if (!sample) return INDISPONIBLE;
     if (evaluationsEnCours.has(id)) return { ok: false, raison: 'Une évaluation est déjà en cours pour cette fiche.' };
@@ -134,14 +142,23 @@ export function creerControleur({ etat, depot, enregistreur, assets, horloge, id
       };
       const actuelle = trouver(id);
       if (actuelle) {
-        const g = appliquerEvaluation(actuelle, changements, horloge());
+        const g = verrouillerSiRouge(appliquerEvaluation(actuelle, changements, horloge()));
         remplacer(g);
         await ecrireMaintenant(g);
         return { ok: true, fiche: g };
       }
+      await enregistreur.vider(id);
       const relue = await depot.lireFiche(id);
-      if (!relue) return { ok: false, raison: 'La fiche a été supprimée pendant l’évaluation.' };
-      const g = appliquerEvaluation(relue, changements, horloge());
+      const revenue = trouver(id);
+      if (revenue) {
+        const g = verrouillerSiRouge(appliquerEvaluation(revenue, changements, horloge()));
+        remplacer(g);
+        await ecrireMaintenant(g);
+        return { ok: true, fiche: g };
+      }
+      if (!relue || supprimeesPendantSession.has(id)) return { ok: false, raison: 'La fiche a été supprimée pendant l’évaluation.' };
+      const g = verrouillerSiRouge(appliquerEvaluation(relue, changements, horloge()));
+      if (supprimeesPendantSession.has(id)) return { ok: false, raison: 'La fiche a été supprimée pendant l’évaluation.' };
       enregistreur.planifier(g);
       await enregistreur.vider(g.id);
       return { ok: true, fiche: g };
@@ -266,6 +283,7 @@ export function creerControleur({ etat, depot, enregistreur, assets, horloge, id
     },
 
     async supprimerFiche(id) {
+      supprimeesPendantSession.add(id);
       etat.modifier({ fiches: etat.lire().fiches.filter(f => f.id !== id), ficheOuverte: null });
       await enregistreur.annuler(id);
       try {

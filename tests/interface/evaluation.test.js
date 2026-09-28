@@ -21,9 +21,11 @@ const differe = () => { let resoudre, rejeter; const p = new Promise((a, b) => {
 const fauxSample = (json = async () => REPONSE, limits = async () => ({ maxPromptBytes: 65536 })) =>
   Object.assign(vi.fn(), { json: vi.fn(json), limits: vi.fn(limits) });
 
-async function monter({ sample = fauxSample(), chargerImage = vi.fn(async () => new Blob(['x'], { type: 'image/png' })), contenu = {} } = {}) {
+async function monter({
+  sample = fauxSample(), chargerImage = vi.fn(async () => new Blob(['x'], { type: 'image/png' })), contenu = {}, envelopperDepot = d => d,
+} = {}) {
   const db = creerFausseBase();
-  const depot = creerDepot(db);
+  const depot = envelopperDepot(creerDepot(db));
   const enregistreur = creerEnregistreur(f => depot.enregistrerFiche(f), 600);
   const etat = creerEtat({ profil: { ...fictif, version: 1 }, fiches: [], vue: 'semaine', ancre: T, ficheOuverte: null, erreur: null, sauvegarde: 'ok' });
   const actions = creerControleur({ etat, depot, enregistreur, assets: null, horloge: () => T, idAleatoire: () => 'f1', sample, chargerImage });
@@ -33,7 +35,7 @@ async function monter({ sample = fauxSample(), chargerImage = vi.fn(async () => 
     hashtags: ['nuit', 'socio', 'humour', 'paris'], visuel: 'a1', visuel_type: 'video', ...contenu,
   });
   await enregistreur.vider('f1');
-  return { db, etat, actions, sample, chargerImage };
+  return { db, etat, actions, sample, chargerImage, depot };
 }
 
 describe('evaluerFiche', () => {
@@ -124,6 +126,47 @@ describe('evaluerFiche', () => {
     expect(r.fiche.score.total).toBe(71);
     expect(etat.lire().fiches).toEqual([]);
     expect(db._docs.get('fiches/f1').score.total).toBe(71);
+  });
+
+  it('reprend le chemin normal si la fiche revient dans l’état pendant la relecture en base', async () => {
+    const reponse = differe();
+    const lectureAppelee = differe();
+    const lectureDifferee = differe();
+    const { db, etat, actions } = await monter({
+      sample: fauxSample(() => reponse.p),
+      envelopperDepot: depot => ({ ...depot, lireFiche: async id => { lectureAppelee.resoudre(); await lectureDifferee.p; return depot.lireFiche(id); } }),
+    });
+    const originale = etat.lire().fiches[0];
+    const enCours = actions.evaluerFiche('f1');
+    await Promise.resolve();
+    etat.modifier({ fiches: [] });
+    reponse.resoudre(REPONSE);
+    await lectureAppelee.p;
+    etat.modifier({ fiches: [{ ...originale, caption: 'EDITION RECENTE' }] });
+    lectureDifferee.resoudre();
+    const r = await enCours;
+    expect(r.ok).toBe(true);
+    expect(r.fiche.caption).toBe('EDITION RECENTE');
+    expect(db._docs.get('fiches/f1').caption).toBe('EDITION RECENTE');
+    expect(db._docs.get('fiches/f1').score.total).toBeGreaterThan(0);
+  });
+
+  it('ne ressuscite pas une fiche supprimée pendant la relecture en base', async () => {
+    const reponse = differe();
+    const suppressionDifferee = differe();
+    const { db, actions } = await monter({
+      sample: fauxSample(() => reponse.p),
+      envelopperDepot: depot => ({ ...depot, supprimerFiche: async id => { await suppressionDifferee.p; return depot.supprimerFiche(id); } }),
+    });
+    const enCours = actions.evaluerFiche('f1');
+    await Promise.resolve();
+    const suppression = actions.supprimerFiche('f1');
+    reponse.resoudre(REPONSE);
+    const r = await enCours;
+    expect(r).toEqual({ ok: false, raison: 'La fiche a été supprimée pendant l’évaluation.' });
+    suppressionDifferee.resoudre();
+    await suppression;
+    expect(db._docs.has('fiches/f1')).toBe(false);
   });
 
   it('signale une fiche supprimée pendant l’évaluation', async () => {
