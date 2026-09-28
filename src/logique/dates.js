@@ -20,13 +20,15 @@ export function partiesLocales(iso, fuseau) {
 export function versUtc({ annee, mois, jour, heure = 0, minute = 0 }, fuseau) {
   const voulu = Date.UTC(annee, mois - 1, jour, heure, minute);
   let t = voulu;
+  let apresLeSaut = null; // heure locale inexistante (saut d'heure d'été) : on garde le candidat juste après
   for (let i = 0; i < 3; i++) {
     const p = partiesLocales(new Date(t).toISOString(), fuseau);
     const obtenu = Date.UTC(p.annee, p.mois - 1, p.jour, p.heure, p.minute);
-    if (obtenu === voulu) break;
+    if (obtenu === voulu) return new Date(t).toISOString();
+    if (obtenu > voulu && (apresLeSaut === null || obtenu - voulu < apresLeSaut.ecart)) apresLeSaut = { t, ecart: obtenu - voulu };
     t += voulu - obtenu;
   }
-  return new Date(t).toISOString();
+  return new Date(apresLeSaut ? apresLeSaut.t : t).toISOString();
 }
 
 const dateUtc = (a, m, j) => new Date(Date.UTC(a, m - 1, j));

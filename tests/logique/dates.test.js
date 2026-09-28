@@ -23,6 +23,11 @@ describe('conversions', () => {
   it('rattache 23 h 30 locale au bon jour', () => {
     expect(cleJour('2026-10-25T22:30:00.000Z', FZ)).toBe('2026-10-25');
   });
+  it('place une heure inexistante (passage à l’heure d’été) juste après le saut', () => {
+    expect(versUtc({ annee: 2026, mois: 3, jour: 29, heure: 2, minute: 30 }, FZ)).toBe('2026-03-29T01:30:00.000Z');
+    expect(ajouterJours('2026-03-28T01:30:00.000Z', 1, FZ)).toBe('2026-03-29T01:30:00.000Z');
+    expect(versUtc({ annee: 2026, mois: 3, jour: 29, heure: 12 }, FZ)).toBe('2026-03-29T10:00:00.000Z');
+  });
 });
 
 describe('semaines et jours', () => {
