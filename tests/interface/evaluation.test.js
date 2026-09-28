@@ -110,6 +110,20 @@ describe('evaluerFiche', () => {
     await premiere;
   });
 
+  it('un changement de semaine pendant l’évaluation n’efface pas le résultat : il est écrit en base', async () => {
+    const reponse = differe();
+    const { db, etat, actions } = await monter({ sample: fauxSample(() => reponse.p) });
+    const enCours = actions.evaluerFiche('f1');
+    await Promise.resolve();
+    etat.modifier({ fiches: [] });
+    reponse.resoudre(REPONSE);
+    const r = await enCours;
+    expect(r.ok).toBe(true);
+    expect(r.fiche.score.total).toBe(71);
+    expect(etat.lire().fiches).toEqual([]);
+    expect(db._docs.get('fiches/f1').score.total).toBe(71);
+  });
+
   it('signale une fiche supprimée pendant l’évaluation', async () => {
     const reponse = differe();
     const { actions } = await monter({ sample: fauxSample(() => reponse.p) });

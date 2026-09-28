@@ -123,16 +123,24 @@ export function creerControleur({ etat, depot, enregistreur, assets, horloge, id
       const semaine = fichesDeLaSemaine(fiches, debutSemaine(f.date_heure, fz), fz);
       const resultat = await evaluerContenu(f, { signal, fichesSemaine: semaine });
       if (!resultat.ok) return resultat;
-      const actuelle = trouver(id);
-      if (!actuelle) return { ok: false, raison: 'La fiche a été supprimée pendant l’évaluation.' };
-      const g = appliquerEvaluation(actuelle, {
+      const changements = {
         score: resultat.score,
         variantes: resultat.jugement.captions,
         suggestions: { accroches: resultat.jugement.accroches, hashtags: resultat.jugement.hashtags },
         recommandations: resultat.jugement.recommandations,
-      }, horloge());
-      remplacer(g);
-      await ecrireMaintenant(g);
+      };
+      const actuelle = trouver(id);
+      if (actuelle) {
+        const g = appliquerEvaluation(actuelle, changements, horloge());
+        remplacer(g);
+        await ecrireMaintenant(g);
+        return { ok: true, fiche: g };
+      }
+      const relue = await depot.lireFiche(id);
+      if (!relue) return { ok: false, raison: 'La fiche a été supprimée pendant l’évaluation.' };
+      const g = appliquerEvaluation(relue, changements, horloge());
+      enregistreur.planifier(g);
+      await enregistreur.vider(g.id);
       return { ok: true, fiche: g };
     } finally {
       evaluationsEnCours.delete(id);

@@ -18,6 +18,11 @@ export function creerDepot(db) {
       await db.doc(`fiches/${id}`).delete();
     },
 
+    async lireFiche(id) {
+      const doc = await db.doc(`fiches/${id}`).get();
+      return doc.exists ? { id, ...doc.data() } : null;
+    },
+
     ecouterProfil(rappel, erreur) {
       return db.doc('profil/courant').onSnapshot(s => rappel(s.exists ? s.data() : null), erreur);
     },

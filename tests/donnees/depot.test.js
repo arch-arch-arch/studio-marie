@@ -24,6 +24,13 @@ describe('fiches', () => {
     await depot.supprimerFiche('a');
     expect(db._docs.has('fiches/a')).toBe(false);
   });
+  it('lit une fiche par id, ou renvoie null si elle n’existe pas', async () => {
+    const db = creerFausseBase();
+    const depot = creerDepot(db);
+    await depot.enregistrerFiche({ id: 'a', date_heure: T, format: 'reel' });
+    expect(await depot.lireFiche('a')).toEqual({ id: 'a', date_heure: T, format: 'reel' });
+    expect(await depot.lireFiche('inconnue')).toBeNull();
+  });
 });
 
 describe('profil', () => {
