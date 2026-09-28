@@ -45,7 +45,14 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .sauvegarde-erreur { color: var(--rouge); }
 .corps { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; padding-top: 12px; }
 #app.avec-panneau .corps { grid-template-columns: minmax(0, 1fr) minmax(320px, 400px); }
-@media (max-width: 900px) { #app.avec-panneau .corps { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 900px) {
+  #app.avec-panneau .corps { grid-template-columns: minmax(0, 1fr); }
+  .panneau {
+    position: fixed; inset: 0; z-index: 10; border-radius: 0; max-height: none; height: 100%; overflow-y: auto;
+    padding-top: calc(12px + env(safe-area-inset-top, 0px));
+    padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  }
+}
 .erreur-bandeau { background: color-mix(in srgb, var(--rouge) 12%, var(--surface)); border: 1px solid var(--rouge); border-radius: var(--rayon); padding: 8px 12px; margin: 12px 0 0; }
 .indisponible { max-width: 560px; padding-block: 48px; }
 .aide { color: var(--texte-2); margin: 0; }
