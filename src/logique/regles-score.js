@@ -1,10 +1,51 @@
 import { heureLocale, partiesLocales } from './dates.js';
 
 const FEED = new Set(['reel', 'carrousel', 'post']);
-const MOTIF_LIEN = /(https?:\/\/|www\.)\S+|\b[a-z0-9-]+\.(com|fr|net|org|io|me|co|ly|link|page|bio)\b(\/\S*)?/i;
-const MOTIF_ADRESSE = /\d|\b(rue|avenue|av\.|boulevard|bd|chemin|impasse|allée|place|chez|domicile|maison|appart(ement)?)\b/i;
 
-const normaliser = texte => (texte ?? '').toLocaleLowerCase('fr-FR');
+// --- Liens ---------------------------------------------------------------
+
+const DOMAINES_BIO = ['linktr\\.ee', 'beacons\\.ai', 'lnk\\.bio', 'linkin\\.bio', 'allmylinks\\.com', 'bit\\.ly'];
+const EXTENSIONS_SURES = 'com|net|org|io|ly|link|page|bio|ee|ai|xyz|app';
+
+const DETECTEURS_LIEN = [
+  { re: /https?:\/\/\S+/iu, groupe: 0 },
+  { re: /www\.\S+/iu, groupe: 0 },
+  { re: new RegExp(`(?:${DOMAINES_BIO.join('|')})(?:/\\S*)?`, 'iu'), groupe: 0 },
+  { re: /[\p{L}\p{N}-]+\.[a-z]{2,}\/\S*/iu, groupe: 0 },
+  { re: new RegExp(`(?:^|[\\s(«"'])([\\p{L}\\p{N}-]+\\.(?:${EXTENSIONS_SURES}))(?=$|[\\s.,;:!?)»"'])`, 'iu'), groupe: 1 },
+];
+
+function detecterLien(texte) {
+  for (const { re, groupe } of DETECTEURS_LIEN) {
+    const m = texte.match(re);
+    if (m) return m[groupe];
+  }
+  return null;
+}
+
+// --- Géotag ----------------------------------------------------------------
+
+const TYPES_VOIE = ['rue', 'avenue', 'av\\.?', 'boulevard', 'bd', 'chemin', 'impasse', 'allée', 'place', 'quai', 'cours', 'square', 'passage', 'villa', 'cité', 'route', 'résidence', 'faubourg'];
+const MARQUEURS_DOMICILE = ['chez', 'domicile', 'maison', 'appart(?:ement)?'];
+const RE_MARQUEUR_ADRESSE = new RegExp(`(?<![\\p{L}\\p{N}])(?:${[...TYPES_VOIE, ...MARQUEURS_DOMICILE].join('|')})(?![\\p{L}\\p{N}])`, 'iu');
+const RE_CODE_POSTAL = /(?<!\d)\d{5}(?!\d)/;
+const RE_NUMERO_VOIE = new RegExp(`\\d+\\s*(?:bis|ter)?\\s*,?\\s*(?:${TYPES_VOIE.join('|')})`, 'iu');
+
+const geotagTropPrecis = geotag => RE_MARQUEUR_ADRESSE.test(geotag) || RE_CODE_POSTAL.test(geotag) || RE_NUMERO_VOIE.test(geotag);
+
+// --- Mots à éviter -----------------------------------------------------------
+
+const echapperRegex = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+function normaliser(texte) {
+  return (texte ?? '')
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '')
+    .replace(/[’‘]/g, "'")
+    .replace(/\s+/g, ' ')
+    .toLowerCase()
+    .trim();
+}
 
 export const compterMots = texte => (texte ?? '').trim().split(/\s+/).filter(Boolean).length;
 
@@ -18,18 +59,25 @@ export function verifierRegles(fiche, regles) {
   const causes = [];
   const alertes = [];
 
-  const textes = [fiche.accroche, fiche.caption, ...(fiche.hashtags ?? [])].map(normaliser).join('\n');
+  const texteNormalise = normaliser(`${fiche.accroche ?? ''} ${fiche.caption ?? ''}`);
+  const hashtagsNormalises = (fiche.hashtags ?? []).map(normaliser);
   for (const mot of regles.mots_a_eviter ?? []) {
-    const cherche = normaliser(mot).trim();
-    if (cherche && textes.includes(cherche)) causes.push(`mot à éviter « ${mot.trim()} »`);
+    const cherche = normaliser(mot);
+    if (!cherche) continue;
+    const motSansEspaces = cherche.replace(/\s+/g, '');
+    const re = new RegExp(`(?<![\\p{L}\\p{N}])${echapperRegex(cherche)}(?![\\p{L}\\p{N}])`, 'u');
+    const dansLeTexte = re.test(texteNormalise);
+    const dansLesHashtags = hashtagsNormalises.some(h => h === motSansEspaces || (motSansEspaces.length >= 6 && h.includes(motSansEspaces)));
+    if (dansLeTexte || dansLesHashtags) causes.push(`mot à éviter « ${mot.trim()} »`);
   }
 
   const lienAutorise = fiche.format === 'story' && fiche.porte;
-  if (!lienAutorise && MOTIF_LIEN.test(`${fiche.accroche ?? ''}\n${fiche.caption ?? ''}`)) {
-    causes.push('lien dans le texte (seule une story qui mène à la porte peut porter un lien)');
+  const fragmentLien = detecterLien(`${fiche.accroche ?? ''}\n${fiche.caption ?? ''}`);
+  if (!lienAutorise && fragmentLien) {
+    causes.push(`lien « ${fragmentLien} » dans le texte (seule une story qui mène à la porte peut porter un lien)`);
   }
 
-  if (fiche.geotag?.trim() && MOTIF_ADRESSE.test(fiche.geotag)) {
+  if (fiche.geotag?.trim() && geotagTropPrecis(fiche.geotag)) {
     causes.push(`géotag trop précis « ${fiche.geotag.trim()} » (reste au niveau de la ville)`);
   }
 

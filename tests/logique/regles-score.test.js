@@ -43,12 +43,51 @@ describe('verifierRegles', () => {
     expect(verifierRegles(fiche(), { ...R, mots_a_eviter: ['', '   '] }).conformite.etat).toBe('vert');
   });
 
+  it('ne bloque pas un mot à éviter contenu dans un autre mot', () => {
+    expect(verifierRegles(fiche({ ...{}, caption: 'un bon courage' }), { ...R, mots_a_eviter: ['rage'] }).conformite.etat)
+      .toBe('vert');
+  });
+
+  it('bloque un mot à éviter composé même avec espaces multiples ou retour à la ligne, et son hashtag collé', () => {
+    expect(verifierRegles(fiche({ caption: 'Tout est link\nin  bio ici.' }), R).conformite.causes)
+      .toEqual(['mot à éviter « link in bio »']);
+    expect(verifierRegles(fiche({ hashtags: ['nuit', 'linkinbio', 'paris'] }), R).conformite.causes)
+      .toEqual(['mot à éviter « link in bio »']);
+  });
+
+  it('bloque un mot à éviter malgré les accents', () => {
+    expect(verifierRegles(fiche({ caption: 'Un peu de serenite please' }), { ...R, mots_a_eviter: ['sérénité'] }).conformite.etat)
+      .toBe('rouge');
+  });
+
+  it('bloque un mot à éviter malgré une apostrophe typographique différente', () => {
+    expect(verifierRegles(fiche({ caption: 'Franchement c’est ça la vie.' }), { ...R, mots_a_eviter: ["c'est ça"] }).conformite.etat)
+      .toBe('rouge');
+  });
+
   it('bloque un lien dans le texte, sauf pour une story qui mène à la porte', () => {
-    const cause = 'lien dans le texte (seule une story qui mène à la porte peut porter un lien)';
-    expect(verifierRegles(fiche({ caption: 'Tout est sur https://exemple.test/moi' }), R).conformite.causes).toEqual([cause]);
-    expect(verifierRegles(fiche({ caption: 'Va voir exemple.com/x' }), R).conformite.causes).toEqual([cause]);
+    const cause = fragment => `lien « ${fragment} » dans le texte (seule une story qui mène à la porte peut porter un lien)`;
+    expect(verifierRegles(fiche({ caption: 'Tout est sur https://exemple.test/moi' }), R).conformite.causes)
+      .toEqual([cause('https://exemple.test/moi')]);
+    expect(verifierRegles(fiche({ caption: 'Va voir exemple.com/x' }), R).conformite.causes)
+      .toEqual([cause('exemple.com/x')]);
     expect(verifierRegles(fiche({ format: 'story', porte: true, caption: 'https://exemple.test/moi' }), R).conformite.etat).toBe('vert');
-    expect(verifierRegles(fiche({ format: 'story', porte: false, caption: 'https://exemple.test/moi' }), R).conformite.causes).toEqual([cause]);
+    expect(verifierRegles(fiche({ format: 'story', porte: false, caption: 'https://exemple.test/moi' }), R).conformite.causes)
+      .toEqual([cause('https://exemple.test/moi')]);
+    // un reel avec porte:true (champ ignoré hors story) reste bloqué
+    expect(verifierRegles(fiche({ format: 'reel', porte: true, caption: 'https://exemple.test/moi' }), R).conformite.etat).toBe('rouge');
+  });
+
+  it('détecte les domaines de link-in-bio connus et les domaines nus dans une extension sûre', () => {
+    expect(verifierRegles(fiche({ caption: 'Mon lien : linktr.ee/moi' }), R).conformite.etat).toBe('rouge');
+    expect(verifierRegles(fiche({ caption: 'beacons.ai' }), R).conformite.etat).toBe('rouge');
+    expect(verifierRegles(fiche({ caption: 'Va sur moi.xyz' }), R).conformite.etat).toBe('rouge');
+    expect(verifierRegles(fiche({ caption: 'www.exemple.fr' }), R).conformite.etat).toBe('rouge');
+  });
+
+  it('ne bloque pas une phrase ressemblant à un domaine sans être un lien', () => {
+    expect(verifierRegles(fiche({ caption: 'Je rentre vraiment.Me voilà' }), R).conformite.etat).toBe('vert');
+    expect(verifierRegles(fiche({ caption: 'On a fini.Co-working demain' }), R).conformite.etat).toBe('vert');
   });
 
   it('bloque un géotag plus précis que la ville', () => {
@@ -56,6 +95,15 @@ describe('verifierRegles', () => {
     expect(verifierRegles(fiche({ geotag: '12 rue des Lilas' }), R).conformite.causes)
       .toEqual(['géotag trop précis « 12 rue des Lilas » (reste au niveau de la ville)']);
     expect(verifierRegles(fiche({ geotag: 'Chez moi' }), R).conformite.etat).toBe('rouge');
+  });
+
+  it('détecte les types de voie et les codes postaux, mais pas un chiffre seul', () => {
+    expect(verifierRegles(fiche({ geotag: '12 av. Foch' }), R).conformite.etat).toBe('rouge');
+    expect(verifierRegles(fiche({ geotag: 'Quai de Valmy' }), R).conformite.etat).toBe('rouge');
+    expect(verifierRegles(fiche({ geotag: '75011 Paris' }), R).conformite.etat).toBe('rouge');
+    expect(verifierRegles(fiche({ geotag: '3 bis, rue X' }), R).conformite.etat).toBe('rouge');
+    expect(verifierRegles(fiche({ geotag: 'Paris 11e' }), R).conformite.etat).toBe('vert');
+    expect(verifierRegles(fiche({ geotag: 'Lyon' }), R).conformite.etat).toBe('vert');
   });
 
   it('cumule plusieurs causes', () => {
