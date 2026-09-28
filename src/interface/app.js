@@ -54,7 +54,10 @@ export async function demarrer(racine, claude, { horloge = () => new Date().toIS
         plageCourante = `${debut}|${fin}`;
         arreterFiches?.();
         arreterFiches = depot.ecouterFiches(debut, fin,
-          recues => etat.modifier({ fiches: fusionnerInstantane(recues, etat.lire().fiches, enregistreur.estEnAttente) }),
+          recues => {
+            etat.modifier({ fiches: fusionnerInstantane(recues, etat.lire().fiches, enregistreur.estEnAttente) });
+            actions.reverifierFiches();
+          },
           err => etat.modifier({ erreur: messageErreurBase(err) }));
       }
     }

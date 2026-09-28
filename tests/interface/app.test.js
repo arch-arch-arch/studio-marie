@@ -3,8 +3,23 @@ import { describe, it, expect, vi } from 'vitest';
 import fictif from '../../exemples/profil-fictif.json';
 import { creerFausseBase } from '../aides/fausseBase.js';
 import { demarrer } from '../../src/interface/app.js';
+import { nouvelleFiche, appliquerEvaluation, changerStatut, empreinte } from '../../src/logique/fiche.js';
 
 const horloge = () => '2026-09-28T08:00:00.000Z';
+const T = horloge();
+
+function ficheValideDirecte({ id, date_heure, caption }) {
+  const base = nouvelleFiche({ id, format: 'reel', date_heure, pilier: 'socio', maintenant: T });
+  const f = {
+    ...base, visuel: 'a1', visuel_type: 'image', accroche: 'Une accroche correcte',
+    caption, hashtags: ['nuit', 'socio', 'humour'],
+  };
+  const score = { total: 80, criteres: [], conformite: { etat: 'vert', causes: [] }, empreinte: empreinte(f) };
+  const evaluee = appliquerEvaluation(f, {
+    score, variantes: [], suggestions: { accroches: [], hashtags: [] }, recommandations: ['R1', 'R2', 'R3'],
+  }, T);
+  return changerStatut(evaluee, 'valide', T);
+}
 
 describe('demarrer', () => {
   it('affiche un message clair quand la base est indisponible', async () => {
@@ -126,6 +141,61 @@ describe('demarrer', () => {
 
     expect(app.etat.lire().fiches.find(x => x.id === f.id).statut).toBe('brouillon');
     await vi.waitFor(() => expect(app.etat.lire().erreur).toBe('1 fiche(s) repassée(s) en Brouillon : le profil actuel les bloque.'));
+  });
+
+  it('rétrograde une fiche déjà bloquée par le profil dès le premier instantané de fiches, au démarrage', async () => {
+    const db = creerFausseBase();
+    const bloquant = { ...fictif, regles_studio: { ...fictif.regles_studio, mots_a_eviter: [...fictif.regles_studio.mots_a_eviter, 'ligne'] } };
+    await db.doc('profil/courant').set({ ...bloquant, version: 1, importe_le: T });
+    const f = ficheValideDirecte({ id: 'f-bloquee', date_heure: '2026-09-28T10:00:00.000Z', caption: 'Une ligne. Dis-moi en commentaire.' });
+    const { id, ...corps } = f;
+    await db.doc(`fiches/${id}`).set(corps);
+
+    const racine = document.createElement('div');
+    const app = await demarrer(racine, { use: async nom => (nom === 'db' ? db : null) }, { horloge });
+
+    await vi.waitFor(() => expect(app.etat.lire().fiches.find(x => x.id === 'f-bloquee')?.statut).toBe('brouillon'));
+    await vi.waitFor(() => expect(db._docs.get('fiches/f-bloquee')?.statut).toBe('brouillon'));
+  });
+
+  it('rétrograde une fiche bloquée qui arrive par navigation, après un réimport de profil pendant qu’elle n’était pas chargée', async () => {
+    const db = creerFausseBase();
+    const racine = document.createElement('div');
+    const app = await demarrer(racine, { use: async nom => (nom === 'db' ? db : null) }, { horloge });
+    await app.actions.importerProfil(JSON.stringify(fictif));
+
+    const f = ficheValideDirecte({ id: 'f-loin', date_heure: '2026-10-05T10:00:00.000Z', caption: 'Une ligne. Dis-moi en commentaire.' });
+    const { id, ...corps } = f;
+    await db.doc(`fiches/${id}`).set(corps);
+
+    const bloque = { ...fictif, regles_studio: { ...fictif.regles_studio, mots_a_eviter: [...fictif.regles_studio.mots_a_eviter, 'ligne'] } };
+    await app.actions.importerProfil(JSON.stringify(bloque));
+    expect(app.etat.lire().fiches.some(x => x.id === 'f-loin')).toBe(false);
+
+    await app.actions.naviguer(1);
+    await vi.waitFor(() => expect(app.etat.lire().fiches.find(x => x.id === 'f-loin')?.statut).toBe('brouillon'));
+    await vi.waitFor(() => expect(db._docs.get('fiches/f-loin')?.statut).toBe('brouillon'));
+  });
+
+  it('ne réécrit pas une fiche déjà rétrogradée à chaque nouvel instantané de fiches', async () => {
+    const db = creerFausseBase();
+    const bloquant = { ...fictif, regles_studio: { ...fictif.regles_studio, mots_a_eviter: [...fictif.regles_studio.mots_a_eviter, 'ligne'] } };
+    await db.doc('profil/courant').set({ ...bloquant, version: 1, importe_le: T });
+    const f = ficheValideDirecte({ id: 'f-stable', date_heure: '2026-09-28T10:00:00.000Z', caption: 'Une ligne. Dis-moi en commentaire.' });
+    const { id, ...corps } = f;
+    await db.doc(`fiches/${id}`).set(corps);
+
+    const racine = document.createElement('div');
+    await demarrer(racine, { use: async nom => (nom === 'db' ? db : null) }, { horloge });
+    await vi.waitFor(() => expect(db._docs.get('fiches/f-stable')?.statut).toBe('brouillon'));
+    const ecrituresApres = db.ecritures.filter(e => e === 'fiches/f-stable').length;
+
+    for (let i = 0; i < 3; i++) {
+      await db.doc(`fiches/autre-${i}`).set({ date_heure: '2026-09-28T11:00:00.000Z', format: 'reel', statut: 'idee' });
+    }
+    await new Promise(r => setTimeout(r, 20));
+
+    expect(db.ecritures.filter(e => e === 'fiches/f-stable').length).toBe(ecrituresApres);
   });
 
   it('propose « Évaluer » dans la fiche quand la capacité sample existe', async () => {

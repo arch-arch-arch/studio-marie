@@ -169,6 +169,42 @@ describe('evaluerFiche', () => {
     expect(db._docs.has('fiches/f1')).toBe(false);
   });
 
+  it('refuse d’écrire si la fiche supprimée revient dans l’état par un instantané avant le résultat (chemin normal)', async () => {
+    const reponse = differe();
+    const { db, etat, actions } = await monter({ sample: fauxSample(() => reponse.p) });
+    const originale = etat.lire().fiches[0];
+    const enCours = actions.evaluerFiche('f1');
+    await Promise.resolve();
+    await actions.supprimerFiche('f1');
+    etat.modifier({ fiches: [originale] });
+    reponse.resoudre(REPONSE);
+    const r = await enCours;
+    expect(r).toEqual({ ok: false, raison: 'La fiche a été supprimée pendant l’évaluation.' });
+    expect(db._docs.has('fiches/f1')).toBe(false);
+  });
+
+  it('refuse d’écrire si la fiche supprimée revient dans l’état pendant la relecture en base (chemin « fiche revenue »)', async () => {
+    const reponse = differe();
+    const lectureAppelee = differe();
+    const lectureDifferee = differe();
+    const { db, etat, actions } = await monter({
+      sample: fauxSample(() => reponse.p),
+      envelopperDepot: depot => ({ ...depot, lireFiche: async id => { lectureAppelee.resoudre(); await lectureDifferee.p; return depot.lireFiche(id); } }),
+    });
+    const originale = etat.lire().fiches[0];
+    const enCours = actions.evaluerFiche('f1');
+    await Promise.resolve();
+    etat.modifier({ fiches: [] });
+    reponse.resoudre(REPONSE);
+    await lectureAppelee.p;
+    await actions.supprimerFiche('f1');
+    etat.modifier({ fiches: [originale] });
+    lectureDifferee.resoudre();
+    const r = await enCours;
+    expect(r).toEqual({ ok: false, raison: 'La fiche a été supprimée pendant l’évaluation.' });
+    expect(db._docs.has('fiches/f1')).toBe(false);
+  });
+
   it('signale une fiche supprimée pendant l’évaluation', async () => {
     const reponse = differe();
     const { actions } = await monter({ sample: fauxSample(() => reponse.p) });

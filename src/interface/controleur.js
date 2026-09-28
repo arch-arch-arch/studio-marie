@@ -142,6 +142,7 @@ export function creerControleur({ etat, depot, enregistreur, assets, horloge, id
       };
       const actuelle = trouver(id);
       if (actuelle) {
+        if (supprimeesPendantSession.has(id)) return { ok: false, raison: 'La fiche a été supprimée pendant l’évaluation.' };
         const g = verrouillerSiRouge(appliquerEvaluation(actuelle, changements, horloge()));
         remplacer(g);
         await ecrireMaintenant(g);
@@ -151,6 +152,7 @@ export function creerControleur({ etat, depot, enregistreur, assets, horloge, id
       const relue = await depot.lireFiche(id);
       const revenue = trouver(id);
       if (revenue) {
+        if (supprimeesPendantSession.has(id)) return { ok: false, raison: 'La fiche a été supprimée pendant l’évaluation.' };
         const g = verrouillerSiRouge(appliquerEvaluation(revenue, changements, horloge()));
         remplacer(g);
         await ecrireMaintenant(g);
