@@ -96,4 +96,14 @@ describe('demarrer', () => {
     await app.actions.evaluerFiche(app.etat.lire().ficheOuverte);
     expect(sample.json).toHaveBeenCalledTimes(1);
   });
+
+  it('propose « Évaluer » dans la fiche quand la capacité sample existe', async () => {
+    const db = creerFausseBase();
+    const sample = Object.assign(async () => ({}), { json: async () => ({}), limits: async () => ({}) });
+    const racine = document.createElement('div');
+    const app = await demarrer(racine, { use: async nom => (nom === 'db' ? db : nom === 'sample' ? sample : null) }, { horloge });
+    await app.actions.importerProfil(JSON.stringify(fictif));
+    await app.actions.creerFiche({ format: 'reel', date_heure: '2026-09-28T10:00:00.000Z' });
+    expect([...racine.querySelectorAll('button')].some(b => b.textContent === 'Évaluer')).toBe(true);
+  });
 });
