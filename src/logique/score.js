@@ -18,8 +18,9 @@ const PENALITE_ALERTE = 0.2;
 const RANG = { vert: 0, orange: 1, rouge: 2 };
 
 export function fusionnerConformite(calculee, jugee) {
+  const etatCalcule = calculee?.etat in RANG ? calculee.etat : 'rouge';
   const etatJuge = jugee?.etat in RANG ? jugee.etat : 'orange';
-  const etat = RANG[calculee.etat] >= RANG[etatJuge] ? calculee.etat : etatJuge;
+  const etat = RANG[etatCalcule] >= RANG[etatJuge] ? etatCalcule : etatJuge;
   const causesJugees = etatJuge === 'vert' ? [] : (jugee?.causes ?? []);
   return { etat, causes: [...new Set([...calculee.causes, ...causesJugees])] };
 }

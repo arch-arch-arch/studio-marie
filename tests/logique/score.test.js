@@ -70,4 +70,8 @@ describe('fusionnerConformite', () => {
     expect(fusionnerConformite(VERT, VERT)).toEqual(VERT);
     expect(fusionnerConformite(VERT, { etat: 'inconnu', causes: [] }).etat).toBe('orange');
   });
+
+  it('traite un état calculé inconnu comme rouge : le verrou reste fermé par défaut', () => {
+    expect(fusionnerConformite({ etat: 'bizarre', causes: [] }, { etat: 'vert', causes: [] }).etat).toBe('rouge');
+  });
 });
