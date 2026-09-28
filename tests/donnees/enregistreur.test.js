@@ -73,4 +73,31 @@ describe('creerEnregistreur', () => {
     await e.viderTout();
     expect(enregistrer).toHaveBeenCalledTimes(2);
   });
+
+  it('une annulation pendant une écriture qui échoue ne remet rien en file', async () => {
+    const vol = differe();
+    const enregistrer = vi.fn(() => vol.p);
+    const e = creerEnregistreur(enregistrer, 600);
+    e.planifier({ id: 'f1', accroche: 'v1' });
+    const vidange = e.vider('f1');
+    await vi.advanceTimersByTimeAsync(0);
+    const annulation = e.annuler('f1');
+    vol.p.catch(() => {});
+    vol.resoudre(Promise.reject({ code: 'unavailable' }));
+    await vidange; await annulation;
+    expect(e.estEnAttente('f1')).toBe(false);
+    await e.viderTout();
+    expect(enregistrer).toHaveBeenCalledTimes(1);
+  });
+
+  it('un surErreur qui lève ne bloque pas les écritures suivantes', async () => {
+    const enregistrer = vi.fn().mockRejectedValueOnce({ code: 'unavailable' }).mockResolvedValue();
+    const e = creerEnregistreur(enregistrer, 600, () => { throw new Error('affichage cassé'); });
+    e.planifier({ id: 'f1', accroche: 'v1' });
+    await e.vider('f1');
+    e.planifier({ id: 'f1', accroche: 'v2' });
+    await e.vider('f1');
+    expect(enregistrer).toHaveBeenLastCalledWith({ id: 'f1', accroche: 'v2' });
+    expect(e.estEnAttente('f1')).toBe(false);
+  });
 });
