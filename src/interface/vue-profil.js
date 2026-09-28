@@ -24,7 +24,7 @@ export function vueProfil({ profil, reference = [], resultatReference = null, ve
       erreurs),
   ];
   if (profil) {
-    ref = sectionReference({ reference, resultatReference, verificationReference }, actions, capacites);
+    ref = sectionReference({ reference, resultatReference, verificationReference }, actions, capacites, profil.regles_studio.fuseau);
     enfants.push(ref.element);
   }
 
@@ -33,7 +33,7 @@ export function vueProfil({ profil, reference = [], resultatReference = null, ve
   return racine;
 }
 
-function sectionReference(initial, actions, capacites) {
+function sectionReference(initial, actions, capacites, fuseau) {
   const zone = h('textarea', { id: 'reference-json', rows: 8, placeholder: 'Colle ici la liste JSON des contenus de référence (voir exemples/reference-fictive.json).' });
   const erreurs = h('ul', { class: 'erreurs', 'aria-live': 'polite' });
   const message = h('p', { class: 'aide', role: 'status' });
@@ -66,7 +66,7 @@ function sectionReference(initial, actions, capacites) {
     }
     etatZone.replaceChildren(
       h('p', { class: 'aide' }, `${reference.length} contenus (${gagnants} gagnants, ${perdants} perdants). Le score doit classer les gagnants au-dessus des perdants.`),
-      resultatReference ? bilanReference(resultatReference) : h('p', { class: 'aide' }, 'Pas encore vérifié.'),
+      resultatReference ? bilanReference(resultatReference, fuseau) : h('p', { class: 'aide' }, 'Pas encore vérifié.'),
       commande);
     boutonImporter.disabled = !!verificationReference;
   }
@@ -83,9 +83,9 @@ function sectionReference(initial, actions, capacites) {
   return { element, mettreAJour };
 }
 
-function bilanReference(b) {
+function bilanReference(b, fuseau) {
   const accroche = id => b.resultats?.find(r => r.id === id)?.accroche ?? id;
-  const date = new Date(b.verifie_le).toLocaleString('fr-FR');
+  const date = new Date(b.verifie_le).toLocaleString('fr-FR', { timeZone: fuseau });
   return h('div', { class: b.ok ? 'bilan bilan-ok' : 'bilan bilan-ko' },
     h('p', {}, `${Math.round(b.taux * 100)} % des paires bien classées (seuil 80 %) : ${b.ok ? 'calibration correcte' : 'à recalibrer'}. Vérifié le ${date}, profil version ${b.version_profil}.`),
     b.inversions?.length

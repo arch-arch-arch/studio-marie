@@ -180,6 +180,14 @@ describe('jeu de référence (vue Profil)', () => {
     expect(el.textContent).toContain('« G2 » n’est pas au-dessus de « P4 »');
   });
 
+  it('affiche la date du bilan dans le fuseau du profil', () => {
+    const bilan = { taux: 1, ok: true, paires: 1, inversions: [], resultats: [], version_profil: 1, verifie_le: T };
+    const profilTokyo = { ...fictif, version: 1, importe_le: T, regles_studio: { ...fictif.regles_studio, fuseau: 'Asia/Tokyo' } };
+    const el = vueProfil({ profil: profilTokyo, reference: items, resultatReference: bilan, verificationReference: null }, actions(), { sample: true });
+    const attendu = new Date(T).toLocaleString('fr-FR', { timeZone: 'Asia/Tokyo' });
+    expect(el.textContent).toContain(`Vérifié le ${attendu}`);
+  });
+
   it('importe un jeu collé', async () => {
     const a = actions();
     const el = vueProfil(etatVue(), a, { sample: true });
