@@ -250,4 +250,47 @@ describe('evaluerFiche', () => {
     expect(etat.lire().fiches[0].statut).toBe('brouillon');
     expect(db._docs.get('fiches/f1').statut).toBe('brouillon');
   });
+
+  it('repasse en brouillon si le profil change pour bloquer une fiche validée pendant que la réévaluation est en cours', async () => {
+    const sample = fauxSample();
+    const { db, etat, actions } = await monter({ sample });
+    await actions.evaluerFiche('f1');
+    expect(await actions.changerStatut('f1', 'valide')).toEqual({ ok: true });
+    const reponse = differe();
+    sample.json.mockImplementationOnce(() => reponse.p);
+    const enCours = actions.evaluerFiche('f1');
+    await Promise.resolve();
+    const profil = etat.lire().profil;
+    etat.modifier({ profil: { ...profil, regles_studio: { ...profil.regles_studio, mots_a_eviter: [...profil.regles_studio.mots_a_eviter, 'ligne'] } } });
+    reponse.resoudre(REPONSE);
+    const r = await enCours;
+    expect(r.ok).toBe(true);
+    expect(r.fiche.statut).toBe('brouillon');
+    expect(etat.lire().fiches[0].statut).toBe('brouillon');
+    expect(db._docs.get('fiches/f1').statut).toBe('brouillon');
+  });
+});
+
+describe('reverifierFiches', () => {
+  it('repasse en brouillon les fiches validées ou programmées bloquées par le profil actuel, et pose le message', async () => {
+    const { db, etat, actions } = await monter();
+    await actions.evaluerFiche('f1');
+    expect(await actions.changerStatut('f1', 'programme')).toEqual({ ok: true });
+    const profil = etat.lire().profil;
+    etat.modifier({ profil: { ...profil, regles_studio: { ...profil.regles_studio, mots_a_eviter: [...profil.regles_studio.mots_a_eviter, 'ligne'] } } });
+    const n = await actions.reverifierFiches();
+    expect(n).toBe(1);
+    expect(etat.lire().fiches[0].statut).toBe('brouillon');
+    expect(db._docs.get('fiches/f1').statut).toBe('brouillon');
+    expect(etat.lire().erreur).toBe('1 fiche(s) repassée(s) en Brouillon : le profil actuel les bloque.');
+  });
+
+  it('ne touche à rien si aucune fiche n’est bloquée', async () => {
+    const { etat, actions } = await monter();
+    await actions.evaluerFiche('f1');
+    expect(await actions.changerStatut('f1', 'valide')).toEqual({ ok: true });
+    expect(await actions.reverifierFiches()).toBe(0);
+    expect(etat.lire().fiches[0].statut).toBe('valide');
+    expect(etat.lire().erreur).toBeNull();
+  });
 });

@@ -167,6 +167,21 @@ export function creerControleur({ etat, depot, enregistreur, assets, horloge, id
     }
   }
 
+  async function reverifierFiches() {
+    const { fiches, profil } = etat.lire();
+    const aRetrograder = fiches.filter(f => (f.statut === 'valide' || f.statut === 'programme')
+      && verifierRegles(f, profil.regles_studio).conformite.etat === 'rouge');
+    for (const f of aRetrograder) {
+      const g = appliquerStatut(f, 'brouillon', horloge());
+      remplacer(g);
+      await ecrireMaintenant(g);
+    }
+    if (aRetrograder.length) {
+      etat.modifier({ erreur: `${aRetrograder.length} fiche(s) repassée(s) en Brouillon : le profil actuel les bloque.` });
+    }
+    return aRetrograder.length;
+  }
+
   let controleurReference = null;
 
   async function importerReference(texte) {
@@ -237,6 +252,7 @@ export function creerControleur({ etat, depot, enregistreur, assets, horloge, id
     modifierFiche,
     evaluerFiche,
     evaluationDisponible: () => !evaluationIndisponible,
+    reverifierFiches,
     importerReference,
     verifierReference,
     arreterReference: () => controleurReference?.abort(),

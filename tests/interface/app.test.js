@@ -97,6 +97,37 @@ describe('demarrer', () => {
     expect(sample.json).toHaveBeenCalledTimes(1);
   });
 
+  it('réimporter le profil repasse en brouillon les fiches validées que les nouvelles règles bloquent', async () => {
+    const REPONSE = {
+      notes: { accroche: 8, voix: 7, mecanique: 6 },
+      phrases: { accroche: 'A.', voix: 'V.', mecanique: 'M.' },
+      conformite: { etat: 'vert', causes: [] },
+      captions: [{ role: 'engagement', texte: 'Variante A' }, { role: 'deadpan', texte: 'Variante B' }],
+      accroches: ['Acc 1', 'Acc 2'],
+      hashtags: ['nuit', 'socio'],
+      recommandations: ['R1', 'R2', 'R3'],
+    };
+    const db = creerFausseBase();
+    const sample = Object.assign(vi.fn(), { limits: async () => ({}), json: vi.fn(async () => REPONSE) });
+    const racine = document.createElement('div');
+    const app = await demarrer(racine, { use: async nom => (nom === 'db' ? db : nom === 'sample' ? sample : null) }, { horloge });
+    await app.actions.importerProfil(JSON.stringify(fictif));
+    const f = await app.actions.creerFiche({ format: 'reel', date_heure: '2026-09-28T10:00:00.000Z' });
+    app.actions.modifierFiche(f.id, {
+      accroche: 'Tu relis ce message.', caption: 'Une ligne. Dis-moi en commentaire.',
+      hashtags: ['nuit', 'socio', 'humour'], visuel: 'a1', visuel_type: 'image',
+    });
+    await app.actions.fermerPanneau();
+    await app.actions.evaluerFiche(f.id);
+    expect(await app.actions.changerStatut(f.id, 'valide')).toEqual({ ok: true });
+
+    const bloque = { ...fictif, regles_studio: { ...fictif.regles_studio, mots_a_eviter: [...fictif.regles_studio.mots_a_eviter, 'ligne'] } };
+    await app.actions.importerProfil(JSON.stringify(bloque));
+
+    expect(app.etat.lire().fiches.find(x => x.id === f.id).statut).toBe('brouillon');
+    await vi.waitFor(() => expect(app.etat.lire().erreur).toBe('1 fiche(s) repassée(s) en Brouillon : le profil actuel les bloque.'));
+  });
+
   it('propose « Évaluer » dans la fiche quand la capacité sample existe', async () => {
     const db = creerFausseBase();
     const sample = Object.assign(async () => ({}), { json: async () => ({}), limits: async () => ({}) });

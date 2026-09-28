@@ -42,7 +42,12 @@ export async function demarrer(racine, claude, { horloge = () => new Date().toIS
 
   let arreterFiches = null;
   let plageCourante = '';
+  let derniereVersionVerifiee = null;
   etat.abonner(e => {
+    if (e.profil && e.profil.version !== derniereVersionVerifiee) {
+      derniereVersionVerifiee = e.profil.version;
+      actions.reverifierFiches();
+    }
     if (e.profil) {
       const [debut, fin] = plageDeVue(e.vue, e.ancre, e.profil.regles_studio.fuseau);
       if (`${debut}|${fin}` !== plageCourante) {
