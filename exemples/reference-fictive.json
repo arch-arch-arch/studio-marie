@@ -1,0 +1,8 @@
+[
+  { "format": "reel", "pilier": "nuit", "resultat": "gagnant", "accroche": "Personne ne m'attire. Sauf celui qui part avant la fin du set.", "caption": "Team « il reste » ou team « il file » ?", "hashtags": ["nuit", "club", "paris"] },
+  { "format": "reel", "pilier": "socio", "resultat": "gagnant", "accroche": "Ce que ta façon de répondre en trois jours dit de toi.", "caption": "Tu sais qui envoyer. Envoie-lui.", "hashtags": ["socio", "dating", "humour"] },
+  { "format": "carrousel", "pilier": "humour_sec", "resultat": "gagnant", "accroche": "Mon défaut préféré ? Avoir raison en retard.", "caption": "Complète : elle est le genre de fille qui ___", "hashtags": ["humour", "ironie", "paris"] },
+  { "format": "reel", "pilier": "nuit", "resultat": "perdant", "accroche": "I want soul to soul, not skin to skin", "caption": "Bonne soirée à tous", "hashtags": ["love"] },
+  { "format": "post", "pilier": "socio", "resultat": "perdant", "accroche": "Journée plage", "caption": "Belle journée ensoleillée à la plage avec mes amis, profitez bien de la vie", "hashtags": ["summer", "beach", "happy", "love", "friends", "sun", "vibes"] },
+  { "format": "reel", "pilier": "humour_sec", "resultat": "perdant", "accroche": "Je ne sais pas qui a besoin d'entendre ça mais sois bienveillant avec toi-même aujourd'hui car tu le mérites vraiment", "caption": "Link in bio pour plus de mindset", "hashtags": ["mindset", "motivation", "bienveillance"] }
+]

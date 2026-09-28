@@ -23,7 +23,7 @@ export async function demarrer(racine, claude, { horloge = () => new Date().toIS
   const assets = (await claude.use('assets')) ?? null;
   const sample = (await claude.use('sample')) ?? null;
   const depot = creerDepot(db);
-  const etat = creerEtat({ profil: undefined, fiches: [], vue: 'semaine', ancre: horloge(), ficheOuverte: null, erreur: null, sauvegarde: 'ok' });
+  const etat = creerEtat({ profil: undefined, fiches: [], vue: 'semaine', ancre: horloge(), ficheOuverte: null, erreur: null, sauvegarde: 'ok', reference: [], resultatReference: null, verificationReference: null });
   const enregistreur = creerEnregistreur(
     async fiche => {
       etat.modifier({ sauvegarde: 'en_cours' });
@@ -60,6 +60,8 @@ export async function demarrer(racine, claude, { horloge = () => new Date().toIS
     profil => etat.modifier({ profil, vue: profil ? etat.lire().vue : 'profil' }),
     err => etat.modifier({ erreur: messageErreurBase(err) }),
   );
+  depot.ecouterReference(reference => etat.modifier({ reference }), err => etat.modifier({ erreur: messageErreurBase(err) }));
+  depot.ecouterResultatReference(resultatReference => etat.modifier({ resultatReference }), err => etat.modifier({ erreur: messageErreurBase(err) }));
   if (typeof window !== 'undefined') window.addEventListener('pagehide', () => { enregistreur.viderTout(); });
   if (typeof document !== 'undefined') {
     const bloquerDepotFichier = e => { if (e.dataTransfer?.types?.includes?.('Files')) e.preventDefault(); };

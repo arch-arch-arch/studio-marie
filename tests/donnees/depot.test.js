@@ -54,3 +54,20 @@ describe('profil', () => {
     expect(db._docs.get('profil/courant')).toMatchObject({ version: 1 });
   });
 });
+
+describe('jeu de référence', () => {
+  it('remplace le jeu en supprimant les contenus retirés, et garde le dernier bilan', async () => {
+    const db = creerFausseBase();
+    const depot = creerDepot(db);
+    const vus = [];
+    depot.ecouterReference(liste => vus.push(liste));
+    await depot.remplacerReference([{ id: 'r1', accroche: 'a' }, { id: 'r2', accroche: 'b' }], []);
+    await depot.remplacerReference([{ id: 'r1', accroche: 'c' }], vus.at(-1));
+    expect(vus.at(-1)).toEqual([{ id: 'r1', accroche: 'c' }]);
+    const bilans = [];
+    depot.ecouterResultatReference(b => bilans.push(b));
+    expect(bilans[0]).toBeNull();
+    await depot.enregistrerResultatReference({ taux: 1, ok: true });
+    expect(bilans.at(-1)).toEqual({ taux: 1, ok: true });
+  });
+});

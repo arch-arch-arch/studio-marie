@@ -7,6 +7,7 @@ import { verifierRegles } from '../logique/regles-score.js';
 import { composerScore } from '../logique/score.js';
 import { fichesDeLaSemaine } from '../logique/controle.js';
 import { construirePrompt, validerReponse, messageErreurSample, CODES_INDISPONIBLES } from '../claude/evaluation.js';
+import { validerReference, ficheDeReference, verifierClassement } from '../logique/reference.js';
 
 const MESSAGES_TELEVERSEMENT = {
   too_large: 'Fichier trop lourd (20 Mo au maximum).',
@@ -138,11 +139,65 @@ export function creerControleur({ etat, depot, enregistreur, assets, horloge, id
     }
   }
 
+  let controleurReference = null;
+
+  async function importerReference(texte) {
+    let liste;
+    try {
+      liste = JSON.parse(texte);
+    } catch (e) {
+      return { ok: false, erreurs: [`Ce texte n’est pas du JSON valide : ${e.message}`] };
+    }
+    const verification = validerReference(liste);
+    if (!verification.ok) return verification;
+    try {
+      await depot.remplacerReference(verification.items, etat.lire().reference ?? []);
+      return { ok: true, erreurs: [], nombre: verification.items.length };
+    } catch {
+      return { ok: false, erreurs: ['L’import a échoué : la base du studio ne répond pas. Réessaie dans un instant.'] };
+    }
+  }
+
+  async function verifierReference() {
+    if (!sample) return INDISPONIBLE;
+    const { profil, reference = [] } = etat.lire();
+    if (!reference.length) return { ok: false, raison: 'Importe d’abord un jeu de référence.' };
+    if (controleurReference) return { ok: false, raison: 'Une vérification est déjà en cours.' };
+    controleurReference = new AbortController();
+    const resultats = [];
+    etat.modifier({ verificationReference: { fait: 0, total: reference.length }, erreur: null });
+    try {
+      for (const item of reference) {
+        const r = await evaluerContenu(ficheDeReference(item, profil.regles_studio), { signal: controleurReference.signal, fichesSemaine: [] });
+        if (!r.ok) {
+          if (r.annule) return { ok: false, annule: true };
+          etat.modifier({ erreur: r.raison });
+          return { ok: false, raison: r.raison };
+        }
+        resultats.push({ id: item.id, resultat: item.resultat, total: r.score.total, accroche: item.accroche });
+        etat.modifier({ verificationReference: { fait: resultats.length, total: reference.length } });
+      }
+      const bilan = { ...verifierClassement(resultats), resultats, version_profil: profil.version, verifie_le: horloge() };
+      try {
+        await depot.enregistrerResultatReference(bilan);
+      } catch {
+        etat.modifier({ erreur: 'Le bilan n’a pas pu être enregistré : réessaie dans un instant.' });
+      }
+      return { ok: true, bilan };
+    } finally {
+      controleurReference = null;
+      etat.modifier({ verificationReference: null });
+    }
+  }
+
   return {
     ouvrirFiche: id => etat.modifier({ ficheOuverte: id, erreur: null }),
     fermerPanneau,
     modifierFiche,
     evaluerFiche,
+    importerReference,
+    verifierReference,
+    arreterReference: () => controleurReference?.abort(),
 
     async creerFiche({ format, date_heure }) {
       await fermerPanneau();

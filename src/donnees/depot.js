@@ -32,5 +32,24 @@ export function creerDepot(db) {
       await db.doc('profil/courant').set({ ...profil, version, importe_le: maintenant });
       return { ok: true, erreurs: [], version };
     },
+
+    ecouterReference(rappel, erreur) {
+      return db.collection('reference').onSnapshot(snap => rappel(snap.docs.map(d => ({ id: d.id, ...d.data() }))), erreur);
+    },
+
+    async remplacerReference(items, anciens = []) {
+      for (const ancien of anciens) {
+        if (!items.some(i => i.id === ancien.id)) await db.doc(`reference/${ancien.id}`).delete();
+      }
+      for (const { id, ...corps } of items) await db.doc(`reference/${id}`).set(corps);
+    },
+
+    ecouterResultatReference(rappel, erreur) {
+      return db.doc('reference_resultats/dernier').onSnapshot(s => rappel(s.exists ? s.data() : null), erreur);
+    },
+
+    async enregistrerResultatReference(bilan) {
+      await db.doc('reference_resultats/dernier').set(bilan);
+    },
   };
 }

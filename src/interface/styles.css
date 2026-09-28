@@ -154,3 +154,10 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .suggestion-texte { white-space: pre-wrap; overflow-wrap: anywhere; }
 .suggestion-hashtags { font-family: var(--mono); font-size: 13px; margin: 4px 0; overflow-wrap: anywhere; }
 .evaluation-actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+
+/* Jeu de référence */
+.reference { display: grid; gap: 10px; }
+.bilan { border-left: 4px solid var(--etat); padding: 6px 10px; background: var(--surface-2); border-radius: 6px; }
+.bilan p { margin: 0; }
+.bilan ul { margin: 6px 0 0; padding-left: 18px; font-size: 14px; }
+.bilan-ok { --etat: var(--vert); } .bilan-ko { --etat: var(--rouge); }
