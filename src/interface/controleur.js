@@ -85,7 +85,13 @@ export function creerControleur({ etat, depot, enregistreur, assets, horloge, id
     if (fiche.visuel && fiche.visuel_type === 'image') {
       try {
         const limites = await sample.limits();
-        if (limites?.images) images = await chargerImage(fiche.visuel);
+        if (limites?.images) {
+          const blob = await chargerImage(fiche.visuel);
+          const { mediaTypes, maxInputBytes } = limites.images;
+          const typeOk = !mediaTypes || mediaTypes.includes(blob.type);
+          const tailleOk = maxInputBytes == null || blob.size <= maxInputBytes;
+          if (typeOk && tailleOk) images = blob;
+        }
       } catch {
         images = undefined;
       }

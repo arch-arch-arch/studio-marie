@@ -140,4 +140,22 @@ describe('appliquerEvaluation', () => {
     expect(aReevaluer(g)).toBe(false);
     expect(peutPasserA(g, 'valide')).toEqual({ ok: true });
   });
+
+  it('repasse en brouillon une fiche validée dont la conformité redevient rouge', () => {
+    const validee = changerStatut(prete(), 'valide', T0);
+    const score = { total: 40, criteres: [], conformite: { etat: 'rouge', causes: ['x'] }, empreinte: empreinte(validee) };
+    const g = appliquerEvaluation(validee, {
+      score, variantes: [], suggestions: { accroches: [], hashtags: [] }, recommandations: ['R1', 'R2', 'R3'],
+    }, '2026-09-28T09:00:00.000Z');
+    expect(g.statut).toBe('brouillon');
+  });
+
+  it('garde le statut publié même si la conformité redevient rouge', () => {
+    const publiee = changerStatut(changerStatut(prete(), 'valide', T0), 'publie', T0);
+    const score = { total: 40, criteres: [], conformite: { etat: 'rouge', causes: ['x'] }, empreinte: empreinte(publiee) };
+    const g = appliquerEvaluation(publiee, {
+      score, variantes: [], suggestions: { accroches: [], hashtags: [] }, recommandations: ['R1', 'R2', 'R3'],
+    }, '2026-09-28T09:00:00.000Z');
+    expect(g.statut).toBe('publie');
+  });
 });

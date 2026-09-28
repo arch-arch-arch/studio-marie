@@ -131,8 +131,45 @@ describe('evaluerFiche', () => {
     await b.actions.evaluerFiche('f1');
     expect(b.chargerImage).not.toHaveBeenCalled();
 
+    const sampleEchec = fauxSample(undefined, async () => ({ images: { maxCount: 1 } }));
     const echec = vi.fn(async () => { throw new Error('404'); });
-    const c = await monter({ sample: fauxSample(undefined, async () => ({ images: { maxCount: 1 } })), chargerImage: echec, contenu: { visuel_type: 'image' } });
+    const c = await monter({ sample: sampleEchec, chargerImage: echec, contenu: { visuel_type: 'image' } });
     expect((await c.actions.evaluerFiche('f1')).ok).toBe(true);
+    expect(sampleEchec.json.mock.calls[0][1]).not.toHaveProperty('images');
+  });
+
+  it('ignore le visuel si son type ou sa taille ne correspond pas aux limites de la vue', async () => {
+    const sampleType = fauxSample(undefined, async () => ({ images: { maxCount: 1, mediaTypes: ['image/jpeg'] } }));
+    const png = vi.fn(async () => new Blob(['x'], { type: 'image/png' }));
+    const a = await monter({ sample: sampleType, chargerImage: png, contenu: { visuel_type: 'image' } });
+    await a.actions.evaluerFiche('f1');
+    expect(sampleType.json.mock.calls[0][1]).not.toHaveProperty('images');
+    expect(sampleType.json.mock.calls[0][0]).toContain('"visuel":"présent mais non joint"');
+
+    const sampleTaille = fauxSample(undefined, async () => ({ images: { maxCount: 1, maxInputBytes: 1 } }));
+    const gros = vi.fn(async () => new Blob(['xxxxxxxxxx'], { type: 'image/png' }));
+    const b = await monter({ sample: sampleTaille, chargerImage: gros, contenu: { visuel_type: 'image' } });
+    await b.actions.evaluerFiche('f1');
+    expect(sampleTaille.json.mock.calls[0][1]).not.toHaveProperty('images');
+  });
+
+  it('signale un rate_limited sans relancer automatiquement', async () => {
+    const sample = fauxSample(async () => { throw { code: 'rate_limited', message: 'x' }; });
+    const { actions } = await monter({ sample });
+    expect(await actions.evaluerFiche('f1')).toEqual({ ok: false, raison: 'Trop de demandes à Claude pour le moment : réessaie un peu plus tard.', indisponible: false });
+    expect(sample.json).toHaveBeenCalledTimes(1);
+  });
+
+  it('repasse en brouillon si la conformité redevient rouge après la réévaluation d’une fiche validée', async () => {
+    const sample = fauxSample();
+    const { db, etat, actions } = await monter({ sample });
+    await actions.evaluerFiche('f1');
+    expect(await actions.changerStatut('f1', 'valide')).toEqual({ ok: true });
+    sample.json.mockImplementationOnce(async () => ({ ...REPONSE, conformite: { etat: 'rouge', causes: ['groupe visé'] } }));
+    const r = await actions.evaluerFiche('f1');
+    expect(r.ok).toBe(true);
+    expect(r.fiche.statut).toBe('brouillon');
+    expect(etat.lire().fiches[0].statut).toBe('brouillon');
+    expect(db._docs.get('fiches/f1').statut).toBe('brouillon');
   });
 });
