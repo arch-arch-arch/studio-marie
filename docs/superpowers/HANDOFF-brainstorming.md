@@ -88,13 +88,33 @@ Révisée à partir du profil de marque réel (fourni par Jean, conservé hors d
   5. `releves_compte` : un relevé par semaine le dimanche : abonnés, vues moyennes des stories, clics sur la porte, croissance nette.
 - **Laissé de côté pour l'instant** : historique des modifications, gestion de plusieurs comptes, import automatique des statistiques (phase 2).
 
+## Section 4 : veille hebdo (VALIDÉE le 2026-09-27)
+
+- **Déclenchement** : tâche programmée le dimanche à 20 h (fuseau du profil), plus un bouton « Relancer la veille » dans le studio. Routine cloud : sa capacité à écrire dans la base est confirmée par un test.
+- **Ce qu'elle lit** : le profil, les stats des 2 dernières semaines, le relevé du compte, les créneaux libres de la semaine suivante.
+- **Sources** : recherche web (annonces d'Instagram aux créateurs, rapports de tendances, tendances de la niche). Pas de scraping d'Instagram. Un son tendance est marqué « à vérifier dans l'app ».
+- **Filtre de marque** : chaque tendance est adaptée ou écartée, avec la raison. 3 à 5 tendances retenues.
+- **Bulletin** :
+  1. rétrospective de la semaine (meilleur et pire contenu selon le taux d'abonnés par vue et les partages) ;
+  2. tendances ;
+  3. alertes (une mise à jour du profil peut être proposée, jamais appliquée automatiquement) ;
+  4. 3 à 5 idées en « Brouillon », déjà évaluées, placées sur les créneaux libres.
+- **Erreurs** :
+  - un bulletin par semaine ISO ; une relance ne remplace que ses propres idées restées en « Brouillon » sans modification ;
+  - si la recherche web échoue, bulletin partiel ;
+  - si les stats n'ont pas été saisies, rappel de saisie ;
+  - si la tâche n'a pas tourné, bandeau et bouton de relance.
+
+## Sections 5 et 6 (VALIDÉES le 2026-09-27)
+
+- **Interface** : conçue d'abord pour l'ordinateur (la créatrice travaille sur Mac). Semaine en 7 colonnes avec glisser-déposer ; fiche en panneau latéral.
+- **Tests** : règles calculées en JS testées avec Vitest ; réponses de Claude validées par un schéma ; jeu de référence gardé hors de git ; un studio de test et le studio réel.
+- **Test de la routine cloud** : réussi le 2026-09-28. La veille tournera dans le cloud.
+
 ## Reste à faire
 
-1. Section 4 : veille hebdo (sources de tendances, format du bulletin, gestion des erreurs).
-2. Section 5 : interface (calendrier, fiche, dashboard ; usage mobile d'abord ?).
-3. Section 6 : tests et vérification.
-4. Écrire la spec dans `docs/superpowers/specs/2026-09-27-studio-contenu-design.md`, puis faire l'auto-revue et la faire valider.
-5. Passer au skill `writing-plans`.
+1. Faire relire et valider la spec `docs/superpowers/specs/2026-09-27-studio-contenu-design.md`.
+2. Passer au skill `writing-plans`.
 
 ## Contraintes
 
