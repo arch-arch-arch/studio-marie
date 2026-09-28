@@ -13,7 +13,8 @@ export function vueProfil({ profil, reference = [], resultatReference = null, ve
     if (!r.ok) erreurs.replaceChildren(...r.erreurs.map(m => h('li', {}, m)));
   };
 
-  return h('div', { class: 'profil' },
+  let ref = null;
+  const enfants = [
     profil ? resume(profil) : h('p', { class: 'aide' }, 'Aucun profil pour l’instant. Importe le profil de marque pour commencer.'),
     h('section', { class: 'import' },
       h('h2', {}, profil ? 'Importer une nouvelle version' : 'Importer le profil'),
@@ -21,39 +22,61 @@ export function vueProfil({ profil, reference = [], resultatReference = null, ve
       h('label', { class: 'champ' }, h('span', { class: 'champ-libelle' }, 'Ou colle le JSON'), zone),
       h('button', { type: 'button', class: 'bouton-principal', onclick: importer }, 'Importer cette version'),
       erreurs),
-    profil ? sectionReference({ reference, resultatReference, verificationReference }, actions, capacites) : null);
+  ];
+  if (profil) {
+    ref = sectionReference({ reference, resultatReference, verificationReference }, actions, capacites);
+    enfants.push(ref.element);
+  }
+
+  const racine = h('div', { class: 'profil' }, ...enfants);
+  racine.mettreAJour = e => ref?.mettreAJour(e);
+  return racine;
 }
 
-function sectionReference({ reference, resultatReference, verificationReference }, actions, capacites) {
+function sectionReference(initial, actions, capacites) {
   const zone = h('textarea', { id: 'reference-json', rows: 8, placeholder: 'Colle ici la liste JSON des contenus de référence (voir exemples/reference-fictive.json).' });
   const erreurs = h('ul', { class: 'erreurs', 'aria-live': 'polite' });
   const message = h('p', { class: 'aide', role: 'status' });
-  const gagnants = reference.filter(i => i.resultat === 'gagnant').length;
-  const perdants = reference.filter(i => i.resultat === 'perdant').length;
-  const importer = async () => {
+  const etatZone = h('div', { class: 'reference-etat' });
+  const boutonImporter = h('button', { type: 'button', class: 'bouton-secondaire', onclick: () => importer() }, 'Importer ce jeu');
+
+  async function importer() {
     erreurs.replaceChildren();
     message.textContent = '';
     const r = await actions.importerReference(zone.value);
     if (!r.ok) erreurs.replaceChildren(...r.erreurs.map(m => h('li', {}, m)));
     else message.textContent = `${r.nombre} contenus importés.`;
-  };
-  let commande = null;
-  if (capacites.sample && reference.length) {
-    commande = verificationReference
-      ? h('div', { class: 'evaluation-actions' },
-        h('p', { class: 'aide' }, `Vérification en cours : ${verificationReference.fait}/${verificationReference.total}`),
-        h('button', { type: 'button', class: 'bouton-secondaire', onclick: () => actions.arreterReference() }, 'Arrêter'))
-      : h('button', { type: 'button', class: 'bouton-principal', onclick: () => actions.verifierReference() },
-        `Vérifier le classement (${reference.length} évaluations sur ton compte Claude)`);
   }
-  return h('section', { class: 'reference' },
+
+  function mettreAJour({ reference, resultatReference, verificationReference }) {
+    const gagnants = reference.filter(i => i.resultat === 'gagnant').length;
+    const perdants = reference.filter(i => i.resultat === 'perdant').length;
+    let commande = null;
+    if (capacites.sample && reference.length) {
+      commande = verificationReference
+        ? h('div', { class: 'evaluation-actions' },
+          h('p', { class: 'aide' }, `Vérification en cours : ${verificationReference.fait}/${verificationReference.total}`),
+          h('button', { type: 'button', class: 'bouton-secondaire', onclick: () => actions.arreterReference() }, 'Arrêter'))
+        : h('button', { type: 'button', class: 'bouton-principal', onclick: () => actions.verifierReference() },
+          `Vérifier le classement (${reference.length} évaluations sur ton compte Claude)`);
+    }
+    etatZone.replaceChildren(
+      h('p', { class: 'aide' }, `${reference.length} contenus (${gagnants} gagnants, ${perdants} perdants). Le score doit classer les gagnants au-dessus des perdants.`),
+      resultatReference ? bilanReference(resultatReference) : h('p', { class: 'aide' }, 'Pas encore vérifié.'),
+      commande);
+    boutonImporter.disabled = !!verificationReference;
+  }
+
+  mettreAJour(initial);
+
+  const element = h('section', { class: 'reference' },
     h('h2', {}, 'Jeu de référence'),
-    h('p', { class: 'aide' }, `${reference.length} contenus (${gagnants} gagnants, ${perdants} perdants). Le score doit classer les gagnants au-dessus des perdants.`),
-    resultatReference ? bilanReference(resultatReference) : h('p', { class: 'aide' }, 'Pas encore vérifié.'),
-    commande,
+    etatZone,
     h('label', { class: 'champ' }, h('span', { class: 'champ-libelle' }, 'Remplacer le jeu (JSON)'), zone),
-    h('button', { type: 'button', class: 'bouton-secondaire', onclick: importer }, 'Importer ce jeu'),
+    boutonImporter,
     erreurs, message);
+
+  return { element, mettreAJour };
 }
 
 function bilanReference(b) {

@@ -52,6 +52,7 @@ export function creerRendu(racine, actions, capacites, horloge) {
   const panneau = h('div', { class: 'zone-panneau' });
   racine.replaceChildren(tete, zoneErreur, h('div', { class: 'corps' }, vue, panneau));
   let memo = {};
+  let elementVue = null;
 
   return function rendre(e) {
     zoneErreur.replaceChildren(e.erreur
@@ -63,9 +64,12 @@ export function creerRendu(racine, actions, capacites, horloge) {
     }
     tete.replaceChildren(...barre(e, actions));
     const e2 = { ...e, maintenant: horloge() };
-    if (memo.profil !== e.profil || memo.fiches !== e.fiches || memo.vue !== e.vue || memo.ancre !== e.ancre
-      || memo.reference !== e.reference || memo.resultatReference !== e.resultatReference || memo.verificationReference !== e.verificationReference) {
-      vue.replaceChildren(contenuVue(e2, actions, capacites));
+    const estVueProfil = !e.profil || e.vue === 'profil';
+    if (memo.profil !== e.profil || memo.fiches !== e.fiches || memo.vue !== e.vue || memo.ancre !== e.ancre) {
+      elementVue = contenuVue(e2, actions, capacites);
+      vue.replaceChildren(elementVue);
+    } else if (estVueProfil && (memo.reference !== e.reference || memo.resultatReference !== e.resultatReference || memo.verificationReference !== e.verificationReference)) {
+      elementVue?.mettreAJour?.(e2);
     }
     const ouverte = e.profil && e.ficheOuverte ? e.fiches.find(f => f.id === e.ficheOuverte) : null;
     const panneauChange = memo.ficheOuverte !== e.ficheOuverte || memo.profil !== e.profil || (!!ouverte !== memo.panneauAffiche);

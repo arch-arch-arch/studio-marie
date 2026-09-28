@@ -51,5 +51,9 @@ export function creerDepot(db) {
     async enregistrerResultatReference(bilan) {
       await db.doc('reference_resultats/dernier').set(bilan);
     },
+
+    async effacerResultatReference() {
+      await db.doc('reference_resultats/dernier').delete();
+    },
   };
 }

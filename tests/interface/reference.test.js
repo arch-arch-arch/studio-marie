@@ -8,8 +8,10 @@ import { creerEnregistreur } from '../../src/donnees/enregistreur.js';
 import { creerEtat } from '../../src/interface/etat.js';
 import { creerControleur } from '../../src/interface/controleur.js';
 import { vueProfil } from '../../src/interface/vue-profil.js';
+import { demarrer } from '../../src/interface/app.js';
 
 const T = '2026-09-28T08:00:00.000Z';
+const horloge = () => T;
 const note = n => ({
   notes: { accroche: n, voix: n, mecanique: n }, phrases: { accroche: 'a', voix: 'v', mecanique: 'm' },
   conformite: { etat: 'vert', causes: [] }, captions: [{ role: 'engagement', texte: 'x' }, { role: 'deadpan', texte: 'y' }],
@@ -78,6 +80,46 @@ describe('jeu de référence (contrôleur)', () => {
     expect(await monter().actions.verifierReference()).toEqual({ ok: false, raison: 'Importe d’abord un jeu de référence.' });
     expect((await monter(null).actions.verifierReference()).raison).toBe('L’évaluation par Claude n’est pas disponible dans cette vue.');
   });
+
+  it('efface le bilan précédent dès qu’un nouveau jeu est importé', async () => {
+    const { db, actions } = monter();
+    await actions.importerReference(JSON.stringify(jeu));
+    await actions.verifierReference();
+    expect(db._docs.has('reference_resultats/dernier')).toBe(true);
+    await actions.importerReference(JSON.stringify(jeu));
+    expect(db._docs.has('reference_resultats/dernier')).toBe(false);
+  });
+
+  it('vérifie l’arrêt avant de lancer l’évaluation suivante, même si l’appel en cours se termine normalement', async () => {
+    let resoudrePremier;
+    const premier = new Promise(resolve => { resoudrePremier = resolve; });
+    const sample = Object.assign(vi.fn(), {
+      limits: async () => ({}),
+      json: vi.fn()
+        .mockImplementationOnce(async () => { await premier; return note(9); })
+        .mockImplementation(async () => note(9)),
+    });
+    const { etat, actions } = monter(sample);
+    await actions.importerReference(JSON.stringify(jeu));
+    const enCours = actions.verifierReference();
+    await vi.waitFor(() => expect(sample.json).toHaveBeenCalledTimes(1));
+    actions.arreterReference();
+    resoudrePremier();
+    expect(await enCours).toEqual({ ok: false, annule: true });
+    expect(sample.json).toHaveBeenCalledTimes(1);
+    expect(etat.lire().erreur).toBeNull();
+  });
+
+  it('affiche un message clair et n’enregistre rien si l’évaluation lève une exception inattendue', async () => {
+    const sample = Object.assign(vi.fn(), { limits: async () => ({}), json: vi.fn(async () => note(9)) });
+    const { db, etat, actions } = monter(sample);
+    await actions.importerReference(JSON.stringify(jeu));
+    const profilSansCreneaux = { ...etat.lire().profil, regles_studio: { ...etat.lire().profil.regles_studio, creneaux: undefined } };
+    etat.modifier({ profil: profilSansCreneaux });
+    expect(await actions.verifierReference()).toEqual({ ok: false, raison: 'La vérification a échoué : réessaie. Rien n’a été enregistré.' });
+    expect(etat.lire().erreur).toBe('La vérification a échoué : réessaie. Rien n’a été enregistré.');
+    expect(db._docs.has('reference_resultats/dernier')).toBe(false);
+  });
 });
 
 describe('jeu de référence (vue Profil)', () => {
@@ -116,5 +158,42 @@ describe('jeu de référence (vue Profil)', () => {
     el.querySelector('#reference-json').value = JSON.stringify(jeu);
     [...el.querySelectorAll('button')].find(b => b.textContent === 'Importer ce jeu').click();
     await vi.waitFor(() => expect(a.importerReference).toHaveBeenCalledWith(JSON.stringify(jeu)));
+  });
+
+  it('désactive « Importer ce jeu » pendant une vérification', () => {
+    const el = vueProfil(etatVue({ reference: items, verificationReference: { fait: 1, total: 6 } }), actions(), { sample: true });
+    const importer = [...el.querySelectorAll('button')].find(b => b.textContent === 'Importer ce jeu');
+    expect(importer.disabled).toBe(true);
+  });
+});
+
+describe('jeu de référence (stabilité de la vue Profil dans l’application)', () => {
+  async function demarrerAvecProfil() {
+    const db = creerFausseBase();
+    const sample = sampleClasseur();
+    const racine = document.createElement('div');
+    const app = await demarrer(racine, { use: async nom => (nom === 'db' ? db : nom === 'sample' ? sample : null) }, { horloge });
+    await app.actions.importerProfil(JSON.stringify(fictif));
+    app.actions.changerVue('profil', T);
+    await app.actions.importerReference(JSON.stringify(jeu));
+    return { db, sample, racine, app };
+  }
+
+  it('garde la zone de texte de la référence intacte pendant une progression', async () => {
+    const { racine, app } = await demarrerAvecProfil();
+    const zone = racine.querySelector('#reference-json');
+    zone.value = 'texte collé pendant la vérification';
+    app.etat.modifier({ verificationReference: { fait: 1, total: 6 } });
+    expect(racine.querySelector('#reference-json')).toBe(zone);
+    expect(zone.value).toBe('texte collé pendant la vérification');
+    expect(racine.textContent).toContain('Vérification en cours : 1/6');
+  });
+
+  it('affiche le message de confirmation d’import après un import réel', async () => {
+    const { racine, app } = await demarrerAvecProfil();
+    const zone = racine.querySelector('#reference-json');
+    zone.value = JSON.stringify(jeu);
+    [...racine.querySelectorAll('button')].find(b => b.textContent === 'Importer ce jeu').click();
+    await vi.waitFor(() => expect(racine.textContent).toContain('6 contenus importés.'));
   });
 });

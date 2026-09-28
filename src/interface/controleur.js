@@ -152,6 +152,7 @@ export function creerControleur({ etat, depot, enregistreur, assets, horloge, id
     if (!verification.ok) return verification;
     try {
       await depot.remplacerReference(verification.items, etat.lire().reference ?? []);
+      await depot.effacerResultatReference();
       return { ok: true, erreurs: [], nombre: verification.items.length };
     } catch {
       return { ok: false, erreurs: ['L’import a échoué : la base du studio ne répond pas. Réessaie dans un instant.'] };
@@ -167,15 +168,22 @@ export function creerControleur({ etat, depot, enregistreur, assets, horloge, id
     const resultats = [];
     etat.modifier({ verificationReference: { fait: 0, total: reference.length }, erreur: null });
     try {
-      for (const item of reference) {
-        const r = await evaluerContenu(ficheDeReference(item, profil.regles_studio), { signal: controleurReference.signal, fichesSemaine: [] });
-        if (!r.ok) {
-          if (r.annule) return { ok: false, annule: true };
-          etat.modifier({ erreur: r.raison });
-          return { ok: false, raison: r.raison };
+      try {
+        for (const item of reference) {
+          if (controleurReference.signal.aborted) return { ok: false, annule: true };
+          const r = await evaluerContenu(ficheDeReference(item, profil.regles_studio), { signal: controleurReference.signal, fichesSemaine: [] });
+          if (!r.ok) {
+            if (r.annule) return { ok: false, annule: true };
+            etat.modifier({ erreur: r.raison });
+            return { ok: false, raison: r.raison };
+          }
+          resultats.push({ id: item.id, resultat: item.resultat, total: r.score.total, accroche: item.accroche });
+          etat.modifier({ verificationReference: { fait: resultats.length, total: reference.length } });
         }
-        resultats.push({ id: item.id, resultat: item.resultat, total: r.score.total, accroche: item.accroche });
-        etat.modifier({ verificationReference: { fait: resultats.length, total: reference.length } });
+      } catch {
+        const raison = 'La vérification a échoué : réessaie. Rien n’a été enregistré.';
+        etat.modifier({ erreur: raison });
+        return { ok: false, raison };
       }
       const bilan = { ...verifierClassement(resultats), resultats, version_profil: profil.version, verifie_le: horloge() };
       try {

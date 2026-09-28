@@ -70,4 +70,11 @@ describe('jeu de référence', () => {
     await depot.enregistrerResultatReference({ taux: 1, ok: true });
     expect(bilans.at(-1)).toEqual({ taux: 1, ok: true });
   });
+  it('efface le bilan', async () => {
+    const db = creerFausseBase();
+    const depot = creerDepot(db);
+    await depot.enregistrerResultatReference({ taux: 1, ok: true });
+    await depot.effacerResultatReference();
+    expect(db._docs.has('reference_resultats/dernier')).toBe(false);
+  });
 });
