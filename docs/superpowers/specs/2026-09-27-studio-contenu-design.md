@@ -1,7 +1,7 @@
 # Studio Contenu : spec de conception
 
 - **Date** : 2026-09-27
-- **Statut** : à relire
+- **Statut** : validée le 2026-09-28
 - **Parcours** : architectural (nouveau projet)
 
 ## 1. Objectif
