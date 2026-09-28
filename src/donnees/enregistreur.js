@@ -5,6 +5,7 @@ export function creerEnregistreur(enregistrer, delaiMs = 600, surErreur = () => 
   const chaines = new Map();
   const enVol = new Map();
   const generations = new Map();
+  const echecs = new Map();
 
   function lancer(id) {
     clearTimeout(minuteries.get(id));
@@ -19,8 +20,16 @@ export function creerEnregistreur(enregistrer, delaiMs = 600, surErreur = () => 
       enVol.set(id, (enVol.get(id) ?? 0) + 1);
       try {
         await enregistrer(fiche);
+        echecs.delete(id);
       } catch (e) {
-        if ((generations.get(id) ?? 0) === generation && !dernier.has(id)) dernier.set(id, fiche);
+        if ((generations.get(id) ?? 0) === generation && !dernier.has(id)) {
+          dernier.set(id, fiche);
+          const n = (echecs.get(id) ?? 0) + 1;
+          echecs.set(id, n);
+          const delai = Math.min(delaiMs * 2 ** (n - 1), 30000);
+          clearTimeout(minuteries.get(id));
+          minuteries.set(id, setTimeout(() => lancer(id), delai));
+        }
         try {
           surErreur(e, fiche);
         } catch {
@@ -47,9 +56,11 @@ export function creerEnregistreur(enregistrer, delaiMs = 600, surErreur = () => 
       clearTimeout(minuteries.get(id));
       minuteries.delete(id);
       dernier.delete(id);
+      echecs.delete(id);
       generations.set(id, (generations.get(id) ?? 0) + 1);
       return chaines.get(id) ?? Promise.resolve();
     },
     estEnAttente: id => dernier.has(id) || enVol.has(id),
+    enEchec: () => [...echecs.keys()],
   };
 }

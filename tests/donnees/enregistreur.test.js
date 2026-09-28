@@ -101,6 +101,44 @@ describe('creerEnregistreur', () => {
     expect(e.estEnAttente('f1')).toBe(false);
   });
 
+  it('après un échec, une nouvelle tentative a lieu seule avec un délai croissant', async () => {
+    const enregistrer = vi.fn()
+      .mockRejectedValueOnce({ code: 'unavailable' })
+      .mockRejectedValueOnce({ code: 'unavailable' })
+      .mockResolvedValue();
+    const e = creerEnregistreur(enregistrer, 600);
+    e.planifier({ id: 'f1', accroche: 'x' });
+    await vi.advanceTimersByTimeAsync(600); // écriture initiale : échoue
+    expect(enregistrer).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(600); // nouvelle tentative au bout de delaiMs : échoue encore
+    expect(enregistrer).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(1200); // nouvelle tentative au bout de 2*delaiMs : réussit
+    expect(enregistrer).toHaveBeenCalledTimes(3);
+    expect(e.estEnAttente('f1')).toBe(false);
+  });
+
+  it('enEchec liste les fiches dont la dernière écriture a échoué, jusqu’à la réussite', async () => {
+    const enregistrer = vi.fn().mockRejectedValueOnce({ code: 'unavailable' }).mockResolvedValue();
+    const e = creerEnregistreur(enregistrer, 600);
+    e.planifier({ id: 'f1', accroche: 'x' });
+    await vi.advanceTimersByTimeAsync(600);
+    expect(e.enEchec()).toEqual(['f1']);
+    await vi.advanceTimersByTimeAsync(600);
+    expect(e.enEchec()).toEqual([]);
+  });
+
+  it('annuler arrête les nouvelles tentatives programmées', async () => {
+    const enregistrer = vi.fn().mockRejectedValueOnce({ code: 'unavailable' }).mockResolvedValue();
+    const e = creerEnregistreur(enregistrer, 600);
+    e.planifier({ id: 'f1', accroche: 'x' });
+    await vi.advanceTimersByTimeAsync(600);
+    expect(enregistrer).toHaveBeenCalledTimes(1);
+    await e.annuler('f1');
+    await vi.advanceTimersByTimeAsync(600);
+    expect(enregistrer).toHaveBeenCalledTimes(1);
+    expect(e.enEchec()).toEqual([]);
+  });
+
   it('vérifie la génération au moment de l’écriture, pas à la création du lien', async () => {
     const vol1 = differe();
     const enregistrer = vi.fn()

@@ -27,10 +27,14 @@ export async function demarrer(racine, claude, { horloge = () => new Date().toIS
     async fiche => {
       etat.modifier({ sauvegarde: 'en_cours' });
       await depot.enregistrerFiche(fiche);
-      etat.modifier({ sauvegarde: 'ok' });
+      const enErreur = enregistreur.enEchec().some(id => id !== fiche.id);
+      etat.modifier({ sauvegarde: enErreur ? 'erreur' : 'ok' });
     },
     delaiEnregistrement,
-    () => etat.modifier({ sauvegarde: 'erreur' }),
+    e => {
+      etat.modifier({ sauvegarde: enregistreur.enEchec().length > 0 ? 'erreur' : 'ok' });
+      if (e?.code === 'quota_exceeded' || e?.code === 'revoked') etat.modifier({ erreur: messageErreurBase(e) });
+    },
   );
   const actions = creerControleur({ etat, depot, enregistreur, assets, horloge });
   const rendre = creerRendu(racine, actions, { assets: !!assets }, horloge);
@@ -56,6 +60,11 @@ export async function demarrer(racine, claude, { horloge = () => new Date().toIS
     err => etat.modifier({ erreur: messageErreurBase(err) }),
   );
   if (typeof window !== 'undefined') window.addEventListener('pagehide', () => { enregistreur.viderTout(); });
+  if (typeof document !== 'undefined') {
+    const bloquerDepotFichier = e => { if (e.dataTransfer?.types?.includes?.('Files')) e.preventDefault(); };
+    document.addEventListener('dragover', bloquerDepotFichier);
+    document.addEventListener('drop', bloquerDepotFichier);
+  }
   rendre(etat.lire());
   return { etat, actions };
 }

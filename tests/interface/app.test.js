@@ -46,4 +46,43 @@ describe('demarrer', () => {
     expect(racine.textContent).toContain('L’accès au studio a été retiré pour cette vue.');
     expect(racine.textContent).not.toContain('Chargement du studio…');
   });
+
+  it('affiche un message clair et l’indicateur en échec quand la base est pleine', async () => {
+    const reelle = creerFausseBase();
+    let appel = 0;
+    const db = {
+      ...reelle,
+      doc(chemin) {
+        const d = reelle.doc(chemin);
+        if (!chemin.startsWith('fiches/')) return d;
+        return {
+          ...d,
+          async set(corps) {
+            appel += 1;
+            if (appel === 2) throw { code: 'quota_exceeded' };
+            return d.set(corps);
+          },
+        };
+      },
+    };
+    const racine = document.createElement('div');
+    const app = await demarrer(racine, { use: async nom => (nom === 'db' ? db : null) }, { horloge });
+    await app.actions.importerProfil(JSON.stringify(fictif));
+    const f = await app.actions.creerFiche({ format: 'reel', date_heure: '2026-09-28T10:00:00.000Z' });
+    app.actions.modifierFiche(f.id, { accroche: 'x' });
+    await app.actions.fermerPanneau();
+    expect(racine.textContent).toContain('La base du studio est pleine');
+    expect(racine.querySelector('.sauvegarde').className).toContain('sauvegarde-erreur');
+    await new Promise(r => setTimeout(r, 650)); // laisse la nouvelle tentative automatique se terminer proprement
+  });
+
+  it('empêche un fichier lâché hors de la zone prévue de quitter la page', async () => {
+    const db = creerFausseBase();
+    const racine = document.createElement('div');
+    await demarrer(racine, { use: async nom => (nom === 'db' ? db : null) }, { horloge });
+    const evt = new Event('drop', { cancelable: true });
+    Object.defineProperty(evt, 'dataTransfer', { value: { types: ['Files'] } });
+    document.dispatchEvent(evt);
+    expect(evt.defaultPrevented).toBe(true);
+  });
 });
