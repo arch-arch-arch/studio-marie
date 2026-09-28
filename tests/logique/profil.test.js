@@ -1,0 +1,60 @@
+import { describe, it, expect } from 'vitest';
+import fictif from '../../exemples/profil-fictif.json';
+import { validerProfil, fuseauValide } from '../../src/logique/profil.js';
+
+const avec = modif => { const p = structuredClone(fictif); modif(p.regles_studio, p); return p; };
+
+describe('fuseauValide', () => {
+  it('accepte un fuseau IANA et refuse le reste', () => {
+    expect(fuseauValide('Europe/Paris')).toBe(true);
+    expect(fuseauValide('Mars/Olympus')).toBe(false);
+    expect(fuseauValide('')).toBe(false);
+    expect(fuseauValide(undefined)).toBe(false);
+  });
+});
+
+describe('validerProfil', () => {
+  it('accepte le profil fictif', () => {
+    expect(validerProfil(fictif)).toEqual({ ok: true, erreurs: [] });
+  });
+
+  it('refuse ce qui n’est pas un objet', () => {
+    for (const v of [null, [], 'texte', 3]) {
+      expect(validerProfil(v)).toEqual({ ok: false, erreurs: ['Le fichier doit contenir un objet JSON.'] });
+    }
+  });
+
+  it('explique qu’il manque regles_studio', () => {
+    const p = structuredClone(fictif); delete p.regles_studio;
+    const r = validerProfil(p);
+    expect(r.ok).toBe(false);
+    expect(r.erreurs[0]).toContain('regles_studio');
+  });
+
+  it('signale un fuseau inconnu', () => {
+    const r = validerProfil(avec(rs => { rs.fuseau = 'Mars/Olympus'; }));
+    expect(r.erreurs).toContain('regles_studio.fuseau : fuseau horaire inconnu (ex. « Europe/Paris »).');
+  });
+
+  it('signale une couleur de pilier invalide', () => {
+    const r = validerProfil(avec(rs => { rs.piliers[1].couleur = 'rouge'; }));
+    expect(r.erreurs).toContain('regles_studio.piliers[1].couleur doit être au format #rrggbb.');
+  });
+
+  it('signale un créneau incohérent', () => {
+    const r = validerProfil(avec(rs => { rs.creneaux = [{ jours: [0], debut: '15:00', fin: '12:00' }]; }));
+    expect(r.erreurs).toContain('regles_studio.creneaux[0].jours : liste de jours de 1 (lundi) à 7 (dimanche).');
+    expect(r.erreurs).toContain('regles_studio.creneaux[0] : debut et fin au format HH:MM, avec debut < fin.');
+  });
+
+  it('signale stories_porte avec min > max', () => {
+    const r = validerProfil(avec(rs => { rs.stories_porte = { min: 4, max: 2 }; }));
+    expect(r.erreurs).toContain('regles_studio.stories_porte : min et max entiers, avec min ≤ max.');
+  });
+
+  it('remonte toutes les erreurs d’un coup', () => {
+    const r = validerProfil(avec(rs => { rs.cadence.reel = -1; rs.cta_ratio_max = 2; rs.accroche_mots_max = 0; }));
+    expect(r.ok).toBe(false);
+    expect(r.erreurs).toHaveLength(3);
+  });
+});

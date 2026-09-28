@@ -1,0 +1,29 @@
+{
+  "meta": { "document": "profil_marque_instagram", "fictif": true },
+  "identite_de_marque": {
+    "positionnement": "Créatrice fictive : chroniques nocturnes, humour sec, regard de sociologue amatrice.",
+    "piliers": ["socio", "nuit", "humour_sec", "pont_offre"]
+  },
+  "ton_et_voix": {
+    "registre": "sec, ironique, jamais moralisateur",
+    "test": "Si un coach pourrait le dire, réécrire."
+  },
+  "regles_studio": {
+    "fuseau": "Europe/Paris",
+    "piliers": [
+      { "cle": "socio", "nom": "Socio", "couleur": "#4a5be0" },
+      { "cle": "nuit", "nom": "Nuit", "couleur": "#0b8574" },
+      { "cle": "humour_sec", "nom": "Humour sec", "couleur": "#b07d00" },
+      { "cle": "pont_offre", "nom": "Pont vers l'offre", "couleur": "#b3125a" }
+    ],
+    "cadence": { "reel": 4, "carrousel": 2, "story_par_jour": 1 },
+    "cta_ratio_max": 0.25,
+    "roles_caption": { "engagement": 2, "cta": 1, "deadpan": 1 },
+    "ragebait_max": 1,
+    "stories_porte": { "min": 2, "max": 3 },
+    "creneaux": [{ "jours": [1, 2, 4], "debut": "12:00", "fin": "15:00" }],
+    "mots_a_eviter": ["mindset", "link in bio", "bienveillance"],
+    "hashtags": { "min": 3, "max": 5 },
+    "accroche_mots_max": 15
+  }
+}
