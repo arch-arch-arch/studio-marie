@@ -150,6 +150,7 @@ export function creerControleur({ etat, depot, enregistreur, assets, horloge, id
   let controleurReference = null;
 
   async function importerReference(texte) {
+    if (controleurReference) return { ok: false, erreurs: ['Une vérification est en cours : attends la fin ou arrête-la avant d’importer.'] };
     let liste;
     try {
       liste = JSON.parse(texte);

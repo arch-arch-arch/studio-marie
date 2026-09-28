@@ -14,6 +14,10 @@ export function validerReference(liste) {
     if (!FORMATS.includes(item.format)) erreurs.push(`Élément ${n} : format inconnu.`);
     if (!RESULTATS.includes(item.resultat)) erreurs.push(`Élément ${n} : resultat doit valoir gagnant ou perdant.`);
     if (typeof item.accroche !== 'string' || !item.accroche.trim()) erreurs.push(`Élément ${n} : accroche manquante.`);
+    const captionOk = item.caption === undefined || typeof item.caption === 'string';
+    const pilierOk = item.pilier === undefined || typeof item.pilier === 'string';
+    const hashtagsOk = item.hashtags === undefined || (Array.isArray(item.hashtags) && item.hashtags.every(h => typeof h === 'string'));
+    if (!captionOk || !pilierOk || !hashtagsOk) erreurs.push(`Élément ${n} : caption, pilier et hashtags doivent être du texte.`);
   });
   if (!erreurs.length && (!liste.some(i => i.resultat === 'gagnant') || !liste.some(i => i.resultat === 'perdant'))) {
     erreurs.push('Il faut au moins un contenu gagnant et un contenu perdant.');

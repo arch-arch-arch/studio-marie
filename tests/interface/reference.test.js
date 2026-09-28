@@ -41,6 +41,22 @@ describe('jeu de référence (contrôleur)', () => {
     expect(etat.lire().reference).toHaveLength(6);
   });
 
+  it('refuse d’importer pendant qu’une vérification est en cours', async () => {
+    const sample = Object.assign(vi.fn(), {
+      limits: async () => ({}),
+      json: vi.fn((prompt, { signal }) => new Promise((ok, ko) => signal.addEventListener('abort', () => ko({ code: 'cancelled', message: 'x' })))),
+    });
+    const { actions } = monter(sample);
+    await actions.importerReference(JSON.stringify(jeu));
+    const enCours = actions.verifierReference();
+    await vi.waitFor(() => expect(sample.json).toHaveBeenCalledTimes(1));
+    expect(await actions.importerReference(JSON.stringify(jeu))).toEqual({
+      ok: false, erreurs: ['Une vérification est en cours : attends la fin ou arrête-la avant d’importer.'],
+    });
+    actions.arreterReference();
+    await enCours;
+  });
+
   it('vérifie le classement et enregistre le bilan', async () => {
     const { db, etat, actions, sample } = monter();
     await actions.importerReference(JSON.stringify(jeu));

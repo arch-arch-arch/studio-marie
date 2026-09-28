@@ -18,6 +18,12 @@ describe('validerReference', () => {
       'Élément 1 : format inconnu.', 'Élément 1 : resultat doit valoir gagnant ou perdant.', 'Élément 1 : accroche manquante.',
     ]);
   });
+  it('refuse une caption, un pilier ou des hashtags qui ne sont pas du texte', () => {
+    expect(validerReference([{ ...jeu[0], hashtags: [1] }]).erreurs).toEqual(['Élément 1 : caption, pilier et hashtags doivent être du texte.']);
+    expect(validerReference([{ ...jeu[0], caption: 42 }]).erreurs).toEqual(['Élément 1 : caption, pilier et hashtags doivent être du texte.']);
+    expect(validerReference([{ ...jeu[0], pilier: 42 }]).erreurs).toEqual(['Élément 1 : caption, pilier et hashtags doivent être du texte.']);
+  });
+
   it('exige au moins un gagnant et un perdant, et 20 contenus au plus', () => {
     expect(validerReference([jeu[0]]).erreurs).toEqual(['Il faut au moins un contenu gagnant et un contenu perdant.']);
     expect(validerReference(Array.from({ length: 21 }, (_, i) => jeu[i % 6])).erreurs)
