@@ -10,6 +10,9 @@ describe('fuseauValide', () => {
     expect(fuseauValide('Mars/Olympus')).toBe(false);
     expect(fuseauValide('')).toBe(false);
     expect(fuseauValide(undefined)).toBe(false);
+    expect(fuseauValide('+01:00')).toBe(false);
+    expect(fuseauValide('europe/paris')).toBe(false);
+    expect(fuseauValide('UTC')).toBe(true);
   });
 });
 

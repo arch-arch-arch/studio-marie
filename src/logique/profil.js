@@ -4,9 +4,9 @@ const entier = (v, min = 0) => Number.isInteger(v) && v >= min;
 
 export function fuseauValide(fuseau) {
   if (typeof fuseau !== 'string' || !fuseau) return false;
+  if (fuseau.startsWith('+') || fuseau.startsWith('-')) return false;
   try {
-    new Intl.DateTimeFormat('fr-FR', { timeZone: fuseau });
-    return true;
+    return new Intl.DateTimeFormat('en-US', { timeZone: fuseau }).resolvedOptions().timeZone === fuseau;
   } catch {
     return false;
   }
