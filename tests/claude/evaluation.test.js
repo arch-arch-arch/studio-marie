@@ -141,4 +141,7 @@ describe('messageErreurSample', () => {
   it('propose de simplifier le contenu quand Claude ne répond rien', () => {
     expect(messageErreurSample({ code: 'empty_completion' })).toBe('Claude n’a rien répondu : simplifie le contenu, puis réessaie. Rien n’a été modifié.');
   });
+  it('précise quoi raccourcir quand le contenu envoyé à Claude est trop volumineux', () => {
+    expect(messageErreurSample({ code: 'prompt_too_large' })).toBe('Le contenu envoyé à Claude est trop volumineux : raccourcis la caption, les hashtags ou le géotag.');
+  });
 });

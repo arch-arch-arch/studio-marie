@@ -116,7 +116,7 @@ export function messageErreurSample(e) {
     case 'session_expired': return 'Ta session a expiré : reconnecte-toi à claude.ai, puis réessaie.';
     case 'invalid_json': return 'La réponse de Claude était illisible : réessaie. Rien n’a été modifié.';
     case 'refused': return 'Claude a refusé d’évaluer ce contenu : reformule-le, puis réessaie.';
-    case 'prompt_too_large': return 'Le contenu est trop long pour être évalué : raccourcis la caption.';
+    case 'prompt_too_large': return 'Le contenu envoyé à Claude est trop volumineux : raccourcis la caption, les hashtags ou le géotag.';
     case 'empty_completion': return 'Claude n’a rien répondu : simplifie le contenu, puis réessaie. Rien n’a été modifié.';
     case 'image_rejected': return 'Le visuel n’a pas pu être envoyé à Claude : réessaie, ou remplace-le.';
     case 'images_unavailable': return 'Le visuel ne peut pas être envoyé à Claude dans cette vue : retire-le ou évalue depuis un autre appareil.';
