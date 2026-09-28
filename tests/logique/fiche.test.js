@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   FORMATS, STATUTS, nouvelId, nouvelleFiche, empreinte, aReevaluer, modifierFiche, peutPasserA,
-  changerStatut, deplacerFiche, analyserHashtags, formaterHashtags, texteAPublier,
+  changerStatut, deplacerFiche, analyserHashtags, formaterHashtags, texteAPublier, appliquerEvaluation,
 } from '../../src/logique/fiche.js';
 
 const T0 = '2026-09-27T20:00:00.000Z';
@@ -122,5 +122,22 @@ describe('hashtags et texte à publier', () => {
     expect(formaterHashtags(['nuit', 'socio'])).toBe('#nuit #socio');
     expect(texteAPublier({ caption: ' Bonsoir. ', hashtags: ['nuit'] })).toBe('Bonsoir.\n\n#nuit');
     expect(texteAPublier({ caption: '', hashtags: [] })).toBe('');
+  });
+});
+
+describe('appliquerEvaluation', () => {
+  it('pose le score et les suggestions sans toucher au contenu ni au statut', () => {
+    const f = { ...base(), statut: 'brouillon', visuel: 'a1', caption: 'Une caption.' };
+    const score = { total: 70, criteres: [], conformite: { etat: 'vert', causes: [] }, empreinte: empreinte(f) };
+    const g = appliquerEvaluation(f, {
+      score,
+      variantes: [{ role: 'engagement', texte: 'V1' }, { role: 'deadpan', texte: 'V2' }],
+      suggestions: { accroches: ['A1', 'A2'], hashtags: ['nuit'] },
+      recommandations: ['R1', 'R2', 'R3'],
+    }, '2026-09-28T09:00:00.000Z');
+    expect(g).toMatchObject({ score, statut: 'brouillon', caption: 'Une caption.', maj_le: '2026-09-28T09:00:00.000Z', recommandations: ['R1', 'R2', 'R3'] });
+    expect(g.suggestions).toEqual({ accroches: ['A1', 'A2'], hashtags: ['nuit'] });
+    expect(aReevaluer(g)).toBe(false);
+    expect(peutPasserA(g, 'valide')).toEqual({ ok: true });
   });
 });

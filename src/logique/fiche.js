@@ -96,3 +96,7 @@ export function analyserHashtags(texte) {
 export const formaterHashtags = tags => (tags ?? []).map(t => `#${t}`).join(' ');
 
 export const texteAPublier = f => [f.caption?.trim(), formaterHashtags(f.hashtags)].filter(Boolean).join('\n\n');
+
+export function appliquerEvaluation(fiche, { score, variantes, suggestions, recommandations }, maintenant) {
+  return { ...fiche, score, variantes, suggestions, recommandations, maj_le: maintenant };
+}
