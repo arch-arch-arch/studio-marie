@@ -54,14 +54,14 @@ export function creerRendu(racine, actions, capacites, horloge) {
   let memo = {};
 
   return function rendre(e) {
-    if (e.profil === undefined) {
-      vue.replaceChildren(h('p', { class: 'aide' }, 'Chargement du studio…'));
-      return;
-    }
-    tete.replaceChildren(...barre(e, actions));
     zoneErreur.replaceChildren(e.erreur
       ? h('p', { class: 'erreur-bandeau', role: 'alert' }, e.erreur, ' ', h('button', { type: 'button', class: 'bouton-lien', onclick: () => actions.effacerErreur() }, 'Fermer'))
       : '');
+    if (e.profil === undefined) {
+      vue.replaceChildren(h('p', { class: 'aide' }, e.erreur ? 'Le studio ne peut pas se charger pour le moment.' : 'Chargement du studio…'));
+      return;
+    }
+    tete.replaceChildren(...barre(e, actions));
     const e2 = { ...e, maintenant: horloge() };
     if (memo.profil !== e.profil || memo.fiches !== e.fiches || memo.vue !== e.vue || memo.ancre !== e.ancre) {
       vue.replaceChildren(contenuVue(e2, actions));

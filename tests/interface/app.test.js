@@ -29,4 +29,21 @@ describe('demarrer', () => {
     expect(app.etat.lire().vue).toBe('semaine');
     expect(racine.querySelector('.barre .titre').textContent).toBe('Studio');
   });
+
+  it('affiche l’erreur de base même avant le premier instantané du profil', async () => {
+    const reelle = creerFausseBase();
+    const db = {
+      ...reelle,
+      doc(chemin) {
+        if (chemin === 'profil/courant') {
+          return { ...reelle.doc(chemin), onSnapshot: (suivant, erreur) => { erreur({ code: 'revoked' }); return () => {}; } };
+        }
+        return reelle.doc(chemin);
+      },
+    };
+    const racine = document.createElement('div');
+    await demarrer(racine, { use: async nom => (nom === 'db' ? db : null) }, { horloge });
+    expect(racine.textContent).toContain('L’accès au studio a été retiré pour cette vue.');
+    expect(racine.textContent).not.toContain('Chargement du studio…');
+  });
 });
