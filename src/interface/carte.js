@@ -43,5 +43,6 @@ export function bandeau(pastilles) {
   return h('ul', { class: 'bandeau', 'aria-label': 'Contrôle de la semaine' },
     pastilles.map(p => h('li', { class: `pastille pastille-${p.etat}`, title: LIBELLES_ETAT[p.etat] },
       h('span', {}, p.libelle),
-      h('span', { class: 'pastille-valeur' }, p.valeur))));
+      h('span', { class: 'pastille-valeur' }, p.valeur),
+      h('span', { class: 'visuellement-masque' }, ` : ${LIBELLES_ETAT[p.etat]}`))));
 }

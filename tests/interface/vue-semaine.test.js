@@ -58,6 +58,14 @@ describe('vueSemaine', () => {
     expect(badges[1].querySelector('.point')).not.toBeNull();
   });
 
+  it('rend l’état des pastilles lisible sans la couleur', () => {
+    const el = vueSemaine({ profil: fictif, fiches: [], ancre: ANCRE }, actionsFactices());
+    const rouge = el.querySelector('.pastille-rouge');
+    const vert = el.querySelector('.pastille-vert');
+    expect(rouge.querySelector('.visuellement-masque').textContent).toBe(' : hors cible');
+    expect(vert.querySelector('.visuellement-masque').textContent).toBe(' : conforme à la cible');
+  });
+
   it('ne propose plus les créneaux passés', () => {
     const actions = actionsFactices();
     const el = vueSemaine({ profil: fictif, fiches: [], ancre: ANCRE, maintenant: '2026-09-29T11:00:00.000Z' }, actions);
