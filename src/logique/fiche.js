@@ -23,7 +23,7 @@ export function nouvelleFiche({ id, format, date_heure, pilier = '', maintenant,
 export function empreinte(f) {
   const texte = [
     f.accroche ?? '', f.caption ?? '', f.visuel ?? '', (f.hashtags ?? []).join(' '),
-    f.format ?? '', f.pilier ?? '', f.role_caption ?? '', f.cta ? '1' : '0',
+    f.format ?? '', f.pilier ?? '', f.role_caption ?? '', f.cta ? '1' : '0', f.geotag ?? '', f.porte ? '1' : '0',
   ].join('␞');
   let h = 0x811c9dc5;
   for (let i = 0; i < texte.length; i++) {

@@ -160,6 +160,25 @@ describe('evaluerFiche', () => {
     expect(sample.json).toHaveBeenCalledTimes(1);
   });
 
+  it('refuse la validation si le géotag change après une évaluation au vert (verrou en profondeur)', async () => {
+    const { actions } = await monter({ contenu: { geotag: 'Paris' } });
+    await actions.evaluerFiche('f1');
+    expect(await actions.changerStatut('f1', 'valide')).toEqual({ ok: true });
+    actions.modifierFiche('f1', { geotag: '12 rue des Lilas' });
+    expect((await actions.changerStatut('f1', 'valide')).ok).toBe(false);
+  });
+
+  it('refuse la validation si un profil réimporté ajoute un mot à éviter présent dans une fiche au score vert à jour', async () => {
+    const { etat, actions } = await monter({ contenu: { caption: 'Une ligne sur lilas. Dis-moi en commentaire.' } });
+    await actions.evaluerFiche('f1');
+    expect(await actions.changerStatut('f1', 'valide')).toEqual({ ok: true });
+    const profil = etat.lire().profil;
+    etat.modifier({ profil: { ...profil, regles_studio: { ...profil.regles_studio, mots_a_eviter: [...profil.regles_studio.mots_a_eviter, 'lilas'] } } });
+    const r = await actions.changerStatut('f1', 'valide');
+    expect(r.ok).toBe(false);
+    expect(r.raison).toMatch(/^Conformité au rouge :/);
+  });
+
   it('repasse en brouillon si la conformité redevient rouge après la réévaluation d’une fiche validée', async () => {
     const sample = fauxSample();
     const { db, etat, actions } = await monter({ sample });

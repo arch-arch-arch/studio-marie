@@ -41,14 +41,16 @@ describe('empreinte et réévaluation', () => {
     expect(aReevaluer({ ...f, caption: 'changée' })).toBe(true);
     expect(aReevaluer(base())).toBe(false);
   });
-  it('couvre le format, le pilier, le rôle et le cta, mais pas la date, le statut ni le geotag', () => {
+  it('couvre le format, le pilier, le rôle, le cta, le geotag et la porte, mais pas la date ni le statut', () => {
     const f = base();
     expect(empreinte({ ...f, format: 'post' })).not.toBe(empreinte(f));
     expect(empreinte({ ...f, pilier: 'autre' })).not.toBe(empreinte(f));
     expect(empreinte({ ...f, role_caption: 'cta' })).not.toBe(empreinte(f));
     expect(empreinte({ ...f, cta: true })).not.toBe(empreinte(f));
+    expect(empreinte({ ...f, geotag: 'Paris' })).not.toBe(empreinte(f));
+    expect(empreinte({ ...f, porte: true })).not.toBe(empreinte(f));
     expect(empreinte({ ...f, date_heure: '2026-10-01T00:00:00.000Z' })).toBe(empreinte(f));
-    expect(empreinte({ ...f, geotag: 'Paris' })).toBe(empreinte(f));
+    expect(empreinte({ ...f, statut: 'brouillon' })).toBe(empreinte(f));
   });
 });
 
@@ -64,7 +66,8 @@ describe('modifierFiche', () => {
   it('repasse en brouillon une fiche validée dont le contenu évalué change', () => {
     const validee = changerStatut(prete(), 'valide', T0);
     expect(modifierFiche(validee, { caption: 'autre' }, T0).statut).toBe('brouillon');
-    expect(modifierFiche(validee, { geotag: 'Paris' }, T0).statut).toBe('valide');
+    expect(modifierFiche(validee, { geotag: 'Paris' }, T0).statut).toBe('brouillon');
+    expect(modifierFiche(validee, { porte: true }, T0).statut).toBe('brouillon');
     const publiee = changerStatut(validee, 'publie', T0);
     expect(modifierFiche(publiee, { caption: 'autre' }, T0).statut).toBe('publie');
   });

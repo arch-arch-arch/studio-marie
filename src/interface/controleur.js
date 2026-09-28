@@ -236,6 +236,15 @@ export function creerControleur({ etat, depot, enregistreur, assets, horloge, id
         etat.modifier({ erreur: verification.raison });
         return verification;
       }
+      if (cible === 'valide' || cible === 'programme' || cible === 'publie') {
+        const { profil } = etat.lire();
+        const { conformite } = verifierRegles(f, profil.regles_studio);
+        if (conformite.etat === 'rouge') {
+          const raison = `Conformité au rouge : ${conformite.causes.join(' ; ')}.`;
+          etat.modifier({ erreur: raison });
+          return { ok: false, raison };
+        }
+      }
       const g = appliquerStatut(f, cible, horloge());
       remplacer(g);
       etat.modifier({ erreur: null });
