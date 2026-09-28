@@ -119,6 +119,14 @@ describe('verifierRegles', () => {
     expect(verifierRegles(fiche({ geotag: '3 bis, rue X' }), R).conformite.etat).toBe('rouge');
   });
 
+  it('tronque un géotag trop long dans la cause affichée', () => {
+    const geotag = `12 rue ${'x'.repeat(300)}`;
+    const causes = verifierRegles(fiche({ geotag }), R).conformite.causes;
+    expect(causes).toHaveLength(1);
+    expect(causes[0].length).toBeLessThan(120);
+    expect(causes[0]).toContain('…');
+  });
+
   it('reste rapide sur un géotag pensé pour faire reculer le moteur de regex', () => {
     const geotag = '1' + ' '.repeat(5000) + 'x';
     const debut = performance.now();

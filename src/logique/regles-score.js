@@ -83,7 +83,9 @@ export function verifierRegles(fiche, regles) {
   }
 
   if (fiche.geotag?.trim() && geotagTropPrecis(fiche.geotag)) {
-    causes.push(`géotag trop précis « ${fiche.geotag.trim()} » (reste au niveau de la ville)`);
+    const g = fiche.geotag.trim();
+    const affiche = g.length > 60 ? `${g.slice(0, 60)}…` : g;
+    causes.push(`géotag trop précis « ${affiche} » (reste au niveau de la ville)`);
   }
 
   const motsAccroche = compterMots(fiche.accroche);

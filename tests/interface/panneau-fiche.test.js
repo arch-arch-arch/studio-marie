@@ -27,6 +27,11 @@ describe('panneauFiche', () => {
     expect(actions.modifierFiche).toHaveBeenCalledWith('f1', { hashtags: ['nuit', 'socio'] });
   });
 
+  it('borne la longueur du géotag', () => {
+    const p = panneauFiche(fiche(), fictif, actionsFactices(), { assets: true });
+    expect(p.querySelector('input[name="geotag"]').maxLength).toBe(200);
+  });
+
   it('convertit la date et l’heure locales en UTC', () => {
     const actions = actionsFactices();
     const p = panneauFiche(fiche(), fictif, actions, { assets: true });
