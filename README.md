@@ -30,9 +30,18 @@ et image de marque.
 ## Structure
 
 ```
-docs/superpowers/specs/   Spécifications de conception (design docs)
-publisher/                Phase 2 : module de publication automatique
+docs/superpowers/specs/   Spécifications de conception
+docs/superpowers/plans/   Plans d'implémentation
+exemples/                 Profil fictif et fixtures (aucune donnée réelle)
+scripts/build.mjs         Assemble dist/studio.html
+src/logique/              Règles métier pures (testées)
+src/donnees/              Accès à la base du studio
+src/interface/            Vues et panneau de fiche
+tests/                    Tests Vitest
+publisher/                Phase 2 : publication automatique
 ```
+
+Commandes : `npm test` (tests) et `npm run build` (page à publier).
 
 ## Statut
 
