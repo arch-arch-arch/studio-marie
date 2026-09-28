@@ -127,4 +127,42 @@ describe('creerControleur', () => {
     expect(actions.modifierFiche('f1', { statut: 'valide' })).toBeNull();
     expect(etat.lire().erreur).toBe('Champ protégé : statut');
   });
+
+  it('signale un message clair si l’import échoue en base', async () => {
+    const etat = creerEtat({ profil: undefined, fiches: [], vue: 'profil', ancre: T, ficheOuverte: null, erreur: null, sauvegarde: 'ok' });
+    const depotEnPanne = { importerProfil: async () => { throw { code: 'unavailable' }; } };
+    const enregistreur = creerEnregistreur(() => Promise.resolve(), 600);
+    const actions = creerControleur({ etat, depot: depotEnPanne, enregistreur, assets: null, horloge: () => T });
+    const r = await actions.importerProfil(JSON.stringify(fictif));
+    expect(r).toEqual({ ok: false, erreurs: ['L’import a échoué : la base du studio ne répond pas. Réessaie dans un instant.'] });
+  });
+
+  it('traduit les codes d’erreur de téléversement', async () => {
+    const assets = { upload: vi.fn().mockRejectedValue({ code: 'too_large' }) };
+    const { actions } = monter({ assets });
+    await actions.creerFiche({ format: 'reel', date_heure: '2026-09-28T10:00:00.000Z' });
+    expect(await actions.televerserVisuel('f1', { type: 'image/png' }))
+      .toEqual({ ok: false, raison: 'Fichier trop lourd (20 Mo au maximum).' });
+  });
+
+  it('signale un message si la suppression échoue en base', async () => {
+    const reelle = creerFausseBase();
+    const db = {
+      ...reelle,
+      doc(chemin) {
+        const d = reelle.doc(chemin);
+        if (chemin !== 'fiches/f1') return d;
+        return { ...d, delete: async () => { throw { code: 'unavailable' }; } };
+      },
+    };
+    const depot = creerDepot(db);
+    const enregistreur = creerEnregistreur(f => depot.enregistrerFiche(f), 600);
+    const etat = creerEtat({ profil: { ...fictif, version: 1 }, fiches: [], vue: 'semaine', ancre: T, ficheOuverte: null, erreur: null, sauvegarde: 'ok' });
+    const actions = creerControleur({ etat, depot, enregistreur, assets: null, horloge: () => T, idAleatoire: () => 'f1' });
+    await actions.creerFiche({ format: 'reel', date_heure: '2026-09-28T10:00:00.000Z' });
+    await actions.supprimerFiche('f1');
+    expect(etat.lire().erreur).toBe('La suppression a échoué : réessaie dans un instant.');
+    expect(etat.lire().fiches).toEqual([]);
+    expect(etat.lire().ficheOuverte).toBeNull();
+  });
 });

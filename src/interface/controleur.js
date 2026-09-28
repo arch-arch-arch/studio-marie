@@ -3,6 +3,12 @@ import {
 } from '../logique/fiche.js';
 import { ajouterJours, ajouterMois, debutJour, debutSemaine, semainesDuMois } from '../logique/dates.js';
 
+const MESSAGES_TELEVERSEMENT = {
+  too_large: 'Fichier trop lourd (20 Mo au maximum).',
+  unsupported_type: 'Ce type de fichier n’est pas accepté.',
+  rate_limited: 'Trop d’envois d’un coup : réessaie dans un instant.',
+};
+
 export function plageDeVue(vue, ancre, fuseau) {
   if (vue === 'mois') {
     const semaines = semainesDuMois(ancre, fuseau);
@@ -94,9 +100,13 @@ export function creerControleur({ etat, depot, enregistreur, assets, horloge, id
     },
 
     async supprimerFiche(id) {
-      await enregistreur.annuler(id);
       etat.modifier({ fiches: etat.lire().fiches.filter(f => f.id !== id), ficheOuverte: null });
-      await depot.supprimerFiche(id);
+      await enregistreur.annuler(id);
+      try {
+        await depot.supprimerFiche(id);
+      } catch {
+        etat.modifier({ erreur: 'La suppression a échoué : réessaie dans un instant.' });
+      }
     },
 
     async televerserVisuel(id, fichier) {
@@ -108,7 +118,7 @@ export function creerControleur({ etat, depot, enregistreur, assets, horloge, id
         if (g == null) return { ok: false, raison: 'La fiche n’existe plus : le visuel n’a pas été rattaché.' };
         return { ok: true, id: resultat.id, type, statut: g.statut };
       } catch (e) {
-        return { ok: false, raison: `Échec du téléversement (${e?.code ?? 'erreur inconnue'}).` };
+        return { ok: false, raison: MESSAGES_TELEVERSEMENT[e?.code] ?? `Échec du téléversement (${e?.code ?? 'erreur inconnue'}).` };
       }
     },
 
@@ -132,9 +142,13 @@ export function creerControleur({ etat, depot, enregistreur, assets, horloge, id
       } catch (e) {
         return { ok: false, erreurs: [`Ce texte n’est pas du JSON valide : ${e.message}`] };
       }
-      const resultat = await depot.importerProfil(profil, horloge());
-      if (resultat.ok) etat.modifier({ vue: 'semaine' });
-      return resultat;
+      try {
+        const resultat = await depot.importerProfil(profil, horloge());
+        if (resultat.ok) etat.modifier({ vue: 'semaine' });
+        return resultat;
+      } catch {
+        return { ok: false, erreurs: ['L’import a échoué : la base du studio ne répond pas. Réessaie dans un instant.'] };
+      }
     },
   };
 }
