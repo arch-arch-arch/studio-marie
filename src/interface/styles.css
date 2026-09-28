@@ -31,3 +31,103 @@ body { background: var(--fond); color: var(--texte); font: 15px/1.45 var(--polic
 button, input, select, textarea { font: inherit; color: inherit; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+
+/* Barre et zones */
+.barre { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; padding-block: 8px 12px; border-bottom: 1px solid var(--trait); }
+.titre { font-size: 20px; font-weight: 700; margin: 0; letter-spacing: -0.01em; }
+.onglets { display: flex; gap: 4px; }
+.onglet { background: none; border: 0; padding: 6px 10px; border-radius: var(--rayon); cursor: pointer; color: var(--texte-2); font-weight: 600; }
+.onglet[aria-current="page"] { background: var(--surface-2); color: var(--texte); }
+.onglet:disabled { opacity: .45; cursor: not-allowed; }
+.periode { display: flex; align-items: center; gap: 6px; }
+.periode-libelle { font-weight: 600; margin-left: 6px; }
+.sauvegarde { margin-left: auto; font-size: 13px; color: var(--texte-2); }
+.sauvegarde-erreur { color: var(--rouge); }
+.corps { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; padding-top: 12px; }
+#app.avec-panneau .corps { grid-template-columns: minmax(0, 1fr) minmax(320px, 400px); }
+@media (max-width: 900px) { #app.avec-panneau .corps { grid-template-columns: minmax(0, 1fr); } }
+.erreur-bandeau { background: color-mix(in srgb, var(--rouge) 12%, var(--surface)); border: 1px solid var(--rouge); border-radius: var(--rayon); padding: 8px 12px; margin: 12px 0 0; }
+.indisponible { max-width: 560px; padding-block: 48px; }
+.aide { color: var(--texte-2); margin: 0; }
+
+/* Boutons */
+.bouton-principal, .bouton-secondaire, .bouton-danger, .bouton-icone { border-radius: var(--rayon); padding: 6px 12px; cursor: pointer; border: 1px solid var(--trait); background: var(--surface); }
+.bouton-principal { background: var(--accent); color: var(--accent-texte); border-color: var(--accent); font-weight: 600; }
+.bouton-danger { background: var(--rouge); color: #fff; border-color: var(--rouge); }
+.bouton-icone { padding: 4px 10px; font-size: 18px; line-height: 1; }
+.bouton-lien { background: none; border: 0; padding: 0; color: var(--accent); cursor: pointer; text-decoration: underline; }
+
+/* Bandeau de contrôle */
+.bandeau { list-style: none; margin: 0 0 12px; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.pastille { display: inline-flex; align-items: center; gap: 8px; padding: 4px 10px; border-radius: 999px; background: var(--surface); border: 1px solid var(--trait); font-size: 13px; }
+.pastille::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--etat); }
+.pastille-vert { --etat: var(--vert); } .pastille-orange { --etat: var(--orange); } .pastille-rouge { --etat: var(--rouge); }
+.pastille-valeur { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+/* Semaine */
+.colonnes { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8px; }
+@media (max-width: 700px) { .colonnes { grid-template-columns: minmax(0, 1fr); } }
+.jour { background: var(--surface-2); border-radius: var(--rayon); padding: 8px; display: flex; flex-direction: column; gap: 6px; min-height: 180px; }
+.jour.survol { outline: 2px dashed var(--accent); }
+.jour-titre { font-size: 13px; font-weight: 600; margin: 0 0 2px; text-transform: capitalize; color: var(--texte-2); }
+.carte { background: var(--surface); border: 1px solid var(--trait); border-left: 4px solid var(--pilier); border-radius: 6px; padding: 6px 8px; cursor: grab; display: grid; gap: 4px; }
+.carte.statut-publie { opacity: .7; }
+.carte-tete, .carte-pied { display: flex; justify-content: space-between; align-items: center; gap: 6px; font-size: 12px; color: var(--texte-2); }
+.format { font-weight: 600; color: var(--texte); }
+.heure { font-family: var(--mono); }
+.carte-accroche { margin: 0; font-size: 13px; overflow-wrap: anywhere; }
+.badge { font-family: var(--mono); font-size: 12px; padding: 1px 6px; border-radius: 4px; background: var(--surface-2); display: inline-flex; align-items: center; gap: 4px; }
+.badge-bloque { background: color-mix(in srgb, var(--rouge) 18%, var(--surface)); color: var(--rouge); }
+.badge .point { width: 6px; height: 6px; border-radius: 50%; background: var(--orange); }
+.creneau-vide, .ajouter { border: 1px dashed var(--trait); background: none; border-radius: 6px; padding: 6px; font-size: 12px; color: var(--texte-2); cursor: pointer; text-align: left; }
+.ajouter { border-color: transparent; }
+
+/* Mois */
+.mois-entetes, .mois-semaine { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.mois-entetes { font-size: 12px; color: var(--texte-2); margin-bottom: 4px; }
+.mois-semaine { margin-bottom: 4px; }
+.mois-jour { background: var(--surface); border: 1px solid var(--trait); border-radius: 6px; min-height: 72px; padding: 6px; text-align: left; cursor: pointer; display: flex; flex-direction: column; gap: 6px; }
+.mois-jour.hors-mois { opacity: .45; }
+.mois-num { font-family: var(--mono); font-size: 12px; }
+.points { display: flex; flex-wrap: wrap; gap: 3px; }
+.point-format { width: 8px; height: 8px; border-radius: 50%; }
+.format-reel { background: var(--reel); } .format-carrousel { background: var(--carrousel); } .format-story { background: var(--story); } .format-post { background: var(--post); }
+
+/* Jour */
+.frise { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 8px; max-width: 640px; }
+.frise-ligne { display: grid; grid-template-columns: 56px minmax(0, 1fr); gap: 12px; align-items: start; }
+.frise-heure { font-family: var(--mono); color: var(--texte-2); padding-top: 6px; }
+
+/* Panneau de fiche */
+.panneau { background: var(--surface); border: 1px solid var(--trait); border-radius: var(--rayon); padding: 12px 16px 16px; display: grid; gap: 14px; align-self: start; position: sticky; top: env(safe-area-inset-top, 0px); max-height: 100vh; overflow-y: auto; }
+.panneau-tete { display: flex; justify-content: space-between; align-items: center; }
+.panneau-tete h2 { margin: 0; font-size: 18px; }
+.fermer { background: none; border: 0; font-size: 22px; cursor: pointer; color: var(--texte-2); }
+.statuts { display: flex; flex-wrap: wrap; gap: 4px; }
+.statut-bouton { border: 1px solid var(--trait); background: var(--surface); border-radius: 999px; padding: 3px 10px; font-size: 13px; cursor: pointer; }
+.statut-bouton.actif { background: var(--texte); color: var(--fond); border-color: var(--texte); }
+.grille-champs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.champ { display: grid; gap: 4px; }
+.champ-libelle { font-size: 12px; font-weight: 600; color: var(--texte-2); text-transform: uppercase; letter-spacing: .04em; }
+.champ input, .champ select, .champ textarea { border: 1px solid var(--trait); background: var(--fond); border-radius: 6px; padding: 6px 8px; width: 100%; box-sizing: border-box; }
+.cases { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 12px; font-size: 14px; }
+.case { display: inline-flex; gap: 6px; align-items: center; }
+.textes { display: grid; gap: 10px; }
+.zone-visuel { border: 1px dashed var(--trait); border-radius: var(--rayon); padding: 10px; display: grid; gap: 8px; justify-items: start; }
+.zone-visuel input[type="file"] { display: block; margin-top: 6px; }
+.apercu { max-width: 100%; max-height: 240px; border-radius: 6px; }
+.score h3 { margin: 0 0 4px; font-size: 15px; }
+.score ul { margin: 0; padding-left: 18px; font-size: 14px; }
+.panneau-message { margin: 0; font-size: 14px; color: var(--texte-2); min-height: 1.2em; }
+.secours-copie { width: 100%; margin-top: 6px; }
+.suppression { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 14px; }
+
+/* Profil */
+.profil { display: grid; gap: 24px; max-width: 720px; }
+.resume h2, .import h2 { margin: 0 0 6px; font-size: 18px; }
+.regles { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 16px; margin: 12px 0 0; }
+.regles dt { font-weight: 600; color: var(--texte-2); }
+.regles dd { margin: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.puce-pilier { border-left: 4px solid var(--pilier); padding: 1px 8px; background: var(--surface-2); border-radius: 4px; }
+.import { display: grid; gap: 10px; }
+.erreurs { color: var(--rouge); margin: 0; padding-left: 18px; }
