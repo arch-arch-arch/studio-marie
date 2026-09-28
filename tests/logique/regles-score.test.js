@@ -90,6 +90,11 @@ describe('verifierRegles', () => {
     expect(verifierRegles(fiche({ caption: 'On a fini.Co-working demain' }), R).conformite.etat).toBe('vert');
   });
 
+  it('ne bloque pas un domaine de link-in-bio connu caché dans un autre mot', () => {
+    expect(verifierRegles(fiche({ caption: 'mon habit.Lyon' }), R).conformite.etat).toBe('vert');
+    expect(verifierRegles(fiche({ caption: 'bit.ly/x' }), R).conformite.etat).toBe('rouge');
+  });
+
   it('bloque un géotag plus précis que la ville', () => {
     expect(verifierRegles(fiche({ geotag: 'Paris' }), R).conformite.etat).toBe('vert');
     expect(verifierRegles(fiche({ geotag: '12 rue des Lilas' }), R).conformite.causes)
@@ -104,6 +109,27 @@ describe('verifierRegles', () => {
     expect(verifierRegles(fiche({ geotag: '3 bis, rue X' }), R).conformite.etat).toBe('rouge');
     expect(verifierRegles(fiche({ geotag: 'Paris 11e' }), R).conformite.etat).toBe('vert');
     expect(verifierRegles(fiche({ geotag: 'Lyon' }), R).conformite.etat).toBe('vert');
+  });
+
+  it('ne remonte pas un numéro isolé d’un type de voie comme un numéro de voie', () => {
+    expect(verifierRegles(fiche({ geotag: 'Festival 2024 Avignon' }), R).conformite.etat).toBe('vert');
+    expect(verifierRegles(fiche({ geotag: 'Paris 3 Villages' }), R).conformite.etat).toBe('vert');
+    expect(verifierRegles(fiche({ geotag: 'Bordeaux 33 Bdx' }), R).conformite.etat).toBe('vert');
+    expect(verifierRegles(fiche({ geotag: '12 av. Foch' }), R).conformite.etat).toBe('rouge');
+    expect(verifierRegles(fiche({ geotag: '3 bis, rue X' }), R).conformite.etat).toBe('rouge');
+  });
+
+  it('reste rapide sur un géotag pensé pour faire reculer le moteur de regex', () => {
+    const geotag = '1' + ' '.repeat(5000) + 'x';
+    const debut = performance.now();
+    verifierRegles(fiche({ geotag }), R);
+    expect(performance.now() - debut).toBeLessThan(50);
+  });
+
+  it('détecte un géotag sans accent, insensible à la casse, après normalisation', () => {
+    expect(verifierRegles(fiche({ geotag: 'Allee des Pins' }), R).conformite.etat).toBe('rouge');
+    expect(verifierRegles(fiche({ geotag: 'Residence les Tilleuls' }), R).conformite.etat).toBe('rouge');
+    expect(verifierRegles(fiche({ geotag: 'Cite U' }), R).conformite.etat).toBe('rouge');
   });
 
   it('cumule plusieurs causes', () => {

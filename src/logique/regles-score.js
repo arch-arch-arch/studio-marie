@@ -10,7 +10,7 @@ const EXTENSIONS_SURES = 'com|net|org|io|ly|link|page|bio|ee|ai|xyz|app';
 const DETECTEURS_LIEN = [
   { re: /https?:\/\/\S+/iu, groupe: 0 },
   { re: /www\.\S+/iu, groupe: 0 },
-  { re: new RegExp(`(?:${DOMAINES_BIO.join('|')})(?:/\\S*)?`, 'iu'), groupe: 0 },
+  { re: new RegExp(`(?<![\\p{L}\\p{N}])(?:${DOMAINES_BIO.join('|')})(?![\\p{L}\\p{N}])(?:/\\S*)?`, 'iu'), groupe: 0 },
   { re: /[\p{L}\p{N}-]+\.[a-z]{2,}\/\S*/iu, groupe: 0 },
   { re: new RegExp(`(?:^|[\\s(«"'])([\\p{L}\\p{N}-]+\\.(?:${EXTENSIONS_SURES}))(?=$|[\\s.,;:!?)»"'])`, 'iu'), groupe: 1 },
 ];
@@ -25,13 +25,18 @@ function detecterLien(texte) {
 
 // --- Géotag ----------------------------------------------------------------
 
-const TYPES_VOIE = ['rue', 'avenue', 'av\\.?', 'boulevard', 'bd', 'chemin', 'impasse', 'allée', 'place', 'quai', 'cours', 'square', 'passage', 'villa', 'cité', 'route', 'résidence', 'faubourg'];
+const LONGUEUR_MAX_GEOTAG = 200;
+// Écrits sans accent : le géotag analysé passe par normaliser() avant le test.
+const TYPES_VOIE = ['rue', 'avenue', 'av\\.?', 'boulevard', 'bd', 'chemin', 'impasse', 'allee', 'place', 'quai', 'cours', 'square', 'passage', 'villa', 'cite', 'route', 'residence', 'faubourg'];
 const MARQUEURS_DOMICILE = ['chez', 'domicile', 'maison', 'appart(?:ement)?'];
 const RE_MARQUEUR_ADRESSE = new RegExp(`(?<![\\p{L}\\p{N}])(?:${[...TYPES_VOIE, ...MARQUEURS_DOMICILE].join('|')})(?![\\p{L}\\p{N}])`, 'iu');
 const RE_CODE_POSTAL = /(?<!\d)\d{5}(?!\d)/;
-const RE_NUMERO_VOIE = new RegExp(`\\d+\\s*(?:bis|ter)?\\s*,?\\s*(?:${TYPES_VOIE.join('|')})`, 'iu');
+const RE_NUMERO_VOIE = new RegExp(`(?<!\\d)\\d+(?:\\s*(?:bis|ter))?(?:\\s*,)?\\s*(?:${TYPES_VOIE.join('|')})(?![\\p{L}\\p{N}])`, 'iu');
 
-const geotagTropPrecis = geotag => RE_MARQUEUR_ADRESSE.test(geotag) || RE_CODE_POSTAL.test(geotag) || RE_NUMERO_VOIE.test(geotag);
+function geotagTropPrecis(geotag) {
+  const g = normaliser((geotag ?? '').slice(0, LONGUEUR_MAX_GEOTAG));
+  return RE_MARQUEUR_ADRESSE.test(g) || RE_CODE_POSTAL.test(g) || RE_NUMERO_VOIE.test(g);
+}
 
 // --- Mots à éviter -----------------------------------------------------------
 
