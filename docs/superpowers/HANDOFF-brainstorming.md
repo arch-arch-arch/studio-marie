@@ -113,9 +113,8 @@ Révisée à partir du profil de marque réel (fourni par Jean, conservé hors d
 
 ## Reste à faire
 
-1. Plan 2 : évaluation par Claude (`sample`), règles calculées, verrou de conformité, jeu de référence ; ajouter `regles_studio` au profil réel (hors dépôt) et publier le studio réel.
-2. Plan 3 : veille hebdo (consignes `src/claude/veille.md`, routine cloud, vue Bulletin).
-3. Plan 4 : relevés de stats et tableau de bord.
+1. Plan 3 : veille hebdo (consignes `src/claude/veille.md`, routine cloud, vue Bulletin).
+2. Plan 4 : relevés de stats et tableau de bord.
 
 ## Contraintes
 
