@@ -21,7 +21,10 @@ export function nouvelleFiche({ id, format, date_heure, pilier = '', maintenant,
 }
 
 export function empreinte(f) {
-  const texte = [f.accroche ?? '', f.caption ?? '', f.visuel ?? '', (f.hashtags ?? []).join(' ')].join('␞');
+  const texte = [
+    f.accroche ?? '', f.caption ?? '', f.visuel ?? '', (f.hashtags ?? []).join(' '),
+    f.format ?? '', f.pilier ?? '', f.role_caption ?? '', f.cta ? '1' : '0',
+  ].join('␞');
   let h = 0x811c9dc5;
   for (let i = 0; i < texte.length; i++) {
     h ^= texte.charCodeAt(i);
@@ -32,8 +35,19 @@ export function empreinte(f) {
 
 export const aReevaluer = f => !!f.score && f.score.empreinte !== empreinte(f);
 
+const CHAMPS_PROTEGES = ['statut', 'id', 'cree_le', 'score'];
+
 export function modifierFiche(fiche, changements, maintenant) {
-  return { ...fiche, ...changements, modifiee_depuis_creation: true, maj_le: maintenant };
+  for (const cle of CHAMPS_PROTEGES) {
+    if (Object.prototype.hasOwnProperty.call(changements, cle)) {
+      throw new Error(`Champ protégé : ${cle}`);
+    }
+  }
+  const resultat = { ...fiche, ...changements, modifiee_depuis_creation: true, maj_le: maintenant };
+  if ((resultat.statut === 'valide' || resultat.statut === 'programme') && aReevaluer(resultat)) {
+    resultat.statut = 'brouillon';
+  }
+  return resultat;
 }
 
 export function peutPasserA(f, cible) {
@@ -45,6 +59,10 @@ export function peutPasserA(f, cible) {
   if (f.score.conformite?.etat === 'rouge') {
     const causes = (f.score.conformite.causes ?? []).join(' ; ') || 'cause non précisée';
     return { ok: false, raison: `Conformité au rouge : ${causes}.` };
+  }
+  const etat = f.score.conformite?.etat;
+  if (etat !== 'vert' && etat !== 'orange') {
+    return { ok: false, raison: 'Conformité non évaluée : réévalue la fiche.' };
   }
   if (aReevaluer(f)) return { ok: false, raison: 'La fiche a changé depuis son évaluation : réévalue-la.' };
   return { ok: true };

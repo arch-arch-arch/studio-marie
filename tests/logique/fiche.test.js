@@ -41,12 +41,32 @@ describe('empreinte et réévaluation', () => {
     expect(aReevaluer({ ...f, caption: 'changée' })).toBe(true);
     expect(aReevaluer(base())).toBe(false);
   });
+  it('couvre le format, le pilier, le rôle et le cta, mais pas la date, le statut ni le geotag', () => {
+    const f = base();
+    expect(empreinte({ ...f, format: 'post' })).not.toBe(empreinte(f));
+    expect(empreinte({ ...f, pilier: 'autre' })).not.toBe(empreinte(f));
+    expect(empreinte({ ...f, role_caption: 'cta' })).not.toBe(empreinte(f));
+    expect(empreinte({ ...f, cta: true })).not.toBe(empreinte(f));
+    expect(empreinte({ ...f, date_heure: '2026-10-01T00:00:00.000Z' })).toBe(empreinte(f));
+    expect(empreinte({ ...f, geotag: 'Paris' })).toBe(empreinte(f));
+  });
 });
 
 describe('modifierFiche', () => {
   it('applique les changements et note la modification', () => {
     const g = modifierFiche(base(), { accroche: 'Salut' }, '2026-09-27T21:00:00.000Z');
     expect(g).toMatchObject({ accroche: 'Salut', modifiee_depuis_creation: true, maj_le: '2026-09-27T21:00:00.000Z' });
+  });
+  it('refuse de modifier un champ protégé', () => {
+    expect(() => modifierFiche(base(), { statut: 'valide' }, T0)).toThrow('Champ protégé : statut');
+    expect(() => modifierFiche(base(), { score: null }, T0)).toThrow('Champ protégé : score');
+  });
+  it('repasse en brouillon une fiche validée dont le contenu évalué change', () => {
+    const validee = changerStatut(prete(), 'valide', T0);
+    expect(modifierFiche(validee, { caption: 'autre' }, T0).statut).toBe('brouillon');
+    expect(modifierFiche(validee, { geotag: 'Paris' }, T0).statut).toBe('valide');
+    const publiee = changerStatut(validee, 'publie', T0);
+    expect(modifierFiche(publiee, { caption: 'autre' }, T0).statut).toBe('publie');
   });
 });
 
@@ -67,6 +87,12 @@ describe('statuts', () => {
   it('refuse un statut inconnu', () => {
     expect(peutPasserA(base(), 'archive')).toEqual({ ok: false, raison: 'Statut inconnu : archive' });
   });
+  it('refuse une conformité non évaluée et accepte une conformité orange', () => {
+    const sansConformite = { ...prete(), score: { ...prete().score, conformite: {} } };
+    expect(peutPasserA(sansConformite, 'valide')).toEqual({ ok: false, raison: 'Conformité non évaluée : réévalue la fiche.' });
+    const orange = { ...prete(), score: { ...prete().score, conformite: { etat: 'orange', causes: [] } } };
+    expect(peutPasserA(orange, 'valide')).toEqual({ ok: true });
+  });
   it('changerStatut applique ou lève la raison', () => {
     expect(changerStatut(base(), 'brouillon', T0).statut).toBe('brouillon');
     expect(() => changerStatut(base(), 'valide', T0)).toThrow('Ajoute un visuel avant de valider.');
@@ -79,6 +105,11 @@ describe('deplacerFiche', () => {
     const g = deplacerFiche(f, '2026-10-24T22:00:00.000Z', 'Europe/Paris', T0);
     expect(g.date_heure).toBe('2026-10-25T11:00:00.000Z');
     expect(g.modifiee_depuis_creation).toBe(true);
+  });
+  it('ne fait pas perdre le statut validé quand le contenu évalué ne change pas', () => {
+    const validee = changerStatut(prete(), 'valide', T0);
+    const g = deplacerFiche(validee, '2026-10-01T00:00:00.000Z', 'Europe/Paris', T0);
+    expect(g.statut).toBe('valide');
   });
 });
 
