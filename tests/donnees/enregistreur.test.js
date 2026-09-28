@@ -100,4 +100,29 @@ describe('creerEnregistreur', () => {
     expect(enregistrer).toHaveBeenLastCalledWith({ id: 'f1', accroche: 'v2' });
     expect(e.estEnAttente('f1')).toBe(false);
   });
+
+  it('vérifie la génération au moment de l’écriture, pas à la création du lien', async () => {
+    const vol1 = differe();
+    const enregistrer = vi.fn()
+      .mockImplementationOnce(() => vol1.p)           // écriture de v1 (différée)
+      .mockRejectedValueOnce({ code: 'unavailable' }) // écriture de v3 (échoue)
+      .mockResolvedValue();                           // nouvelle tentative de v3 (réussit)
+    const e = creerEnregistreur(enregistrer, 600);
+
+    e.planifier({ id: 'f1', accroche: 'v1' });
+    const vidange1 = e.vider('f1'); // crée le lien qui va prendre v1 (génération 0)
+    const vidange2 = e.vider('f1'); // crée un second lien, chaîné après le premier (génération 0 aussi)
+    await vi.advanceTimersByTimeAsync(0); // le premier lien prend v1 et démarre son écriture : v1 est en vol
+
+    e.annuler('f1'); // génération -> 1
+    e.planifier({ id: 'f1', accroche: 'v3' }); // dernier = v3
+
+    vol1.resoudre(); // l'écriture de v1 se termine
+    await vidange1;
+    await vidange2; // le second lien s'exécute : prend v3, l'écriture échoue
+
+    expect(e.estEnAttente('f1')).toBe(true);
+    await e.vider('f1'); // nouvelle tentative, réussie
+    expect(enregistrer).toHaveBeenLastCalledWith({ id: 'f1', accroche: 'v3' });
+  });
 });

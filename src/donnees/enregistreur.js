@@ -11,9 +11,9 @@ export function creerEnregistreur(enregistrer, delaiMs = 600, surErreur = () => 
     minuteries.delete(id);
     const precedente = chaines.get(id) ?? Promise.resolve();
     if (!dernier.has(id)) return precedente;
-    const generation = generations.get(id) ?? 0;
     const suivante = precedente.catch(() => {}).then(async () => {
       if (!dernier.has(id)) return;
+      const generation = generations.get(id) ?? 0;
       const fiche = dernier.get(id);
       dernier.delete(id);
       enVol.set(id, (enVol.get(id) ?? 0) + 1);
