@@ -16,15 +16,27 @@ function deps(fichiers = {}, maintenant = '2026-10-05T00:00:00.000Z') {
 }
 
 describe('doit-tourner', () => {
-  const run = m => executer(['doit-tourner', '--profil', 'p.json', '--maintenant', m], deps({ 'p.json': { id: 'courant', data: NEW_YORK, version: 3 } })).sortie;
-  it('une seule exécution le dimanche 20 h locale, été comme hiver', () => {
+  const run = (m, extra = []) => executer(['doit-tourner', '--profil', 'p.json', '--maintenant', m, ...extra], deps({ 'p.json': { id: 'courant', data: NEW_YORK, version: 3 } })).sortie;
+  const runParis = (m, extra = []) => executer(['doit-tourner', '--profil', 'p.json', '--maintenant', m, ...extra], deps({ 'p.json': fictif })).sortie;
+  it('une seule exécution le dimanche 20 h locale, été comme hiver (New York)', () => {
     expect(run('2026-10-05T00:00:00.000Z')).toBe('oui');
     expect(run('2026-10-05T01:00:00.000Z')).toBe('non');
     expect(run('2026-11-09T00:00:00.000Z')).toBe('non');
     expect(run('2026-11-09T01:00:00.000Z')).toBe('oui');
   });
-  it('un déclenchement manuel tourne toujours', () => {
+  it('fonctionne aussi au changement d’heure de mars (New York)', () => {
+    expect(run('2027-03-15T00:00:00.000Z')).toBe('oui');
+    expect(run('2027-03-15T01:00:00.000Z')).toBe('non');
+  });
+  it('fonctionne pour un autre fuseau (Paris)', () => {
+    expect(runParis('2026-10-04T18:05:00.000Z')).toBe('oui'); // dimanche 20h05 local
+    expect(runParis('2026-10-04T17:00:00.000Z')).toBe('non'); // dimanche 19h local
+  });
+  it('un déclenchement manuel un jour de semaine tourne toujours', () => {
     expect(run('2026-10-07T15:12:00.000Z')).toBe('oui');
+  });
+  it('--forcer tourne toujours, même dans la fenêtre interdite', () => {
+    expect(runParis('2026-10-04T19:00:00.000Z', ['--forcer'])).toBe('oui'); // dimanche 21h local, normalement "non"
   });
 });
 
@@ -53,5 +65,45 @@ describe('construire', () => {
   });
   it('refuse une commande inconnue', () => {
     expect(executer(['n-importe'], deps()).code).toBe(1);
+  });
+  it('exige --fiches, --entree et --sortie', () => {
+    const d = deps({ 'p.json': NEW_YORK, 'e.json': entree });
+    const r = executer(['construire', '--profil', 'p.json', '--entree', 'e.json', '--sortie', 's.json'], d);
+    expect(r.code).toBe(1);
+    expect(r.sortie).toBe('Il manque --fiches, --entree ou --sortie.');
+    expect(d.ecrits).toEqual({});
+  });
+  it('échoue sans rien écrire si une fiche est corrompue (listerJson lève une erreur)', () => {
+    const ecrits = {};
+    const d = {
+      ecrits,
+      lireJson: p => ({ 'p.json': NEW_YORK, 'e.json': entree })[p],
+      listerJson: () => { throw new SyntaxError('JSON invalide'); },
+      ecrireJson: (p, v) => { ecrits[p] = v; },
+      maintenant: () => '2026-10-05T00:00:00.000Z',
+    };
+    const r = executer(['construire', '--profil', 'p.json', '--fiches', 'f', '--entree', 'e.json', '--sortie', 's.json'], d);
+    expect(r.code).toBe(1);
+    expect(d.ecrits).toEqual({});
+  });
+});
+
+describe('fuseau et date invalides', () => {
+  it('refuse un profil sans fuseau valide', () => {
+    const mauvais = { ...fictif, regles_studio: { ...fictif.regles_studio, fuseau: 'Pas/UnFuseau' } };
+    const r = executer(['plage', '--profil', 'p.json', '--maintenant', '2026-10-05T00:00:00.000Z'], deps({ 'p.json': mauvais }));
+    expect(r.code).toBe(1);
+    expect(r.sortie).toBe('Fuseau du profil absent ou invalide.');
+  });
+  it('refuse un profil sans fuseau du tout', () => {
+    const mauvais = { ...fictif, regles_studio: { ...fictif.regles_studio, fuseau: undefined } };
+    const r = executer(['plage', '--profil', 'p.json', '--maintenant', '2026-10-05T00:00:00.000Z'], deps({ 'p.json': mauvais }));
+    expect(r.code).toBe(1);
+    expect(r.sortie).toBe('Fuseau du profil absent ou invalide.');
+  });
+  it('refuse une date --maintenant invalide', () => {
+    const r = executer(['plage', '--profil', 'p.json', '--maintenant', 'pas-une-date'], deps({ 'p.json': fictif }));
+    expect(r.code).toBe(1);
+    expect(r.sortie).toBe('Date --maintenant invalide.');
   });
 });
