@@ -30,11 +30,19 @@ describe('fichesRemplacables', () => {
   it('ne garde que les idées de ce bulletin, en brouillon et jamais modifiées', () => {
     const cle = '2026-W40';
     const a = fiche('reel', '2026-09-28', '12:00', { statut: 'brouillon', origine: { type: 'veille', bulletin: cle } });
+    expect(a.maj_le).toBe(a.cree_le);
     const b = { ...a, id: 'b', modifiee_depuis_creation: true };
     const c = { ...a, id: 'c', statut: 'valide' };
     const d = { ...a, id: 'd', origine: { type: 'veille', bulletin: '2026-W39' } };
     const e = { ...a, id: 'e', origine: { type: 'manuelle' } };
     expect(fichesRemplacables([a, b, c, d, e], cle).map(f => f.id)).toEqual([a.id]);
+  });
+  it('n’est plus remplaçable une fois validée puis repassée en brouillon (maj_le différent de cree_le)', () => {
+    const cle = '2026-W40';
+    const a = fiche('reel', '2026-09-28', '12:00', {
+      statut: 'brouillon', origine: { type: 'veille', bulletin: cle }, maj_le: '2026-09-29T08:00:00.000Z',
+    });
+    expect(fichesRemplacables([a], cle)).toEqual([]);
   });
 });
 
@@ -69,5 +77,17 @@ describe('validerEntreeVeille', () => {
   });
   it('refuse ce qui n’est pas un objet', () => {
     expect(validerEntreeVeille([], R)).toEqual({ ok: false, erreurs: ['L’entrée de la veille doit être un objet JSON.'] });
+  });
+  it('normalise les hashtags comme validerReponse', () => {
+    const r = validerEntreeVeille(entree({ idees: [idee({ hashtags: ['#nuit', 'vie nocturne'] }), idee({ pilier: 'socio' }), idee({ format: 'carrousel', pilier: 'humour_sec' })] }), R);
+    expect(r.ok).toBe(true);
+    expect(r.entree.idees[0].hashtags).toEqual(['nuit', 'vienocturne']);
+  });
+  it('refuse 6 idées', () => {
+    expect(validerEntreeVeille(entree({ idees: [idee(), idee(), idee(), idee(), idee(), idee()] }), R).erreurs).toContain('idees : 3 à 5 idées attendues.');
+  });
+  it('refuse 6 tendances même avec sources_indisponibles', () => {
+    const tendances = [tendance('T1'), tendance('T2'), tendance('T3'), tendance('T4'), tendance('T5'), tendance('T6')];
+    expect(validerEntreeVeille(entree({ tendances, sources_indisponibles: true }), R).erreurs).toContain('tendances : 5 au maximum.');
   });
 });

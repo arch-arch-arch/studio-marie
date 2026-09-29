@@ -1,4 +1,4 @@
-import { FORMATS } from './fiche.js';
+import { FORMATS, analyserHashtags } from './fiche.js';
 import { depuisSaisieLocale, cleJour } from './dates.js';
 import { creneauxDisponibles } from './creneaux.js';
 import { validerReponse } from '../claude/evaluation.js';
@@ -9,7 +9,7 @@ const texteOuVide = v => typeof v === 'string';
 
 export function fichesRemplacables(fiches, cle) {
   return fiches.filter(f => f.origine?.type === 'veille' && f.origine?.bulletin === cle
-    && f.statut === 'brouillon' && f.modifiee_depuis_creation === false);
+    && f.statut === 'brouillon' && f.modifiee_depuis_creation === false && f.maj_le === f.cree_le);
 }
 
 export function placerIdees(idees, fiches, regles, debutIso) {
@@ -55,7 +55,8 @@ export function validerEntreeVeille(entree, regles) {
     return j.ok ? {
       format: idee.format, pilier: idee.pilier, role_caption: idee.role_caption ?? null, cta: idee.cta === true,
       format_valide: texteOuVide(idee.format_valide) ? idee.format_valide : '', accroche: idee.accroche?.trim(),
-      caption: idee.caption ?? '', hashtags: idee.hashtags ?? [], tendance: texte(idee.tendance) ? idee.tendance : null, jugement: j.jugement,
+      caption: idee.caption ?? '', hashtags: analyserHashtags((idee.hashtags ?? []).map(t => t.replace(/\s+/g, '')).join(' ')),
+      tendance: texte(idee.tendance) ? idee.tendance : null, jugement: j.jugement,
     } : null;
   });
   if (erreurs.length) return { ok: false, erreurs };
