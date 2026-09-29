@@ -234,4 +234,15 @@ describe('demarrer', () => {
     await app.actions.importerProfil(JSON.stringify(fictif));
     expect(app.etat.lire().bulletin).toBeNull();
   });
+
+  it('affiche le tableau de bord avec les relevés de la base', async () => {
+    const db = creerFausseBase();
+    await db.doc('profil/courant').set({ ...fictif, version: 1 });
+    await db.doc('stats_contenu/a_7j').set({ fiche: 'a', releve: '7j', vues: 1000, nouveaux_abonnes: 5, partages_envois: 12, date_publication: '2026-09-15T10:00:00.000Z', format: 'reel', pilier: 'socio', accroche: 'Accroche fictive', score_total: 70 });
+    const racine = document.createElement('div');
+    const app = await demarrer(racine, { use: async nom => (nom === 'db' ? db : null) }, { horloge });
+    await app.actions.changerVue('tableau');
+    await vi.waitFor(() => expect(racine.textContent).toContain('Accroche fictive'));
+    expect(racine.textContent).toContain('Relevé du compte');
+  });
 });

@@ -24,7 +24,7 @@ export async function demarrer(racine, claude, { horloge = () => new Date().toIS
   const assets = (await claude.use('assets')) ?? null;
   const sample = (await claude.use('sample')) ?? null;
   const depot = creerDepot(db);
-  const etat = creerEtat({ profil: undefined, fiches: [], vue: 'semaine', ancre: horloge(), ficheOuverte: null, erreur: null, sauvegarde: 'ok', reference: [], resultatReference: null, verificationReference: null, bulletin: undefined, configVeille: null });
+  const etat = creerEtat({ profil: undefined, fiches: [], vue: 'semaine', ancre: horloge(), ficheOuverte: null, erreur: null, sauvegarde: 'ok', reference: [], resultatReference: null, verificationReference: null, bulletin: undefined, configVeille: null, stats: undefined, relevesCompte: undefined, fichesRecentes: [] });
   const enregistreur = creerEnregistreur(
     async fiche => {
       etat.modifier({ sauvegarde: 'en_cours' });
@@ -46,12 +46,21 @@ export async function demarrer(racine, claude, { horloge = () => new Date().toIS
   let arreterBulletin = null;
   let cleBulletinCourante = '';
   let derniereVersionVerifiee = null;
+  let statsDemarrees = false;
   etat.abonner(e => {
     if (e.profil && e.profil.version !== derniereVersionVerifiee) {
       derniereVersionVerifiee = e.profil.version;
       actions.reverifierFiches();
     }
     if (e.profil) {
+      if (!statsDemarrees) {
+        statsDemarrees = true;
+        const maintenant = Date.parse(horloge());
+        const jours = n => new Date(maintenant - n * 86400000).toISOString();
+        depot.ecouterStats(jours(84), stats => etat.modifier({ stats }), err => etat.modifier({ erreur: messageErreurBase(err), stats: [] }));
+        depot.ecouterRelevesCompte(relevesCompte => etat.modifier({ relevesCompte }), err => etat.modifier({ erreur: messageErreurBase(err), relevesCompte: [] }));
+        depot.ecouterFiches(jours(14), new Date(maintenant + 86400000).toISOString(), fichesRecentes => etat.modifier({ fichesRecentes }), err => etat.modifier({ erreur: messageErreurBase(err) }));
+      }
       const fz = e.profil.regles_studio.fuseau;
       const [debut, fin] = plageDeVue(e.vue, e.ancre, fz);
       if (`${debut}|${fin}` !== plageCourante) {
