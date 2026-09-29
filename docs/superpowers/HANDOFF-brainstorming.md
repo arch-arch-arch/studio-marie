@@ -119,7 +119,7 @@ Révisée à partir du profil de marque réel (fourni par Jean, conservé hors d
 | 1. Fondations et calendrier | Semaine, mois, jour, fiche, contrôle de semaine, créneaux, glisser-déposer, import du profil | Fusionné dans `main`, poussé | 114 tests au moment de la fusion |
 | 2. Évaluation par Claude | Règles calculées, score pondéré par format, verrou de conformité, évaluation via `sample`, suggestions, jeu de référence | Fusionné dans `main` | 240 tests |
 | 3. Veille hebdo | Script `scripts/veille.mjs`, logique `src/logique/veille.js`, consignes `src/claude/veille.md`, onglet Bulletin | Fusionné dans `main` | **302 tests verts**, build OK (72 Ko) |
-| 4. Stats et tableau de bord | Relevés à 48 h et à 7 jours, relevé hebdo du compte, onglet Tableau de bord (6 graphiques SVG), rétrospective du bulletin | Branche `plan-4-stats` poussée, **pas encore fusionnée** | **362 tests verts**, build OK (90 Ko) |
+| 4. Stats et tableau de bord | Relevés à 48 h et à 7 jours, relevé hebdo du compte, onglet Tableau de bord (6 graphiques SVG), rétrospective du bulletin | Fusionné dans `main` | **362 tests verts**, build OK (90 Ko) |
 
 ### Studios publiés (URL dans `.studio.local.json`, non versionné)
 - **Studio de test** : profil fictif, jeu de référence fictif, version de la page avec l'onglet Bulletin (republiée le 2026-09-29). Capacités : `db`, `assets`, `sample`.
@@ -172,17 +172,15 @@ Elles sont toutes détaillées dans le registre de chaque plan (`.superpowers/sd
 - **Interface :** l'onglet Tableau de bord se met à jour sans reconstruire le formulaire du relevé du compte. `replaceChildren` natif n'aplatit pas les tableaux et affiche « null » : on ne lui passe que des nœuds filtrés.
 - **Veille :** elle lit `stats_contenu` et `releves_compte` par des requêtes bornées, et `--maintenant` est normalisé en ISO.
 - **Studio de test :** profil fictif v2 avec cibles, et relevés fictifs (`exemples/stats-fictives.json`).
-- **Studio réel :** page publiée, mais **pas encore de cibles**. Des valeurs proposées tirées du profil attendent l'accord de Jean.
+- **Studio réel :** page publiée ; cibles validées par Jean et écrites dans la base (profil version 2, la version 1 archivée) : 0,3 % d'abonnés par vue, 20 partages et envois par post, +125 abonnés nets par semaine, pas de cible de clics sur la porte.
 
 ### Prochaine étape
 1. **Jean** : checklist à l'écran sur le studio de test.
    - Onglet Tableau de bord : 6 graphiques, en thème clair et sombre, et sur téléphone.
    - Passer une fiche en « Publié », saisir son relevé à 48 h, saisir le relevé du compte.
    - Lire la rétrospective du bulletin, relancer la veille.
-2. **Cibles du studio réel :** valider les valeurs proposées, puis les écrire en nouvelle version du profil, dans la base seulement.
-3. **Fusion :** fusionner `plan-4-stats` dans `main` (la routine réelle suit `main`). Remettre ensuite la routine de test sur `main`, puisque son prompt pointe encore sur `plan-4-stats`.
-4. **Après le dimanche 4 octobre :** lire le compte rendu de la première veille réelle.
-5. **Plus tard, phase 2 :** publication automatique (`publisher/`) et import automatique des statistiques.
+2. **Après le dimanche 4 octobre :** lire le compte rendu de la première veille réelle.
+3. **Plus tard, phase 2 :** publication automatique (`publisher/`) et import automatique des statistiques.
 
 ## Contraintes
 
