@@ -120,6 +120,7 @@ Révisée à partir du profil de marque réel (fourni par Jean, conservé hors d
 | 2. Évaluation par Claude | Règles calculées, score pondéré par format, verrou de conformité, évaluation via `sample`, suggestions, jeu de référence | Fusionné dans `main` | 240 tests |
 | 3. Veille hebdo | Script `scripts/veille.mjs`, logique `src/logique/veille.js`, consignes `src/claude/veille.md`, onglet Bulletin | Fusionné dans `main` | **302 tests verts**, build OK (72 Ko) |
 | 4. Stats et tableau de bord | Relevés à 48 h et à 7 jours, relevé hebdo du compte, onglet Tableau de bord (6 graphiques SVG), rétrospective du bulletin | Fusionné dans `main` | **362 tests verts**, build OK (90 Ko) |
+| 5. Parcours d'une fiche | Prochaine action (cartes, bandeau de fiche, « À faire cette semaine »), confirmations datées de programmation et de publication, relevés depuis la date réelle | Branche `plan-5-parcours` poussée, **pas encore fusionnée** | **417 tests verts**, build OK (98 Ko) |
 
 ### Studios publiés (URL dans `.studio.local.json`, non versionné)
 - **Studio de test** : profil fictif, jeu de référence fictif, version de la page avec l'onglet Bulletin (republiée le 2026-09-29). Capacités : `db`, `assets`, `sample`.
@@ -174,13 +175,19 @@ Elles sont toutes détaillées dans le registre de chaque plan (`.superpowers/sd
 - **Studio de test :** profil fictif v2 avec cibles, et relevés fictifs (`exemples/stats-fictives.json`).
 - **Studio réel :** page publiée ; cibles validées par Jean et écrites dans la base (profil version 2, la version 1 archivée) : 0,3 % d'abonnés par vue, 20 partages et envois par post, +125 abonnés nets par semaine, pas de cible de clics sur la porte.
 
+### Plan 5 : décisions prises à l'exécution
+- **Confirmations :** « Programmé » et « Publié » s'obtiennent par un formulaire daté avec une case obligatoire ; le contrôleur refuse de changer ces statuts sans confirmation. Programmation refusée dans le passé, publication refusée au-delà de maintenant + 5 min.
+- **Champs :** `programme_pour`, `publie_le` (protégés, effacés à chaque retour en arrière ou rétrogradation). Les relevés partent de `publie_le ?? date_heure`.
+- **Prochaine action :** logique pure `src/logique/parcours.js`. Une fiche programmée dont l'heure est passée propose « Confirmer la publication » (avant toute reconfirmation) ; une fiche programmée avant le plan 5 propose « Reconfirmer » avec « Confirme la date programmée dans Meta Business Suite ».
+- **Affichage :** ligne d'action sur les cartes de la vue Semaine seulement, bandeau en tête de fiche, liste « À faire cette semaine ».
+- **Limites connues :** panneau ouvert non rafraîchi après un glisser-déposer de la même fiche ; retour Publié → Programmé en passant par Validé ; une fiche programmée pour plus tard puis déplacée dans le passé propose « Confirmer la publication » sans avertissement.
+
 ### Prochaine étape
-1. **Jean** : checklist à l'écran sur le studio de test.
-   - Onglet Tableau de bord : 6 graphiques, en thème clair et sombre, et sur téléphone.
-   - Passer une fiche en « Publié », saisir son relevé à 48 h, saisir le relevé du compte.
-   - Lire la rétrospective du bulletin, relancer la veille.
-2. **Après le dimanche 4 octobre :** lire le compte rendu de la première veille réelle.
-3. **Plus tard, phase 2 :** publication automatique (`publisher/`) et import automatique des statistiques.
+1. **Jean** : checklist à l'écran sur le studio de test (plan 5, tâche 6, étape 3) et checklist du plan 4.
+2. **Fusion** de `plan-5-parcours` dans `main`.
+3. **Après le dimanche 4 octobre :** lire le compte rendu de la première veille réelle.
+4. **Plan 6 (proposé) : confiance dans les données** — transparence de l'évaluation, tableau de bord à faible volume, export et restauration.
+5. **Phase 2 :** publication automatique (`publisher/`) et import automatique des statistiques.
 
 ## Contraintes
 
