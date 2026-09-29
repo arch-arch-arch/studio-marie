@@ -124,4 +124,11 @@ describe('retrospective', () => {
     });
     expect(r.ecarts).toEqual([]);
   });
+  it('la fenêtre et les manquants partent de la date réelle de publication', () => {
+    const r = retrospective({
+      stats: [], relevesCompte: [], fiches: [{ id: 'p', statut: 'publie', date_heure: '2026-09-30T10:00:00.000Z', publie_le: '2026-09-22T10:00:00.000Z', accroche: 'Réelle' }],
+      cibles: undefined, fuseau: FZ, debutSemaineVisee: W40, maintenant: '2026-09-27T18:00:00.000Z',
+    });
+    expect(r.manquants).toEqual([{ fiche: 'p', releve: '48h', accroche: 'Réelle' }]);
+  });
 });

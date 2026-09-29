@@ -82,7 +82,8 @@ export function creerRendu(racine, actions, capacites, horloge) {
       // vueTableau ne lit ni fiches, ni bulletin, ni configVeille : ils ne doivent pas la reconstruire.
       reconstructionRequise = memo.profil !== e.profil || memo.vue !== e.vue || memo.ancre !== e.ancre || sortDuChargementTableau;
     } else {
-      reconstructionRequise = memo.profil !== e.profil || memo.fiches !== e.fiches || memo.vue !== e.vue || memo.ancre !== e.ancre || memo.bulletin !== e.bulletin || memo.configVeille !== e.configVeille;
+      reconstructionRequise = memo.profil !== e.profil || memo.fiches !== e.fiches || memo.vue !== e.vue || memo.ancre !== e.ancre || memo.bulletin !== e.bulletin || memo.configVeille !== e.configVeille
+        || (e.vue === 'semaine' && memo.stats !== e.stats);
     }
     if (reconstructionRequise) {
       elementVue = contenuVue(e2, actions, capacites);
@@ -94,7 +95,7 @@ export function creerRendu(racine, actions, capacites, horloge) {
     }
     const ouverte = e.profil && e.ficheOuverte ? e.fiches.find(f => f.id === e.ficheOuverte) : null;
     const panneauChange = memo.ficheOuverte !== e.ficheOuverte || memo.profil !== e.profil || (!!ouverte !== memo.panneauAffiche);
-    if (panneauChange) panneau.replaceChildren(ouverte ? panneauFiche(ouverte, e.profil, actions, capacites) : '');
+    if (panneauChange) panneau.replaceChildren(ouverte ? panneauFiche(ouverte, e.profil, actions, capacites, (e.stats ?? []).filter(s => s.fiche === ouverte.id)) : '');
     racine.classList.toggle('avec-panneau', !!ouverte);
     memo = {
       profil: e.profil, fiches: e.fiches, vue: e.vue, ancre: e.ancre, ficheOuverte: e.ficheOuverte, panneauAffiche: !!ouverte,

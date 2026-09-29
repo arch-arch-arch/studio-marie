@@ -1,6 +1,7 @@
 import { h } from './h.js';
 import { LIBELLES_FORMAT, LIBELLES_STATUT, aReevaluer } from '../logique/fiche.js';
 import { heureLocale } from '../logique/dates.js';
+import { ACTIONS_SANS_SUITE } from '../logique/parcours.js';
 
 const LIBELLES_ETAT = { vert: 'conforme à la cible', orange: 'à surveiller', rouge: 'hors cible' };
 
@@ -21,7 +22,7 @@ export function badgeScore(f) {
     perimee ? h('span', { class: 'point', 'aria-label': 'à réévaluer' }) : null);
 }
 
-export function carte(f, regles, actions) {
+export function carte(f, regles, actions, action = null) {
   const pilier = regles.piliers.find(p => p.cle === f.pilier);
   return h('article', {
     class: `carte statut-${f.statut}`, draggable: true, tabindex: '0', 'data-id': f.id,
@@ -34,6 +35,9 @@ export function carte(f, regles, actions) {
     h('span', { class: 'format' }, LIBELLES_FORMAT[f.format]),
     h('span', { class: 'heure' }, heureLocale(f.date_heure, regles.fuseau))),
   h('p', { class: 'carte-accroche' }, f.accroche || 'Sans accroche'),
+  action ? h('p', {
+    class: ['carte-action', action.retard ? 'action-retard' : '', ACTIONS_SANS_SUITE.has(action.cle) ? 'action-calme' : ''].filter(Boolean).join(' '),
+  }, action.libelle) : null,
   h('div', { class: 'carte-pied' },
     h('span', {}, LIBELLES_STATUT[f.statut]),
     badgeScore(f)));

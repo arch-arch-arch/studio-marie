@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   FORMATS, STATUTS, nouvelId, nouvelleFiche, empreinte, aReevaluer, modifierFiche, peutPasserA,
   changerStatut, deplacerFiche, analyserHashtags, formaterHashtags, texteAPublier, appliquerEvaluation,
+  datePublication, effacementsPour, confirmerProgrammation, confirmerPublication,
 } from '../../src/logique/fiche.js';
 
 const T0 = '2026-09-27T20:00:00.000Z';
@@ -160,5 +161,91 @@ describe('appliquerEvaluation', () => {
       score, variantes: [], suggestions: { accroches: [], hashtags: [] }, recommandations: ['R1', 'R2', 'R3'],
     }, '2026-09-28T09:00:00.000Z');
     expect(g.statut).toBe('publie');
+  });
+});
+
+describe('confirmations', () => {
+  const M = '2026-09-28T08:00:00.000Z';
+  const validee = () => changerStatut(prete(), 'valide', T0);
+
+  it('nouvelleFiche prévoit les deux champs', () => {
+    expect(base()).toMatchObject({ programme_pour: null, publie_le: null });
+  });
+
+  it('confirme la programmation et aligne la date', () => {
+    const r = confirmerProgrammation(validee(), { date: '2026-10-01T10:00:00.000Z', coche: true }, M);
+    expect(r.ok).toBe(true);
+    expect(r.fiche).toMatchObject({ statut: 'programme', programme_pour: '2026-10-01T10:00:00.000Z', date_heure: '2026-10-01T10:00:00.000Z', publie_le: null, maj_le: M });
+  });
+
+  it('normalise la date confirmée en ISO UTC', () => {
+    const r = confirmerProgrammation(validee(), { date: '2026-10-01T12:00:00+02:00', coche: true }, M);
+    expect(r.fiche.programme_pour).toBe('2026-10-01T10:00:00.000Z');
+  });
+
+  it('refuse sans case cochée, sans date valide, ou dans le passé', () => {
+    expect(confirmerProgrammation(validee(), { date: '2026-10-01T10:00:00.000Z', coche: false }, M)).toEqual({ ok: false, raison: 'Coche la case pour confirmer.' });
+    expect(confirmerProgrammation(validee(), { date: '', coche: true }, M)).toEqual({ ok: false, raison: 'Indique une date et une heure valides.' });
+    expect(confirmerProgrammation(validee(), { date: '2026-09-28T07:59:00.000Z', coche: true }, M))
+      .toEqual({ ok: false, raison: 'Choisis une date à venir : Meta Business Suite ne programme pas dans le passé.' });
+  });
+
+  it('applique les règles de validation', () => {
+    expect(confirmerProgrammation(base(), { date: '2026-10-01T10:00:00.000Z', coche: true }, M))
+      .toEqual({ ok: false, raison: 'Ajoute un visuel avant de valider.' });
+  });
+
+  it('refuse de programmer une fiche déjà publiée', () => {
+    const publiee = confirmerPublication(validee(), { date: '2026-09-28T07:00:00.000Z', coche: true }, M).fiche;
+    expect(confirmerProgrammation(publiee, { date: '2026-10-01T10:00:00.000Z', coche: true }, M)).toEqual({ ok: false, raison: 'Cette fiche est déjà publiée.' });
+  });
+
+  it('confirme la publication, y compris directement depuis Validé', () => {
+    const r = confirmerPublication(validee(), { date: '2026-09-28T07:00:00.000Z', coche: true }, M);
+    expect(r.fiche).toMatchObject({ statut: 'publie', publie_le: '2026-09-28T07:00:00.000Z', date_heure: '2026-09-28T07:00:00.000Z', programme_pour: null });
+  });
+
+  it('garde la programmation confirmée au moment de la publication', () => {
+    const prog = confirmerProgrammation(validee(), { date: '2026-09-28T09:00:00.000Z', coche: true }, M).fiche;
+    const pub = confirmerPublication(prog, { date: '2026-09-28T09:00:00.000Z', coche: true }, '2026-09-28T09:30:00.000Z').fiche;
+    expect(pub).toMatchObject({ statut: 'publie', programme_pour: '2026-09-28T09:00:00.000Z', publie_le: '2026-09-28T09:00:00.000Z' });
+  });
+
+  it('tolère 5 minutes d’avance pour la publication, pas plus', () => {
+    expect(confirmerPublication(validee(), { date: '2026-09-28T08:05:00.000Z', coche: true }, M).ok).toBe(true);
+    expect(confirmerPublication(validee(), { date: '2026-09-28T08:06:00.000Z', coche: true }, M))
+      .toEqual({ ok: false, raison: 'La date de publication ne peut pas être dans le futur.' });
+    expect(confirmerPublication(validee(), { date: '2026-09-28T07:00:00.000Z', coche: false }, M)).toEqual({ ok: false, raison: 'Coche la case pour confirmer.' });
+  });
+
+  it('efface les confirmations en revenant en arrière', () => {
+    const prog = confirmerProgrammation(validee(), { date: '2026-10-01T10:00:00.000Z', coche: true }, M).fiche;
+    expect(changerStatut(prog, 'valide', M)).toMatchObject({ statut: 'valide', programme_pour: null, publie_le: null });
+    const pub = confirmerPublication(prog, { date: '2026-09-28T07:00:00.000Z', coche: true }, M).fiche;
+    expect(changerStatut(pub, 'programme', M)).toMatchObject({ statut: 'programme', publie_le: null, programme_pour: '2026-10-01T10:00:00.000Z' });
+    expect(effacementsPour('brouillon')).toEqual({ programme_pour: null, publie_le: null });
+    expect(effacementsPour('publie')).toEqual({});
+  });
+
+  it('efface les confirmations quand une modification fait repasser en Brouillon', () => {
+    const prog = confirmerProgrammation(validee(), { date: '2026-10-01T10:00:00.000Z', coche: true }, M).fiche;
+    expect(modifierFiche(prog, { caption: 'autre' }, M)).toMatchObject({ statut: 'brouillon', programme_pour: null });
+  });
+
+  it('déplacer une fiche programmée garde son statut et sa programmation', () => {
+    const prog = confirmerProgrammation(validee(), { date: '2026-10-01T10:00:00.000Z', coche: true }, M).fiche;
+    const g = deplacerFiche(prog, '2026-10-02T10:00:00.000Z', 'Europe/Paris', M);
+    expect(g).toMatchObject({ statut: 'programme', programme_pour: '2026-10-01T10:00:00.000Z', date_heure: '2026-10-02T10:00:00.000Z' });
+  });
+
+  it('protège les deux champs de confirmation', () => {
+    expect(() => modifierFiche(base(), { programme_pour: 'x' }, M)).toThrow('Champ protégé : programme_pour');
+    expect(() => modifierFiche(base(), { publie_le: 'x' }, M)).toThrow('Champ protégé : publie_le');
+  });
+
+  it('datePublication préfère la date réelle', () => {
+    expect(datePublication({ date_heure: 'a', publie_le: 'b' })).toBe('b');
+    expect(datePublication({ date_heure: 'a', publie_le: null })).toBe('a');
+    expect(datePublication({ date_heure: 'a' })).toBe('a');
   });
 });

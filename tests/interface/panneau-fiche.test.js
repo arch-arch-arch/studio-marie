@@ -320,3 +320,111 @@ describe('section Statistiques', () => {
     await vi.waitFor(() => expect(p.querySelector('input[name="48h-clics_porte"]')).not.toBeNull());
   });
 });
+
+describe('parcours dans la fiche', () => {
+  const M = '2026-09-28T08:00:00.000Z';
+  const prete = (extra = {}) => {
+    const f = fiche({ visuel: 'a1', visuel_type: 'image', caption: 'Une caption.', date_heure: '2026-10-01T10:00:00.000Z', ...extra });
+    return { ...f, score: { total: 70, criteres: [], conformite: { etat: 'vert', causes: [] }, empreinte: empreinte(f) } };
+  };
+  const actionsParcours = () => ({
+    ...actionsFactices(),
+    maintenant: () => M,
+    changerStatut: vi.fn(async () => ({ ok: true })),
+    confirmerProgrammation: vi.fn(async (id, date) => ({ ok: true, fiche: { statut: 'programme', programme_pour: date, date_heure: date, publie_le: null } })),
+    confirmerPublication: vi.fn(async (id, date) => ({ ok: true, fiche: { statut: 'publie', publie_le: date, date_heure: date } })),
+  });
+
+  it('affiche la prochaine action en tête de fiche', () => {
+    const p = panneauFiche(fiche(), fictif, actionsParcours(), { assets: true });
+    expect(p.querySelector('.prochaine-action').textContent).toContain('Terminer : ajoute un visuel et une caption');
+    expect(p.textContent).not.toContain('null');
+  });
+
+  it('le bouton « Passer en Validé » applique le statut', async () => {
+    const actions = actionsParcours();
+    const p = panneauFiche(prete(), fictif, actions, { assets: true });
+    bouton(p, 'Passer en Validé').click();
+    await vi.waitFor(() => expect(actions.changerStatut).toHaveBeenCalledWith('f1', 'valide'));
+    await vi.waitFor(() => expect(p.querySelector('.prochaine-action').textContent).toContain('Confirmer la programmation'));
+  });
+
+  it('« Programmé » ouvre le formulaire, préremplit la date et exige la case', async () => {
+    const actions = actionsParcours();
+    actions.confirmerProgrammation = vi.fn(async () => ({ ok: false, raison: 'Coche la case pour confirmer.' }));
+    const p = panneauFiche(prete({ statut: 'valide' }), fictif, actions, { assets: true });
+    bouton(p, 'Programmé').click();
+    const form = p.querySelector('form.confirmation-programme');
+    expect(form.querySelector('input[name="confirmation-date"]').value).toBe('2026-10-01');
+    expect(form.querySelector('input[name="confirmation-heure"]').value).toBe('12:00');
+    form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    await vi.waitFor(() => expect(form.textContent).toContain('Coche la case pour confirmer.'));
+    expect(actions.confirmerProgrammation).toHaveBeenCalledWith('f1', '2026-10-01T10:00:00.000Z', false);
+    expect(actions.changerStatut).not.toHaveBeenCalled();
+  });
+
+  it('une programmation confirmée met à jour le statut et le bandeau', async () => {
+    const actions = actionsParcours();
+    const p = panneauFiche(prete({ statut: 'valide' }), fictif, actions, { assets: true });
+    bouton(p, 'Confirmer…').click();
+    const form = p.querySelector('form.confirmation-programme');
+    form.querySelector('input[name="confirmation-coche"]').checked = true;
+    form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    await vi.waitFor(() => expect(p.querySelector('.panneau-message').textContent).toBe('Programmation confirmée.'));
+    expect(p.querySelector('form.confirmation-programme')).toBeNull();
+    expect(p.querySelector('.statut-bouton.actif').textContent).toBe('Programmé');
+    expect(p.querySelector('.prochaine-action').textContent).toContain('Programmé pour le');
+  });
+
+  it('« Publié » préremplit maintenant, arrondi à la minute, quand la date prévue est à venir', () => {
+    const actions = actionsParcours();
+    actions.maintenant = () => '2026-09-28T08:00:42.000Z';
+    const p = panneauFiche(prete({ statut: 'valide' }), fictif, actions, { assets: true });
+    bouton(p, 'Publié').click();
+    const form = p.querySelector('form.confirmation-publie');
+    expect(form.querySelector('input[name="confirmation-date"]').value).toBe('2026-09-28');
+    expect(form.querySelector('input[name="confirmation-heure"]').value).toBe('10:00');
+    expect(form.textContent).toContain('Le contenu est en ligne');
+  });
+
+  it('une date vide dans le formulaire n’appelle pas le contrôleur', async () => {
+    const actions = actionsParcours();
+    const p = panneauFiche(prete({ statut: 'valide' }), fictif, actions, { assets: true });
+    bouton(p, 'Programmé').click();
+    const form = p.querySelector('form.confirmation-programme');
+    form.querySelector('input[name="confirmation-date"]').value = '';
+    form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    await vi.waitFor(() => expect(form.textContent).toContain('Indique la date et l’heure.'));
+    expect(actions.confirmerProgrammation).not.toHaveBeenCalled();
+  });
+
+  it('pour une fiche publiée, l’action suit les relevés connus', () => {
+    const f = prete({ statut: 'publie', publie_le: '2026-09-25T10:00:00.000Z', date_heure: '2026-09-25T10:00:00.000Z' });
+    const p1 = panneauFiche(f, fictif, actionsParcours(), { assets: true });
+    expect(p1.querySelector('.prochaine-action').textContent).toContain('Saisir les stats à 48 h');
+    const p2 = panneauFiche(f, fictif, actionsParcours(), { assets: true }, [{ releve: '48h' }]);
+    expect(p2.querySelector('.prochaine-action').textContent).toContain('Prochain relevé le');
+  });
+
+  it('remplacer le visuel d’une fiche programmée efface les confirmations et met à jour le bandeau', async () => {
+    const actions = actionsParcours();
+    actions.televerserVisuel = vi.fn(async () => ({ ok: true, id: 'as9', type: 'image', statut: 'brouillon' }));
+    const f = prete({ statut: 'programme', programme_pour: '2026-10-01T10:00:00.000Z' });
+    const p = panneauFiche(f, fictif, actions, { assets: true });
+    expect(p.querySelector('.prochaine-action').textContent).toContain('Programmé pour le');
+    const entree = p.querySelector('input[type="file"]');
+    Object.defineProperty(entree, 'files', { value: [{ type: 'image/png' }] });
+    entree.dispatchEvent(new Event('change', { bubbles: true }));
+    await vi.waitFor(() => expect(p.querySelector('.prochaine-action').textContent).not.toContain('Programmé pour le'));
+  });
+
+  it('une évaluation qui renvoie le statut en Brouillon met aussi à jour le bandeau d’une fiche programmée', async () => {
+    const actions = actionsParcours();
+    const f = prete({ statut: 'programme', programme_pour: '2026-10-01T10:00:00.000Z' });
+    actions.evaluerFiche = vi.fn(async () => ({ ok: true, fiche: { ...f, statut: 'brouillon' } }));
+    const p = panneauFiche(f, fictif, actions, { assets: true, sample: true });
+    expect(p.querySelector('.prochaine-action').textContent).toContain('Programmé pour le');
+    bouton(p, 'Réévaluer').click();
+    await vi.waitFor(() => expect(p.querySelector('.prochaine-action').textContent).not.toContain('Programmé pour le'));
+  });
+});
