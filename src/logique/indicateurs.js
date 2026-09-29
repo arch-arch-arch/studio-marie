@@ -23,7 +23,7 @@ export const LIBELLES_CIBLES = {
   clics_porte_semaine: 'Clics sur la porte de la semaine',
 };
 const MAX = 1e9;
-const ESPACES = /[\s  ]/g;
+const ESPACES = /[\s\u00A0\u202F]/g;
 
 function valider(saisie, champs) {
   const erreurs = [];

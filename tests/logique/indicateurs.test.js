@@ -12,7 +12,9 @@ describe('validerReleveContenu', () => {
     expect(r).toEqual({ ok: true, erreurs: [], valeurs: { vues: 12345, nouveaux_abonnes: 40, partages_envois: 7, sauvegardes: null, visites_profil: null, clics_porte: null } });
   });
   it('accepte l’espace insécable et l’espace fine', () => {
-    expect(validerReleveContenu({ vues: '1 000', nouveaux_abonnes: '2 000', partages_envois: 0 }).valeurs.vues).toBe(1000);
+    const r = validerReleveContenu({ vues: '1\u00A0000', nouveaux_abonnes: '2\u202F000', partages_envois: 0 });
+    expect(r.valeurs.vues).toBe(1000);
+    expect(r.valeurs.nouveaux_abonnes).toBe(2000);
   });
   it('refuse un champ requis vide, un négatif, un décimal et du texte', () => {
     const r = validerReleveContenu({ vues: '', nouveaux_abonnes: -1, partages_envois: '2,5', sauvegardes: 'beaucoup' });
