@@ -120,7 +120,7 @@ Révisée à partir du profil de marque réel (fourni par Jean, conservé hors d
 | 2. Évaluation par Claude | Règles calculées, score pondéré par format, verrou de conformité, évaluation via `sample`, suggestions, jeu de référence | Fusionné dans `main` | 240 tests |
 | 3. Veille hebdo | Script `scripts/veille.mjs`, logique `src/logique/veille.js`, consignes `src/claude/veille.md`, onglet Bulletin | Fusionné dans `main` | **302 tests verts**, build OK (72 Ko) |
 | 4. Stats et tableau de bord | Relevés à 48 h et à 7 jours, relevé hebdo du compte, onglet Tableau de bord (6 graphiques SVG), rétrospective du bulletin | Fusionné dans `main` | **362 tests verts**, build OK (90 Ko) |
-| 5. Parcours d'une fiche | Prochaine action (cartes, bandeau de fiche, « À faire cette semaine »), confirmations datées de programmation et de publication, relevés depuis la date réelle | Branche `plan-5-parcours` poussée, **pas encore fusionnée** | **417 tests verts**, build OK (98 Ko) |
+| 5. Parcours d'une fiche | Prochaine action (cartes, bandeau de fiche, « À faire cette semaine »), confirmations datées de programmation et de publication, relevés depuis la date réelle | Fusionné dans `main` | **417 tests verts**, build OK (98 Ko) |
 
 ### Studios publiés (URL dans `.studio.local.json`, non versionné)
 - **Studio de test** : profil fictif, jeu de référence fictif, version de la page avec l'onglet Bulletin (republiée le 2026-09-29). Capacités : `db`, `assets`, `sample`.
@@ -184,7 +184,7 @@ Elles sont toutes détaillées dans le registre de chaque plan (`.superpowers/sd
 
 ### Prochaine étape
 1. **Jean** : checklist à l'écran sur le studio de test (plan 5, tâche 6, étape 3) et checklist du plan 4.
-2. **Fusion** de `plan-5-parcours` dans `main`.
+2. (fait) Fusion du plan 5 dans `main`.
 3. **Après le dimanche 4 octobre :** lire le compte rendu de la première veille réelle.
 4. **Plan 6 (proposé) : confiance dans les données** — transparence de l'évaluation, tableau de bord à faible volume, export et restauration.
 5. **Phase 2 :** publication automatique (`publisher/`) et import automatique des statistiques.
