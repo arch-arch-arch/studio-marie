@@ -1,0 +1,343 @@
+{
+  "nom": "Studio Contenu",
+  "version_du_document": "2026-09-29 (plan 5)",
+  "resume": "Page web privée (Artifact claude.ai) pour planifier, rédiger, évaluer et piloter le contenu Instagram d'une créatrice : calendrier, fiches contenu notées par Claude, veille hebdomadaire automatique et tableau de bord des statistiques.",
+  "objectifs": [
+    "Savoir quoi poster : idées, accroches, captions, tendances.",
+    "Organiser et publier avec régularité, en respectant la cadence du profil."
+  ],
+  "roles_du_compte": {
+    "tunnel": "Amener vers les plateformes de la créatrice via une « porte » (highlight de stories contenant le lien).",
+    "croissance": "Faire grandir l'audience.",
+    "marque": "Construire la marque personnelle."
+  },
+  "criteres_de_reussite": [
+    "La semaine est planifiée à l'avance et respecte la cadence cible du profil.",
+    "Chaque contenu a un score argumenté avant publication ; aucun contenu non conforme ne passe en « Validé ».",
+    "Le lundi matin, un bulletin de tendances et 3 à 5 idées exploitables sont prêts.",
+    "Le tableau de bord suit la métrique boussole (nouveaux abonnés par vue, partages et envois), pas les vues et likes bruts."
+  ],
+  "hors_perimetre_phase_1": [
+    "Publication automatique via l'API Instagram (prévue en phase 2, dossier publisher/).",
+    "Import automatique des statistiques (phase 2).",
+    "Plusieurs comptes, historique des modifications d'une fiche, notifications push, mode hors ligne."
+  ],
+  "architecture": {
+    "approche": "Hybride en phase 1 (publication manuelle), automatique en phase 2.",
+    "composants": {
+      "studio": {
+        "role": "Calendrier, fiches, bulletin, tableau de bord, profil.",
+        "techno": "Artifact HTML/JS claude.ai, une seule page construite par esbuild (dist/studio.html, ~90 Ko)."
+      },
+      "base_partagee": {
+        "role": "Profil, fiches, bulletins, statistiques.",
+        "techno": "Capacité « db » de l'Artifact (base de documents JSON, écoute en temps réel)."
+      },
+      "stockage_visuels": {
+        "role": "Photos et vidéos des fiches.",
+        "techno": "Capacité « assets » de l'Artifact."
+      },
+      "evaluation": {
+        "role": "Score et suggestions à la demande.",
+        "techno": "Capacité « sample » : la page interroge Claude avec le compte de la personne qui clique (coût à sa charge)."
+      },
+      "veille_hebdo": {
+        "role": "Bulletin de tendances et idées du dimanche soir.",
+        "techno": "Routine Claude Code cloud (modèle Sonnet) qui clone le dépôt, suit src/claude/veille.md, lance scripts/veille.mjs et écrit dans la base avec l'outil ArtifactData."
+      },
+      "publication": {
+        "role": "Manuelle via Meta Business Suite, puis la fiche passe en « Programmé ».",
+        "techno": "Bouton « Copier la caption et les hashtags »."
+      }
+    },
+    "acces": "Jean et la créatrice sont éditeurs de la page. Page privée.",
+    "deux_studios": {
+      "test": "Profil fictif, données fictives, sert aux essais.",
+      "reel": "Profil réel ; les données réelles vivent uniquement dans sa base."
+    },
+    "stack": {
+      "langage": "JavaScript (modules ES), DOM vanilla via une fonction h()",
+      "tests": "Vitest + happy-dom (417 tests)",
+      "build": "esbuild (scripts/build.mjs)",
+      "runtime_script": "Node 24",
+      "dependances_runtime": "aucune"
+    },
+    "decoupage_du_code": {
+      "src/logique/": "Règles métier pures et testées : dates et fuseaux, fiche, créneaux, contrôle de semaine, règles du score, score, profil, jeu de référence, veille, indicateurs, tableau de bord.",
+      "src/claude/": "Consignes envoyées à Claude, validation des réponses (evaluation.js), mode d'emploi de la veille (veille.md).",
+      "src/donnees/": "Accès à la base (depot.js) et enregistrement différé des fiches (enregistreur.js).",
+      "src/interface/": "Vues Semaine, Mois, Jour, Bulletin, Tableau de bord, Profil ; panneau de fiche ; graphiques SVG ; contrôleur et rendu.",
+      "scripts/": "build.mjs (page unique) et veille.mjs (outil de la veille).",
+      "exemples/": "Profil fictif, entrée de veille fictive, statistiques fictives.",
+      "publisher/": "Phase 2."
+    },
+    "confidentialite": [
+      "Dépôt git privé et anonymisé : ni nom, pseudo, e-mail, plateformes, statistiques, contenus, visuels, ni URL des studios ou de la routine.",
+      "Le profil réel, le jeu de référence et les statistiques réelles vivent seulement dans la base du studio réel.",
+      ".gitignore bloque *profil_marque*.json, data/, media/, veille-tmp/, les secrets et .studio.local.json."
+    ]
+  },
+  "modele_de_donnees": {
+    "convention_dates": "Toutes les dates sont stockées en UTC (ISO 8601, format toISOString) et affichées dans le fuseau du profil.",
+    "collections": {
+      "profil/courant": {
+        "contenu": "Profil de marque importé (JSON libre) + bloc machine « regles_studio », « version » et « importe_le ».",
+        "archives": "profil_archives/v<n> : chaque import archive la version précédente et incrémente la version."
+      },
+      "fiches/<id>": "Un document par contenu (voir « fiche »).",
+      "bulletins/<YYYY-Www>": "Un bulletin par semaine ISO : semaine, genere_le, statut (complet | partiel), sources_indisponibles, retrospective, tendances, ecartees, alertes, idees (ids), hors_creneau (ids), controle (pastilles).",
+      "stats_contenu/<idFiche>_48h | <idFiche>_7j": "Relevé d'un contenu publié : vues, nouveaux_abonnes, partages_envois, sauvegardes, visites_profil, clics_porte, saisi_le, et recopie de la fiche (date_publication, format, pilier, accroche, score_total).",
+      "releves_compte/<YYYY-Www>": "Relevé hebdomadaire du compte : semaine, debut, abonnes, vues_moyennes_stories, clics_porte, saisi_le.",
+      "reference/<id>": "Jeu de référence : contenus réels au résultat connu { format, pilier, accroche, caption, hashtags, resultat: gagnant | perdant }.",
+      "reference_resultats/dernier": "Bilan de la dernière vérification du classement du jeu de référence.",
+      "config/veille": "{ url_routine } : lien vers la page de la routine cloud (bouton « Relancer la veille »)."
+    },
+    "fiche": {
+      "type_de_contenu": {
+        "format": "reel | carrousel | story | post",
+        "pilier": "clé d'un pilier du profil",
+        "format_valide": "texte libre",
+        "role_caption": "engagement | cta | deadpan | null",
+        "cta": "booléen (appel à l'action)",
+        "ragebait": "booléen",
+        "porte": "booléen (story qui mène à la porte)"
+      },
+      "planification": {
+        "date_heure": "UTC",
+        "statut": "idee → brouillon → valide → programme → publie",
+        "confirmations": "programme_pour, publie_le (ISO UTC, protégés, effacés en revenant en arrière)"
+      },
+      "contenu": [
+        "visuel (id d'asset)",
+        "visuel_type (image | video)",
+        "accroche",
+        "caption",
+        "hashtags",
+        "geotag (niveau ville, 200 caractères max)"
+      ],
+      "score": [
+        "total",
+        "criteres",
+        "conformite { etat, causes }",
+        "alertes",
+        "version_profil",
+        "evalue_le",
+        "empreinte"
+      ],
+      "suggestions": [
+        "recommandations (3)",
+        "variantes (2 captions { role, texte })",
+        "suggestions { accroches, hashtags }"
+      ],
+      "origine": "manuelle | veille (avec l'id du bulletin) | banque",
+      "suivi": [
+        "modifiee_depuis_creation",
+        "cree_le",
+        "maj_le"
+      ]
+    },
+    "regles_studio": {
+      "fuseau": "fuseau IANA (ex. Europe/Paris)",
+      "piliers": "[{ cle, nom, couleur #rrggbb }]",
+      "cadence": "{ reel, carrousel, story_par_jour } par semaine",
+      "cta_ratio_max": "part maximale d'appels à l'action dans le feed (0 à 1)",
+      "roles_caption": "{ engagement, cta, deadpan } : minimum par semaine",
+      "ragebait_max": "maximum par semaine",
+      "stories_porte": "{ min, max } par semaine",
+      "creneaux": "[{ jours: 1..7, debut: HH:MM, fin: HH:MM }]",
+      "mots_a_eviter": "liste de textes",
+      "hashtags": "{ min, max }",
+      "accroche_mots_max": "entier",
+      "cibles (facultatif)": "{ taux_abonnes_par_vue (fraction), partages_par_post, croissance_nette_semaine, clics_porte_semaine }"
+    }
+  },
+  "score": {
+    "principe": "Avis d'expert, pas une prédiction. Calculé uniquement quand on clique « Évaluer » (coût facturé à la personne qui clique).",
+    "criteres": {
+      "accroche": "Accroche et diffusion",
+      "voix": "Voix et esthétique",
+      "mecanique": "Mécanique de la caption"
+    },
+    "poids_par_format": {
+      "reel": {
+        "accroche": 40,
+        "voix": 30,
+        "mecanique": 30
+      },
+      "carrousel": {
+        "accroche": 30,
+        "voix": 35,
+        "mecanique": 35
+      },
+      "post": {
+        "accroche": 30,
+        "voix": 35,
+        "mecanique": 35
+      },
+      "story": {
+        "accroche": 20,
+        "voix": 30,
+        "mecanique": 50
+      }
+    },
+    "calcul": "Claude note chaque critère sur 10 ; points = note/10 × poids − 20 % du poids par alerte calculée sur ce critère ; total sur 100.",
+    "regles_calculees": {
+      "conformite_rouge": [
+        "mot à éviter dans le texte ou les hashtags",
+        "lien dans le texte (seule une story qui mène à la porte peut porter un lien)",
+        "géotag trop précis (adresse, code postal, domicile)"
+      ],
+      "alertes": [
+        "pas d'accroche ou accroche trop longue",
+        "nombre de hashtags hors de la plage du profil",
+        "hors des créneaux recommandés",
+        "photo seule alors que le profil recommande un carrousel"
+      ]
+    },
+    "verrou_de_conformite": {
+      "fusion": "La conformité retenue est la plus sévère entre les règles calculées et le jugement de Claude.",
+      "au_rouge": "Score plafonné à 40 ; passage en Validé, Programmé ou Publié impossible.",
+      "empreinte": "Hachage de accroche, caption, visuel, hashtags, format, pilier, rôle, cta, géotag, porte. Si la fiche change après évaluation, elle est « à réévaluer » ; une fiche validée ou programmée repasse en Brouillon.",
+      "reverification": "Les règles sont relancées à chaque réception de fiches et à chaque nouveau profil."
+    },
+    "passage_en_valide": "Exige un visuel, une caption (sauf story), un score à jour et une conformité verte ou orange.",
+    "reponse_de_claude": "Validée champ par champ (notes, phrases, conformité, 2 captions de rôles différents, 2-3 accroches, hashtags, 3 recommandations). Rien n'est écrit si la réponse est incomplète.",
+    "calibration": "Jeu de référence (contenus réels gagnants et perdants) : le score doit classer les gagnants au-dessus des perdants ; vérification relançable depuis l'onglet Profil. Le tableau de bord compare aussi score prévu et performance réelle."
+  },
+  "controle_de_la_semaine": {
+    "pastilles": {
+      "reels": "nombre / cadence",
+      "carrousels": "nombre / cadence",
+      "stories": "jours couverts / 7",
+      "appels_a_l_action": "part dans le feed / cta_ratio_max",
+      "roles_des_captions": "engagement / cta / deadpan contre les minimums",
+      "ragebait": "nombre / maximum",
+      "stories_vers_la_porte": "dans [min, max]",
+      "piliers": "tous représentés, aucun > 50 % du feed"
+    },
+    "etats": "vert (conforme), orange (à surveiller), rouge (hors cible)"
+  },
+  "veille_hebdomadaire": {
+    "declenchement": "Routine cloud programmée le lundi à 00 h et 01 h UTC ; le script ne la laisse tourner que le dimanche à 20 h locale (fuseau du profil), été comme hiver. « Run now » (bouton Relancer la veille) tourne toujours.",
+    "semaine_visee": "Semaine ISO de « maintenant + 1 jour » : la semaine suivante le dimanche soir, la semaine en cours sinon.",
+    "lit": [
+      "profil",
+      "fiches de −14 j à +28 j autour de la semaine visée",
+      "bulletin existant",
+      "relevés de contenu des 2 semaines précédentes",
+      "relevés du compte de la même fenêtre"
+    ],
+    "sources": [
+      "annonces d'Instagram aux créateurs",
+      "rapports publics de tendances (sons, formats, memes)",
+      "tendances de la niche du profil"
+    ],
+    "interdits": [
+      "pas de scraping d'Instagram",
+      "ne modifie jamais le profil (peut seulement proposer une mise à jour)",
+      "aucun commit ni push",
+      "une seule écriture : le lot final"
+    ],
+    "filtre_de_marque": "Chaque tendance est adaptée (avec la façon de l'adapter) ou écartée (avec la raison) ; 3 à 5 retenues. Un son tendance est marqué « à vérifier dans l'app ».",
+    "bulletin": {
+      "retrospective": "Meilleur et pire contenu (taux d'abonnés par vue puis partages), écarts avec les cibles, relevés manquants ; sinon un rappel de saisie.",
+      "tendances": "source, date, pourquoi, adaptation, durée de vie",
+      "alertes": "changements de règles Instagram, avec proposition de mise à jour du profil",
+      "idees": "3 à 5 fiches en Brouillon, déjà évaluées, placées sur les créneaux libres (hors créneau signalé)"
+    },
+    "relance": "Une relance remplace le bulletin et seulement ses propres idées restées intactes (brouillon, non modifiées). Pas de doublon (dédoublonnage sur l'accroche, 5 idées max par bulletin).",
+    "robustesse": {
+      "ecritures_epinglees": "Chaque suppression ou remplacement porte la version lue (if_version) ; un conflit autorise une seule reprise.",
+      "recherche_web_en_panne": "Bulletin partiel marqué « sources indisponibles », idées tirées de la banque et des performances passées.",
+      "entree_invalide": "Rien n'est écrit ; 3 essais de construction au maximum."
+    },
+    "script": "scripts/veille.mjs : plage | doit-tourner [--forcer] | construire --profil --fiches --entree --sortie [--bulletin --versions --stats --releves --maintenant]"
+  },
+  "statistiques": {
+    "saisie": "Manuelle en phase 1.",
+    "releves_de_contenu": "Deux par fiche publiée : à 48 h et à 7 jours. Requis : vues, nouveaux abonnés, partages et envois ; facultatifs : sauvegardes, visites du profil, clics sur la porte (stories).",
+    "releve_du_compte": "Un par semaine ISO (semaine en cours ou précédente) : abonnés (requis), vues moyennes des stories, clics sur la porte.",
+    "validation": "Entiers positifs ou nuls ; espaces (y compris insécables) acceptés ; message clair et aucune écriture si invalide.",
+    "calculs": {
+      "taux_abonnes_par_vue": "nouveaux_abonnes / vues (null si 0 vue) ; relevé de référence = 7 jours s'il existe, sinon 48 h",
+      "croissance_nette": "abonnés de la semaine − abonnés de la semaine précédente (null si la semaine précédente manque)",
+      "echeances": "« Stats à saisir » quand un relevé est dû (48 h ou 7 j après publication) et absent"
+    }
+  },
+  "interface": {
+    "conception": "Pensée d'abord pour l'ordinateur, adaptée au téléphone ; thème clair et sombre ; tout en français, au tutoiement.",
+    "onglets": {
+      "semaine": "Écran d'accueil : bandeau de contrôle, 7 colonnes de cartes (format, couleur du pilier, statut, badge de score avec cadenas si rouge et point si à réévaluer), créneaux vides en pointillé, glisser-déposer pour changer la date, bandeau « Pas de bulletin » si besoin. Chaque carte affiche sa prochaine action ; liste « À faire cette semaine ».",
+      "mois": "Grille avec des points colorés par format.",
+      "jour": "Frise horaire.",
+      "bulletin": "Rétrospective, tendances, tendances écartées, alertes, idées déposées (lien vers la fiche), bouton « Relancer la veille ».",
+      "tableau_de_bord": {
+        "saisie": [
+          "liste des relevés à saisir (bouton Ouvrir)",
+          "formulaire du relevé du compte"
+        ],
+        "graphiques": [
+          "taux d'abonnés par vue des Reels dans le temps (ligne de cible)",
+          "partages et envois par post (ligne de cible)",
+          "croissance nette hebdomadaire (ligne de cible)",
+          "clics sur la porte par semaine (ligne de cible)",
+          "meilleurs et pires contenus",
+          "score prévu / performance réelle (nuage de points)"
+        ],
+        "periode": "Publications des 12 dernières semaines, tous les relevés du compte",
+        "rendu": "SVG faits main, couleurs par variables CSS, libellés échappés"
+      },
+      "profil": "Lecture seule ; import d'une nouvelle version du JSON (validée, archivée, versionnée) ; jeu de référence et vérification du classement."
+    },
+    "panneau_de_fiche": [
+      "statut (boutons, avec refus motivés)",
+      "type de contenu, date et heure dans le fuseau du profil",
+      "visuel à glisser ou choisir",
+      "accroche, caption, hashtags, géotag, bouton Copier",
+      "Évaluer / Réévaluer, détail du score, conformité, alertes, recommandations",
+      "captions et accroches proposées avec « Utiliser »",
+      "Statistiques (une fois publiée) : relevés 48 h et 7 jours, taux affiché, pastille « Stats à saisir »",
+      "suppression avec confirmation"
+    ],
+    "enregistrement": "Automatique et différé (indicateur Enregistré / Enregistrement… / Échec) ; écriture immédiate lors des changements de statut."
+  },
+  "tests_et_verification": {
+    "automatiques": "417 tests Vitest : logique (règles, score, contrôle, empreinte, créneaux, veille, indicateurs, tableau de bord), dépôt, contrôleur, vues, script de veille, consignes.",
+    "reponses_de_claude": "Réponses malformées ou incomplètes testées : message clair, aucune donnée partielle écrite.",
+    "jeu_de_reference": "Vérification du classement gagnants/perdants, relancée à chaque changement des consignes de score.",
+    "revue": "Chaque tâche relue (conformité + qualité), puis relecture de toute la branche avant fusion.",
+    "checklist_manuelle": [
+      "créer une fiche",
+      "l'évaluer",
+      "la déplacer",
+      "la passer en Publié",
+      "saisir un relevé",
+      "vérifier le tableau de bord",
+      "relancer la veille"
+    ]
+  },
+  "etat": {
+    "plan_1": "Fondations et calendrier — fusionné",
+    "plan_2": "Évaluation par Claude — fusionné",
+    "plan_3": "Veille hebdomadaire — fusionné, routine réelle programmée (premier passage le dimanche 4 octobre 2026, 20 h locale)",
+    "plan_4": "Statistiques et tableau de bord — fusionné, cibles du studio réel en place",
+    "phase_2": [
+      "publication automatique via l'API Instagram (publisher/)",
+      "import automatique des statistiques"
+    ],
+    "plan_5": "Parcours d'une fiche — fusionné"
+  },
+  "parcours_d_une_fiche": {
+    "prochaine_action": "Calculée pour chaque fiche (src/logique/parcours.js) : terminer (visuel, caption), évaluer, réévaluer, corriger la conformité, valider, confirmer la programmation, reconfirmer, confirmer la publication, saisir les stats à 48 h / 7 jours, sinon « Programmé pour le … », « Prochain relevé le … » ou « Terminé ». Marquée en retard quand la date prévue ou l'échéance est passée.",
+    "affichage": [
+      "ligne d'action sur les cartes de la vue Semaine",
+      "bandeau en tête de fiche avec un bouton direct",
+      "liste « À faire cette semaine », retards d'abord"
+    ],
+    "confirmations": {
+      "programme": "date à venir + case « J’ai programmé ce contenu dans Meta Business Suite » ; enregistre programme_pour",
+      "publie": "date au plus tard maintenant + 5 min + case « Le contenu est en ligne » ; enregistre publie_le"
+    },
+    "date_des_releves": "publie_le ?? date_heure"
+  }
+}
