@@ -175,3 +175,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .idee { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; gap: 8px; align-items: baseline; }
 .idee-accroche { overflow-wrap: anywhere; }
 @media (max-width: 600px) { .idee { grid-template-columns: minmax(0, 1fr); } }
+.stats-fiche { display: grid; gap: 12px; }
+.releve { display: grid; gap: 8px; padding: 12px; border: 1px solid var(--trait); border-radius: var(--rayon); background: var(--surface-2); }
+.releve h4 { margin: 0; }
+.releve-a_saisir { color: var(--orange); font-weight: 600; }
+.etiquette-retard { background: var(--orange); color: var(--surface); }

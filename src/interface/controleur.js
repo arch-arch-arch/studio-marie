@@ -8,6 +8,7 @@ import { composerScore } from '../logique/score.js';
 import { fichesDeLaSemaine } from '../logique/controle.js';
 import { construirePrompt, validerReponse, messageErreurSample, CODES_INDISPONIBLES } from '../claude/evaluation.js';
 import { validerReference, ficheDeReference, verifierClassement } from '../logique/reference.js';
+import { RELEVES, validerReleveContenu, validerReleveCompte, documentReleveContenu, documentReleveCompte } from '../logique/indicateurs.js';
 
 const MESSAGES_TELEVERSEMENT = {
   too_large: 'Fichier trop lourd (20 Mo au maximum).',
@@ -336,6 +337,49 @@ export function creerControleur({ etat, depot, enregistreur, assets, horloge, id
     allerAujourdhui: () => changerAncre(etat.lire().vue, horloge()),
 
     effacerErreur: () => etat.modifier({ erreur: null }),
+
+    maintenant: () => horloge(),
+
+    async lireRelevesFiche(id) {
+      try {
+        return { ok: true, releves: await depot.lireRelevesFiche(id) };
+      } catch {
+        return { ok: false, raison: 'Les relevés ne peuvent pas être lus pour le moment : réessaie dans un instant.' };
+      }
+    },
+
+    async enregistrerReleveContenu(id, releve, saisie) {
+      const f = trouver(id);
+      if (!f) return { ok: false, erreurs: ['Fiche introuvable.'] };
+      if (f.statut !== 'publie') return { ok: false, erreurs: ['Passe la fiche en « Publié » avant de saisir ses statistiques.'] };
+      if (!RELEVES.includes(releve)) return { ok: false, erreurs: ['Relevé inconnu.'] };
+      const v = validerReleveContenu(saisie);
+      if (!v.ok) return v;
+      const doc = documentReleveContenu(f, releve, v.valeurs, horloge());
+      try {
+        await depot.enregistrerReleveContenu(doc);
+      } catch {
+        return { ok: false, erreurs: ['L’enregistrement a échoué : réessaie dans un instant.'] };
+      }
+      return { ok: true, erreurs: [], releve: doc };
+    },
+
+    async enregistrerReleveCompte(debutSemaineIso, saisie) {
+      const v = validerReleveCompte(saisie);
+      if (!v.ok) return v;
+      const doc = documentReleveCompte(debutSemaineIso, fuseau(), v.valeurs, horloge());
+      try {
+        await depot.enregistrerReleveCompte(doc);
+      } catch {
+        return { ok: false, erreurs: ['L’enregistrement a échoué : réessaie dans un instant.'] };
+      }
+      return { ok: true, erreurs: [], releve: doc };
+    },
+
+    async allerAFiche(id, dateHeure) {
+      await changerAncre('semaine', dateHeure);
+      etat.modifier({ ficheOuverte: id, erreur: null });
+    },
 
     async importerProfil(texte) {
       let profil;
