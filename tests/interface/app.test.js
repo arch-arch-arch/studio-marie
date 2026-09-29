@@ -271,15 +271,26 @@ describe('demarrer', () => {
     expect(racine.textContent).toContain('Dernier relevé');
   });
 
-  it('ne reconstruit pas la vue Semaine quand seules les statistiques changent', async () => {
+  it('ne reconstruit pas la vue Semaine quand seuls les relevés du compte changent', async () => {
     const db = creerFausseBase();
     const racine = document.createElement('div');
     const app = await demarrer(racine, { use: async nom => (nom === 'db' ? db : null) }, { horloge });
     await app.actions.importerProfil(JSON.stringify(fictif));
     await vi.waitFor(() => expect(app.etat.lire().vue).toBe('semaine'));
     const avant = racine.querySelector('.vue > *');
-    app.etat.modifier({ stats: [{ id: 'x_7j', fiche: 'x', releve: '7j', vues: 1, nouveaux_abonnes: 1, partages_envois: 1, date_publication: T, format: 'reel', accroche: 'x', score_total: 1 }] });
+    app.etat.modifier({ relevesCompte: [{ id: '2026-W40', semaine: '2026-W40', debut: '2026-09-27T22:00:00.000Z', abonnes: 10 }] });
     expect(racine.querySelector('.vue > *')).toBe(avant);
+  });
+
+  it('reconstruit la vue Semaine quand les relevés de contenu changent', async () => {
+    const db = creerFausseBase();
+    const racine = document.createElement('div');
+    const app = await demarrer(racine, { use: async nom => (nom === 'db' ? db : null) }, { horloge });
+    await app.actions.importerProfil(JSON.stringify(fictif));
+    await vi.waitFor(() => expect(app.etat.lire().vue).toBe('semaine'));
+    const avant = racine.querySelector('.vue > *');
+    app.etat.modifier({ stats: [{ id: 'x_48h', fiche: 'x', releve: '48h', vues: 1, nouveaux_abonnes: 0, partages_envois: 0, date_publication: T }] });
+    expect(racine.querySelector('.vue > *')).not.toBe(avant);
   });
 
   it('quitte l’état de chargement du tableau de bord quand stats et relevesCompte arrivent après l’ouverture de l’onglet', () => {

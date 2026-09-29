@@ -90,3 +90,40 @@ describe('vueSemaine', () => {
     expect(el.querySelector('.sans-bulletin')).toBeNull();
   });
 });
+
+describe('parcours dans la semaine', () => {
+  const M = '2026-09-30T08:00:00.000Z';
+  it('affiche la prochaine action sur chaque carte, en retard si besoin', () => {
+    const el = vueSemaine({ profil: fictif, fiches: [reel('a', '2026-09-29T10:00:00.000Z'), reel('b', '2026-10-02T10:00:00.000Z')], ancre: ANCRE, maintenant: M, stats: [] }, actionsFactices());
+    const a = el.querySelector('.carte[data-id="a"] .carte-action');
+    expect(a.textContent).toBe('Terminer : ajoute un visuel et une caption');
+    expect(a.classList.contains('action-retard')).toBe(true);
+    expect(el.querySelector('.carte[data-id="b"] .carte-action').classList.contains('action-retard')).toBe(false);
+  });
+
+  it('liste « À faire cette semaine », retards d’abord, et ouvre la fiche', () => {
+    const actions = actionsFactices();
+    const el = vueSemaine({ profil: fictif, fiches: [reel('b', '2026-10-02T10:00:00.000Z', { accroche: 'Plus tard' }), reel('a', '2026-09-29T10:00:00.000Z', { accroche: 'En retard' })], ancre: ANCRE, maintenant: M, stats: [] }, actions);
+    const lignes = [...el.querySelectorAll('.a-faire li')];
+    expect(lignes.map(l => l.textContent.includes('En retard'))).toEqual([true, false]);
+    expect(lignes[0].classList.contains('action-retard')).toBe(true);
+    [...lignes[0].querySelectorAll('button')].find(b => b.textContent === 'Ouvrir').click();
+    expect(actions.ouvrirFiche).toHaveBeenCalledWith('a');
+  });
+
+  it('n’inclut pas les fiches sans action et affiche un message si rien n’est à faire', () => {
+    const f = reel('p', '2026-09-29T10:00:00.000Z', { statut: 'publie', publie_le: '2026-09-29T10:00:00.000Z' });
+    const el = vueSemaine({ profil: fictif, fiches: [f], ancre: ANCRE, maintenant: M, stats: [] }, actionsFactices());
+    expect(el.querySelector('.a-faire').textContent).toContain('Rien à faire cette semaine.');
+    expect(el.querySelector('.carte[data-id="p"] .carte-action').classList.contains('action-calme')).toBe(true);
+  });
+
+  it('les relevés de l’état comptent pour les fiches publiées', () => {
+    const f = reel('p', '2026-09-28T06:00:00.000Z', { statut: 'publie', publie_le: '2026-09-28T06:00:00.000Z' });
+    const sans = vueSemaine({ profil: fictif, fiches: [f], ancre: ANCRE, maintenant: '2026-10-01T08:00:00.000Z', stats: [] }, actionsFactices());
+    expect(sans.querySelector('.carte-action').textContent).toBe('Saisir les stats à 48 h');
+    const avec = vueSemaine({ profil: fictif, fiches: [f], ancre: ANCRE, maintenant: '2026-10-01T08:00:00.000Z', stats: [{ fiche: 'p', releve: '48h' }] }, actionsFactices());
+    expect(avec.querySelector('.carte-action').textContent).toContain('Prochain relevé le');
+    expect(avec.textContent).not.toContain('null');
+  });
+});

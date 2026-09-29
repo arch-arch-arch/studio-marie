@@ -205,3 +205,12 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .prochaine-action.action-calme { border-left-color: var(--trait); color: var(--texte-2); }
 .confirmation { display: grid; gap: 8px; padding: 12px; border: 1px solid var(--trait); border-radius: var(--rayon); background: var(--surface); }
 .confirmation h3 { margin: 0; }
+
+.carte-action { margin: 0; font-size: 12px; font-weight: 600; color: var(--accent); }
+.carte-action.action-retard { color: var(--orange); }
+.carte-action.action-calme { font-weight: 400; color: var(--texte-2); }
+.a-faire { margin: 0 0 12px; padding: 10px 12px; border: 1px solid var(--trait); border-radius: var(--rayon); background: var(--surface); }
+.a-faire h3 { margin: 0 0 6px; font-size: 14px; }
+.a-faire ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.a-faire li { display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; }
+.a-faire li.action-retard strong { color: var(--orange); }
