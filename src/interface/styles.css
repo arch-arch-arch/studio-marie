@@ -199,3 +199,9 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .graphique-svg text { fill: var(--texte-2); font-size: 10px; font-family: var(--police); }
 .ecart-atteint { color: var(--vert); }
 .ecart-sous { color: var(--orange); }
+
+.prochaine-action { display: grid; gap: 6px; padding: 10px 12px; border-radius: var(--rayon); background: var(--surface-2); border-left: 4px solid var(--accent); }
+.prochaine-action.action-retard { border-left-color: var(--orange); }
+.prochaine-action.action-calme { border-left-color: var(--trait); color: var(--texte-2); }
+.confirmation { display: grid; gap: 8px; padding: 12px; border: 1px solid var(--trait); border-radius: var(--rayon); background: var(--surface); }
+.confirmation h3 { margin: 0; }

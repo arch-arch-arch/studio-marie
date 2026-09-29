@@ -1,20 +1,26 @@
 import { h } from './h.js';
 import {
-  FORMATS, LIBELLES_FORMAT, STATUTS, LIBELLES_STATUT, analyserHashtags, formaterHashtags, texteAPublier, aReevaluer,
+  FORMATS, LIBELLES_FORMAT, STATUTS, LIBELLES_STATUT, analyserHashtags, formaterHashtags, texteAPublier, aReevaluer, effacementsPour,
 } from '../logique/fiche.js';
 import { cleJour, heureLocale, depuisSaisieLocale } from '../logique/dates.js';
 import { RELEVES, CHAMPS_CONTENU, etatReleves, tauxAbonnesParVue, formaterValeur } from '../logique/indicateurs.js';
+import { prochaineAction, ACTIONS_SANS_SUITE } from '../logique/parcours.js';
 
 const ROLES = [['', '—'], ['engagement', 'Engagement'], ['cta', "Appel à l'action"], ['deadpan', 'Deadpan']];
 const LIBELLES_ROLE = { engagement: 'Engagement', cta: "Appel à l'action", deadpan: 'Deadpan' };
 const LIBELLES_CONFORMITE = { vert: 'conforme', orange: 'à surveiller', rouge: 'bloquante' };
 const LIBELLES_RELEVE = { '48h': 'Relevé à 48 h', '7j': 'Relevé à 7 jours' };
 
-export function panneauFiche(fiche, profil, actions, capacites) {
+export function panneauFiche(fiche, profil, actions, capacites, releves = []) {
   const r = profil.regles_studio;
   const fz = r.fuseau;
   const id = fiche.id;
   let brouillon = { ...fiche };
+  let relevesConnus = releves;
+  let elementAction = null;
+  const zoneConfirmation = h('div', { class: 'zone-confirmation' });
+  const maintenant = () => actions.maintenant?.() ?? new Date().toISOString();
+  const arrondiMinute = iso => new Date(Math.floor(Date.parse(iso) / 60000) * 60000).toISOString();
   const racine = h('aside', { class: 'panneau', 'aria-label': 'Fiche contenu' });
   const message = h('p', { class: 'panneau-message', role: 'status' });
   const afficher = texte => { message.replaceChildren(texte ?? ''); };
@@ -39,6 +45,7 @@ export function panneauFiche(fiche, profil, actions, capacites) {
     } catch {
       controleurEvaluation = null;
       remplacerScore();
+      majAction();
       afficher('L’évaluation a échoué : réessaie. Rien n’a été modifié.');
       return;
     }
@@ -47,12 +54,14 @@ export function panneauFiche(fiche, profil, actions, capacites) {
       const { score, variantes, suggestions, recommandations } = resultat.fiche;
       brouillon = { ...brouillon, score, variantes, suggestions, recommandations };
       remplacerScore();
+      majAction();
       afficher('Évaluation terminée.');
       appliquerStatutRenvoye(resultat.fiche.statut);
       return;
     }
     if (resultat.indisponible) evaluationDisponible = false;
     remplacerScore();
+    majAction();
     afficher(resultat.annule ? 'Évaluation arrêtée.' : resultat.raison);
   }
 
@@ -80,6 +89,7 @@ export function panneauFiche(fiche, profil, actions, capacites) {
     brouillon = { ...brouillon, ...changements };
     const resultat = actions.modifierFiche(id, changements);
     if (resultat != null) appliquerStatutRenvoye(resultat.statut);
+    majAction();
   };
 
   const champ = (libelle, controle) => h('label', { class: 'champ' }, h('span', { class: 'champ-libelle' }, libelle), controle);
@@ -113,16 +123,85 @@ export function panneauFiche(fiche, profil, actions, capacites) {
     appliquerStatutRenvoye(resultat.statut);
   }
 
+  const LIBELLES_BOUTON_ACTION = {
+    evaluer: 'Lancer l’évaluation', reevaluer: 'Lancer l’évaluation', programmer: 'Confirmer…', reconfirmer: 'Confirmer…',
+    publier: 'Confirmer…', stats: 'Aller aux statistiques', valider: 'Passer en Validé',
+  };
+
+  const sectionAction = () => {
+    const a = prochaineAction(brouillon, relevesConnus, maintenant(), fz);
+    const surClic = {
+      evaluer: evaluationDisponible ? () => evaluer() : null,
+      reevaluer: evaluationDisponible ? () => evaluer() : null,
+      programmer: () => ouvrirConfirmation('programme'),
+      reconfirmer: () => ouvrirConfirmation('programme'),
+      publier: () => ouvrirConfirmation('publie'),
+      stats: () => racine.querySelector('.stats-fiche')?.scrollIntoView?.({ behavior: 'smooth', block: 'start' }),
+      valider: () => passerA('valide'),
+    }[a.cle] ?? null;
+    const classes = ['prochaine-action', a.retard ? 'action-retard' : '', ACTIONS_SANS_SUITE.has(a.cle) ? 'action-calme' : ''].filter(Boolean).join(' ');
+    return h('div', { class: classes, 'data-action': a.cle },
+      h('strong', { class: 'prochaine-action-libelle' }, a.libelle),
+      a.detail ? h('span', { class: 'aide' }, a.detail) : null,
+      surClic ? h('button', { type: 'button', class: 'bouton-principal', onclick: surClic }, LIBELLES_BOUTON_ACTION[a.cle]) : null);
+  };
+
+  const majAction = () => {
+    if (!elementAction) return;
+    const nouveau = sectionAction();
+    elementAction.replaceWith(nouveau);
+    elementAction = nouveau;
+  };
+
+  async function passerA(s) {
+    const v = await actions.changerStatut(id, s);
+    if (!v.ok) { afficher(v.raison); return; }
+    brouillon = { ...brouillon, statut: s, ...effacementsPour(s) };
+    construire();
+    afficher('');
+  }
+
+  function ouvrirConfirmation(type) {
+    const publication = type === 'publie';
+    const m = maintenant();
+    const defaut = publication ? (brouillon.date_heure <= m ? brouillon.date_heure : arrondiMinute(m)) : brouillon.date_heure;
+    const date = h('input', { type: 'date', name: 'confirmation-date', value: cleJour(defaut, fz) });
+    const heure = h('input', { type: 'time', name: 'confirmation-heure', value: heureLocale(defaut, fz) });
+    const coche = h('input', { type: 'checkbox', name: 'confirmation-coche' });
+    const retour = h('p', { class: 'aide', role: 'status' });
+    const titre = publication ? 'Confirmer la publication' : 'Confirmer la programmation';
+    const form = h('form', {
+      class: `confirmation confirmation-${type}`,
+      onsubmit: async ev => {
+        ev.preventDefault();
+        if (!date.value || !heure.value) { retour.textContent = 'Indique la date et l’heure.'; return; }
+        const iso = depuisSaisieLocale(date.value, heure.value, fz);
+        const res = publication
+          ? await actions.confirmerPublication(id, iso, coche.checked)
+          : await actions.confirmerProgrammation(id, iso, coche.checked);
+        if (!res.ok) { retour.textContent = res.raison; return; }
+        brouillon = { ...brouillon, ...res.fiche };
+        zoneConfirmation.replaceChildren();
+        construire();
+        afficher(publication ? 'Publication confirmée.' : 'Programmation confirmée.');
+      },
+    },
+    h('h3', {}, titre),
+    h('div', { class: 'grille-champs' },
+      champ(publication ? 'Date de publication' : 'Date programmée', date),
+      champ(`Heure (${fz})`, heure)),
+    h('label', { class: 'case' }, coche, publication ? 'Le contenu est en ligne' : 'J’ai programmé ce contenu dans Meta Business Suite'),
+    h('div', { class: 'evaluation-actions' },
+      h('button', { type: 'submit', class: 'bouton-principal' }, titre),
+      h('button', { type: 'button', class: 'bouton-secondaire', onclick: () => zoneConfirmation.replaceChildren() }, 'Annuler')),
+    retour);
+    zoneConfirmation.replaceChildren(form);
+  }
+
   const sectionStatut = () => h('div', { class: 'statuts', role: 'group', 'aria-label': 'Statut' },
     STATUTS.map(s => h('button', {
       type: 'button', class: s === brouillon.statut ? 'statut-bouton actif' : 'statut-bouton', 'aria-pressed': String(s === brouillon.statut),
-      onclick: async () => {
-        const v = await actions.changerStatut(id, s);
-        if (!v.ok) { afficher(v.raison); return; }
-        brouillon = { ...brouillon, statut: s };
-        construire();
-        afficher('');
-      },
+      onclick: () => (s === 'programme' || s === 'publie' ? ouvrirConfirmation(s) : passerA(s)),
     }, LIBELLES_STATUT[s])));
 
   const sectionType = () => h('div', { class: 'grille-champs' },
@@ -259,6 +338,8 @@ export function panneauFiche(fiche, profil, actions, capacites) {
     }
 
     function dessiner(releves) {
+      relevesConnus = releves;
+      majAction();
       const etats = etatReleves(brouillon, releves, actions.maintenant());
       zone.replaceChildren(...[
         h('h3', {}, 'Statistiques'),
@@ -275,13 +356,14 @@ export function panneauFiche(fiche, profil, actions, capacites) {
   };
 
   function construire() {
+    elementAction = sectionAction();
     elementStatut = sectionStatut();
     elementScore = sectionScore();
     racine.replaceChildren(
       h('header', { class: 'panneau-tete' },
         h('h2', {}, LIBELLES_FORMAT[brouillon.format]),
         h('button', { type: 'button', class: 'fermer', 'aria-label': 'Fermer la fiche', onclick: () => actions.fermerPanneau() }, '×')),
-      ...[elementStatut, sectionType(), sectionDate(), sectionVisuel(), sectionTexte(), elementScore, sectionStats(), message, sectionSuppression()].filter(Boolean));
+      ...[elementAction, elementStatut, zoneConfirmation, sectionType(), sectionDate(), sectionVisuel(), sectionTexte(), elementScore, sectionStats(), message, sectionSuppression()].filter(Boolean));
   }
 
   construire();
