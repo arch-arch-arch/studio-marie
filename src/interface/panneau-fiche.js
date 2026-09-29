@@ -3,10 +3,12 @@ import {
   FORMATS, LIBELLES_FORMAT, STATUTS, LIBELLES_STATUT, analyserHashtags, formaterHashtags, texteAPublier, aReevaluer,
 } from '../logique/fiche.js';
 import { cleJour, heureLocale, depuisSaisieLocale } from '../logique/dates.js';
+import { RELEVES, CHAMPS_CONTENU, etatReleves, tauxAbonnesParVue, formaterValeur } from '../logique/indicateurs.js';
 
 const ROLES = [['', '—'], ['engagement', 'Engagement'], ['cta', "Appel à l'action"], ['deadpan', 'Deadpan']];
 const LIBELLES_ROLE = { engagement: 'Engagement', cta: "Appel à l'action", deadpan: 'Deadpan' };
 const LIBELLES_CONFORMITE = { vert: 'conforme', orange: 'à surveiller', rouge: 'bloquante' };
+const LIBELLES_RELEVE = { '48h': 'Relevé à 48 h', '7j': 'Relevé à 7 jours' };
 
 export function panneauFiche(fiche, profil, actions, capacites) {
   const r = profil.regles_studio;
@@ -223,6 +225,55 @@ export function panneauFiche(fiche, profil, actions, capacites) {
     return zone;
   };
 
+  const sectionStats = () => {
+    if (brouillon.statut !== 'publie' || typeof actions.lireRelevesFiche !== 'function') return null;
+    const zone = h('section', { class: 'stats-fiche' }, h('h3', {}, 'Statistiques'), h('p', { class: 'aide' }, 'Chargement des relevés…'));
+    const dateLocale = iso => new Date(iso).toLocaleString('fr-FR', { timeZone: fz, dateStyle: 'medium', timeStyle: 'short' });
+    const champsVisibles = CHAMPS_CONTENU.filter(c => c.cle !== 'clics_porte' || brouillon.format === 'story');
+
+    function formulaire(r, existant, e, releves) {
+      const entrees = champsVisibles.map(c => h('input', {
+        type: 'number', min: '0', step: '1', inputmode: 'numeric', name: `${r}-${c.cle}`, value: existant?.[c.cle] ?? '',
+      }));
+      const retour = h('p', { class: 'aide', role: 'status' });
+      const taux = tauxAbonnesParVue(existant);
+      const etatTexte = e.etat === 'saisi'
+        ? `Saisi${taux != null ? ` : ${formaterValeur('taux_abonnes_par_vue', taux)} d’abonnés par vue` : ''}.`
+        : e.etat === 'a_saisir' ? 'À saisir.' : `À saisir à partir du ${dateLocale(e.du_le)}.`;
+      return h('form', {
+        class: 'releve',
+        onsubmit: async ev => {
+          ev.preventDefault();
+          const saisie = Object.fromEntries(champsVisibles.map((c, i) => [c.cle, entrees[i].value]));
+          retour.textContent = 'Enregistrement…';
+          const res = await actions.enregistrerReleveContenu(id, r, saisie);
+          if (!res.ok) { retour.textContent = res.erreurs.join(' '); return; }
+          dessiner([...releves.filter(s => s.releve !== r), res.releve]);
+        },
+      },
+      h('h4', {}, LIBELLES_RELEVE[r]),
+      h('p', { class: `aide releve-${e.etat}` }, etatTexte),
+      h('div', { class: 'grille-champs' }, champsVisibles.map((c, i) => champ(c.libelle, entrees[i]))),
+      h('button', { type: 'submit', class: 'bouton-secondaire' }, existant ? 'Mettre à jour' : 'Enregistrer'),
+      retour);
+    }
+
+    function dessiner(releves) {
+      const etats = etatReleves(brouillon, releves, actions.maintenant());
+      zone.replaceChildren(...[
+        h('h3', {}, 'Statistiques'),
+        etats.enRetard ? h('span', { class: 'etiquette etiquette-retard' }, 'Stats à saisir') : null,
+        ...RELEVES.map(r => formulaire(r, releves.find(s => s.releve === r), etats[r], releves)),
+      ].filter(Boolean));
+    }
+
+    actions.lireRelevesFiche(id).then(res => {
+      if (!res.ok) { zone.replaceChildren(h('h3', {}, 'Statistiques'), h('p', { class: 'aide' }, res.raison)); return; }
+      dessiner(res.releves);
+    });
+    return zone;
+  };
+
   function construire() {
     elementStatut = sectionStatut();
     elementScore = sectionScore();
@@ -230,7 +281,7 @@ export function panneauFiche(fiche, profil, actions, capacites) {
       h('header', { class: 'panneau-tete' },
         h('h2', {}, LIBELLES_FORMAT[brouillon.format]),
         h('button', { type: 'button', class: 'fermer', 'aria-label': 'Fermer la fiche', onclick: () => actions.fermerPanneau() }, '×')),
-      elementStatut, sectionType(), sectionDate(), sectionVisuel(), sectionTexte(), elementScore, message, sectionSuppression());
+      ...[elementStatut, sectionType(), sectionDate(), sectionVisuel(), sectionTexte(), elementScore, sectionStats(), message, sectionSuppression()].filter(Boolean));
   }
 
   construire();

@@ -245,4 +245,15 @@ describe('construireVeille', () => {
     expect(r.fichesCreees).toHaveLength(2);
     expect(r.fichesCreees.map(f => f.accroche.trim().toLowerCase())).toEqual(['une accroche.', 'une idée bien différente.']);
   });
+
+  it('rétrospective : bilan à partir des relevés des 2 semaines précédentes', () => {
+    const stats = [{ id: 'x_7j', fiche: 'x', releve: '7j', vues: 1000, nouveaux_abonnes: 4, partages_envois: 12, date_publication: '2026-09-22T10:00:00.000Z', format: 'reel', accroche: 'Accroche x', score_total: 70 }];
+    const r = construireVeille({ profil: { ...fictif, version: 1 }, fiches: [], entree: entree(), maintenant: '2026-09-27T18:00:00.000Z', idAleatoire: () => `id${n++}`, stats, relevesCompte: [] });
+    expect(r.bulletin.retrospective.type).toBe('bilan');
+    expect(r.bulletin.retrospective.meilleur.fiche).toBe('x');
+  });
+  it('rétrospective : rappel sans relevés, comme avant', () => {
+    const r = construireVeille({ profil: { ...fictif, version: 1 }, fiches: [], entree: entree(), maintenant: '2026-09-27T18:00:00.000Z', idAleatoire: () => `id${n++}` });
+    expect(r.bulletin.retrospective.type).toBe('rappel');
+  });
 });

@@ -102,3 +102,34 @@ describe('bulletin et configuration de la veille', () => {
     expect(configs.at(-1)).toEqual({ url_routine: 'https://exemple.test/routine' });
   });
 });
+
+describe('relevés', () => {
+  it('écrit, relit et remplace un relevé de contenu sans doublon', async () => {
+    const db = creerFausseBase();
+    const depot = creerDepot(db);
+    await depot.enregistrerReleveContenu({ id: 'f1_48h', fiche: 'f1', releve: '48h', vues: 10, date_publication: '2026-09-20T10:00:00.000Z' });
+    await depot.enregistrerReleveContenu({ id: 'f1_48h', fiche: 'f1', releve: '48h', vues: 12, date_publication: '2026-09-20T10:00:00.000Z' });
+    const lus = await depot.lireRelevesFiche('f1');
+    expect(lus).toEqual([{ id: 'f1_48h', fiche: 'f1', releve: '48h', vues: 12, date_publication: '2026-09-20T10:00:00.000Z' }]);
+    expect(await depot.lireRelevesFiche('autre')).toEqual([]);
+  });
+
+  it('écoute les relevés publiés depuis une date', async () => {
+    const db = creerFausseBase();
+    const depot = creerDepot(db);
+    const recus = [];
+    depot.ecouterStats('2026-09-01T00:00:00.000Z', l => recus.push(l.map(s => s.id)), () => {});
+    await depot.enregistrerReleveContenu({ id: 'vieux_7j', fiche: 'vieux', releve: '7j', date_publication: '2026-08-01T00:00:00.000Z' });
+    await depot.enregistrerReleveContenu({ id: 'f1_7j', fiche: 'f1', releve: '7j', date_publication: '2026-09-20T00:00:00.000Z' });
+    expect(recus.at(-1)).toEqual(['f1_7j']);
+  });
+
+  it('écrit et écoute les relevés du compte', async () => {
+    const db = creerFausseBase();
+    const depot = creerDepot(db);
+    const recus = [];
+    depot.ecouterRelevesCompte(l => recus.push(l), () => {});
+    await depot.enregistrerReleveCompte({ id: '2026-W40', semaine: '2026-W40', debut: '2026-09-27T22:00:00.000Z', abonnes: 100 });
+    expect(recus.at(-1)).toEqual([{ id: '2026-W40', semaine: '2026-W40', debut: '2026-09-27T22:00:00.000Z', abonnes: 100 }]);
+  });
+});

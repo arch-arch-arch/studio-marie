@@ -5,6 +5,7 @@ import { vueMois } from './vue-mois.js';
 import { vueJour } from './vue-jour.js';
 import { vueProfil } from './vue-profil.js';
 import { vueBulletin } from './vue-bulletin.js';
+import { vueTableau } from './vue-tableau.js';
 import { panneauFiche } from './panneau-fiche.js';
 
 const LIBELLES_SAUVEGARDE = { ok: 'Enregistré', en_cours: 'Enregistrement…', erreur: 'Échec de l’enregistrement : nouvel essai à la prochaine modification' };
@@ -26,9 +27,9 @@ function barre(e, actions) {
   }, libelle);
   const elements = [
     h('h1', { class: 'titre' }, 'Studio'),
-    h('nav', { class: 'onglets', 'aria-label': 'Vues' }, onglet('semaine', 'Semaine'), onglet('mois', 'Mois'), onglet('jour', 'Jour'), onglet('bulletin', 'Bulletin'), onglet('profil', 'Profil')),
+    h('nav', { class: 'onglets', 'aria-label': 'Vues' }, onglet('semaine', 'Semaine'), onglet('mois', 'Mois'), onglet('jour', 'Jour'), onglet('bulletin', 'Bulletin'), onglet('tableau', 'Tableau de bord'), onglet('profil', 'Profil')),
   ];
-  if (aProfil && e.vue !== 'profil') {
+  if (aProfil && e.vue !== 'profil' && e.vue !== 'tableau') {
     elements.push(h('div', { class: 'periode' },
       h('button', { type: 'button', class: 'bouton-icone', 'aria-label': 'Période précédente', onclick: () => actions.naviguer(-1) }, '‹'),
       h('button', { type: 'button', class: 'bouton-secondaire', onclick: () => actions.allerAujourdhui() }, "Aujourd'hui"),
@@ -44,6 +45,7 @@ function contenuVue(e, actions, capacites) {
   if (e.vue === 'mois') return vueMois(e, actions);
   if (e.vue === 'jour') return vueJour(e, actions);
   if (e.vue === 'bulletin') return vueBulletin(e, actions);
+  if (e.vue === 'tableau') return vueTableau(e, actions);
   return vueSemaine(e, actions);
 }
 
@@ -67,13 +69,27 @@ export function creerRendu(racine, actions, capacites, horloge) {
     tete.replaceChildren(...barre(e, actions));
     const e2 = { ...e, maintenant: horloge() };
     const estVueProfil = !e.profil || e.vue === 'profil';
-    const reconstructionRequise = estVueProfil
-      ? (memo.profil !== e.profil || memo.vue !== e.vue || memo.ancre !== e.ancre)
-      : (memo.profil !== e.profil || memo.fiches !== e.fiches || memo.vue !== e.vue || memo.ancre !== e.ancre || memo.bulletin !== e.bulletin || memo.configVeille !== e.configVeille);
+    const estVueTableau = !estVueProfil && e.vue === 'tableau';
+    // vueTableau affiche « Chargement du tableau de bord… » (sans mettreAJour) tant que stats ou
+    // relevesCompte ne sont pas encore arrivés. Il faut reconstruire pour en sortir, sans quoi
+    // mettreAJour?.() ne fait rien et l'écran reste bloqué sur le message de chargement.
+    const sortDuChargementTableau = estVueTableau
+      && (memo.stats === undefined || memo.relevesCompte === undefined) && e.stats !== undefined && e.relevesCompte !== undefined;
+    let reconstructionRequise;
+    if (estVueProfil) {
+      reconstructionRequise = memo.profil !== e.profil || memo.vue !== e.vue || memo.ancre !== e.ancre;
+    } else if (estVueTableau) {
+      // vueTableau ne lit ni fiches, ni bulletin, ni configVeille : ils ne doivent pas la reconstruire.
+      reconstructionRequise = memo.profil !== e.profil || memo.vue !== e.vue || memo.ancre !== e.ancre || sortDuChargementTableau;
+    } else {
+      reconstructionRequise = memo.profil !== e.profil || memo.fiches !== e.fiches || memo.vue !== e.vue || memo.ancre !== e.ancre || memo.bulletin !== e.bulletin || memo.configVeille !== e.configVeille;
+    }
     if (reconstructionRequise) {
       elementVue = contenuVue(e2, actions, capacites);
       vue.replaceChildren(elementVue);
     } else if (estVueProfil && (memo.reference !== e.reference || memo.resultatReference !== e.resultatReference || memo.verificationReference !== e.verificationReference)) {
+      elementVue?.mettreAJour?.(e2);
+    } else if (estVueTableau && (memo.stats !== e.stats || memo.relevesCompte !== e.relevesCompte || memo.fichesRecentes !== e.fichesRecentes)) {
       elementVue?.mettreAJour?.(e2);
     }
     const ouverte = e.profil && e.ficheOuverte ? e.fiches.find(f => f.id === e.ficheOuverte) : null;
@@ -84,6 +100,7 @@ export function creerRendu(racine, actions, capacites, horloge) {
       profil: e.profil, fiches: e.fiches, vue: e.vue, ancre: e.ancre, ficheOuverte: e.ficheOuverte, panneauAffiche: !!ouverte,
       reference: e.reference, resultatReference: e.resultatReference, verificationReference: e.verificationReference,
       bulletin: e.bulletin, configVeille: e.configVeille,
+      stats: e.stats, relevesCompte: e.relevesCompte, fichesRecentes: e.fichesRecentes,
     };
   };
 }

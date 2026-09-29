@@ -1,3 +1,5 @@
+import { CIBLES } from './indicateurs.js';
+
 const HEURE = /^([01]\d|2[0-3]):[0-5]\d$/;
 const COULEUR = /^#[0-9a-fA-F]{6}$/;
 const entier = (v, min = 0) => Number.isInteger(v) && v >= min;
@@ -72,6 +74,22 @@ export function validerProfil(profil) {
     erreurs.push('regles_studio.hashtags : min et max entiers, avec min ≤ max.');
   }
   if (!entier(r.accroche_mots_max, 1)) erreurs.push('regles_studio.accroche_mots_max doit être un entier supérieur à 0.');
+
+  if (r.cibles !== undefined) {
+    const ci = r.cibles;
+    if (!ci || typeof ci !== 'object' || Array.isArray(ci)) {
+      erreurs.push('regles_studio.cibles doit être un objet.');
+    } else {
+      for (const [k, v] of Object.entries(ci)) {
+        if (!CIBLES.includes(k)) erreurs.push(`regles_studio.cibles.${k} : indicateur inconnu.`);
+        else if (k === 'taux_abonnes_par_vue' && (typeof v !== 'number' || !(v >= 0 && v <= 1))) {
+          erreurs.push('regles_studio.cibles.taux_abonnes_par_vue doit être compris entre 0 et 1 (0,003 pour 0,3 %).');
+        } else if (k !== 'taux_abonnes_par_vue' && (typeof v !== 'number' || !Number.isFinite(v) || v < 0)) {
+          erreurs.push(`regles_studio.cibles.${k} doit être un nombre positif ou nul.`);
+        }
+      }
+    }
+  }
 
   return { ok: erreurs.length === 0, erreurs };
 }

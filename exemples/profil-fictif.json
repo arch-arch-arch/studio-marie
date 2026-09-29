@@ -24,6 +24,7 @@
     "creneaux": [{ "jours": [1, 2, 4], "debut": "12:00", "fin": "15:00" }],
     "mots_a_eviter": ["mindset", "link in bio", "bienveillance"],
     "hashtags": { "min": 3, "max": 5 },
-    "accroche_mots_max": 15
+    "accroche_mots_max": 15,
+    "cibles": { "taux_abonnes_par_vue": 0.003, "partages_par_post": 20, "croissance_nette_semaine": 100, "clics_porte_semaine": 30 }
   }
 }

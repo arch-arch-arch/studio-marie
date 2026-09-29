@@ -5,6 +5,7 @@ import { creerDepot } from '../../src/donnees/depot.js';
 import { creerEnregistreur } from '../../src/donnees/enregistreur.js';
 import { creerEtat } from '../../src/interface/etat.js';
 import { creerControleur, plageDeVue, fusionnerInstantane } from '../../src/interface/controleur.js';
+import { nouvelleFiche } from '../../src/logique/fiche.js';
 
 const T = '2026-09-28T08:00:00.000Z';
 const FZ = 'Europe/Paris';
@@ -164,5 +165,61 @@ describe('creerControleur', () => {
     expect(etat.lire().erreur).toBe('La suppression a échoué : réessaie dans un instant.');
     expect(etat.lire().fiches).toEqual([]);
     expect(etat.lire().ficheOuverte).toBeNull();
+  });
+});
+
+describe('relevés de statistiques', () => {
+  const avecFiche = statut => {
+    const m = monter();
+    const f = { ...nouvelleFiche({ id: 'f1', format: 'reel', date_heure: '2026-09-20T10:00:00.000Z', pilier: 'socio', maintenant: T }), statut, accroche: 'Accroche' };
+    m.etat.modifier({ fiches: [f] });
+    return { ...m, depot: creerDepot(m.db) };
+  };
+  const saisie = { vues: '100', nouveaux_abonnes: '1', partages_envois: '2' };
+
+  it('refuse la saisie tant que la fiche n’est pas publiée', async () => {
+    const { actions, depot } = avecFiche('programme');
+    expect(await actions.enregistrerReleveContenu('f1', '48h', saisie))
+      .toEqual({ ok: false, erreurs: ['Passe la fiche en « Publié » avant de saisir ses statistiques.'] });
+    expect(await depot.lireRelevesFiche('f1')).toEqual([]);
+  });
+
+  it('enregistre le relevé d’une fiche publiée', async () => {
+    const { actions, depot } = avecFiche('publie');
+    const ok = await actions.enregistrerReleveContenu('f1', '48h', saisie);
+    expect(ok.ok).toBe(true);
+    expect(ok.releve).toMatchObject({ id: 'f1_48h', vues: 100, accroche: 'Accroche', date_publication: '2026-09-20T10:00:00.000Z' });
+    expect((await depot.lireRelevesFiche('f1'))[0].vues).toBe(100);
+    expect((await actions.lireRelevesFiche('f1')).releves).toHaveLength(1);
+  });
+
+  it('n’écrit rien si la saisie est invalide', async () => {
+    const { actions, depot } = avecFiche('publie');
+    const r = await actions.enregistrerReleveContenu('f1', '7j', { ...saisie, vues: 'abc' });
+    expect(r).toEqual({ ok: false, erreurs: ['Vues : nombre entier positif attendu.'] });
+    expect(await depot.lireRelevesFiche('f1')).toEqual([]);
+  });
+
+  it('refuse un relevé inconnu', async () => {
+    const { actions } = avecFiche('publie');
+    expect((await actions.enregistrerReleveContenu('f1', '30j', saisie)).erreurs).toEqual(['Relevé inconnu.']);
+  });
+
+  it('enregistre le relevé du compte de la semaine', async () => {
+    const { actions } = monter();
+    const r = await actions.enregistrerReleveCompte('2026-09-27T22:00:00.000Z', { abonnes: '1 500' });
+    expect(r.ok).toBe(true);
+    expect(r.releve).toMatchObject({ id: '2026-W40', abonnes: 1500, saisi_le: T });
+  });
+
+  it('allerAFiche passe en vue Semaine et ouvre la fiche', async () => {
+    const { actions, etat } = avecFiche('publie');
+    etat.modifier({ vue: 'mois' });
+    await actions.allerAFiche('f1', '2026-09-20T10:00:00.000Z');
+    expect(etat.lire()).toMatchObject({ vue: 'semaine', ancre: '2026-09-20T10:00:00.000Z', ficheOuverte: 'f1' });
+  });
+
+  it('expose l’horloge', () => {
+    expect(monter().actions.maintenant()).toBe(T);
   });
 });

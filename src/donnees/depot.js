@@ -1,4 +1,5 @@
 import { validerProfil } from '../logique/profil.js';
+import { RELEVES, idReleve } from '../logique/indicateurs.js';
 
 export function creerDepot(db) {
   return {
@@ -67,6 +68,30 @@ export function creerDepot(db) {
 
     ecouterConfigVeille(rappel, erreur) {
       return db.doc('config/veille').onSnapshot(s => rappel(s.exists ? s.data() : null), erreur);
+    },
+
+    async lireRelevesFiche(ficheId) {
+      const lus = await Promise.all(RELEVES.map(r => db.doc(`stats_contenu/${idReleve(ficheId, r)}`).get()));
+      return lus.filter(s => s.exists).map(s => ({ id: s.id, ...s.data() }));
+    },
+
+    async enregistrerReleveContenu(doc) {
+      const { id, ...corps } = doc;
+      await db.doc(`stats_contenu/${id}`).set(corps);
+    },
+
+    ecouterStats(depuisIso, rappel, erreur) {
+      return db.collection('stats_contenu').where('date_publication', '>=', depuisIso)
+        .onSnapshot(snap => rappel(snap.docs.map(d => ({ id: d.id, ...d.data() }))), erreur);
+    },
+
+    async enregistrerReleveCompte(doc) {
+      const { id, ...corps } = doc;
+      await db.doc(`releves_compte/${id}`).set(corps);
+    },
+
+    ecouterRelevesCompte(rappel, erreur) {
+      return db.collection('releves_compte').onSnapshot(snap => rappel(snap.docs.map(d => ({ id: d.id, ...d.data() }))), erreur);
     },
   };
 }

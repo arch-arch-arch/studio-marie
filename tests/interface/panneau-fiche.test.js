@@ -268,3 +268,55 @@ describe('évaluation dans le panneau', () => {
     expect(titres).toContain('Alertes');
   });
 });
+
+describe('section Statistiques', () => {
+  const actionsStats = (releves = []) => ({
+    ...actionsFactices(),
+    maintenant: () => '2026-09-23T10:00:00.000Z',
+    lireRelevesFiche: vi.fn(async () => ({ ok: true, releves })),
+    enregistrerReleveContenu: vi.fn(async (id, releve, saisie) => ({ ok: true, erreurs: [], releve: { id: `${id}_${releve}`, fiche: id, releve, vues: Number(saisie.vues), nouveaux_abonnes: Number(saisie.nouveaux_abonnes), partages_envois: Number(saisie.partages_envois) } })),
+  });
+  const publiee = () => fiche({ statut: 'publie', date_heure: '2026-09-20T10:00:00.000Z' });
+
+  it('n’apparaît pas avant la publication', () => {
+    const p = panneauFiche(fiche(), fictif, actionsStats(), { assets: true });
+    expect(p.querySelector('.stats-fiche')).toBeNull();
+    expect(p.textContent).not.toContain('null');
+  });
+
+  it('signale le relevé à 48 h en retard', async () => {
+    const p = panneauFiche(publiee(), fictif, actionsStats(), { assets: true });
+    await vi.waitFor(() => expect(p.querySelector('.etiquette-retard')?.textContent).toBe('Stats à saisir'));
+    expect(p.querySelector('.stats-fiche').textContent).toContain('Relevé à 48 h');
+    expect(p.querySelector('.stats-fiche').textContent).toContain('Relevé à 7 jours');
+    expect(p.querySelector('input[name="48h-clics_porte"]')).toBeNull();
+  });
+
+  it('enregistre un relevé et affiche le taux', async () => {
+    const actions = actionsStats();
+    const p = panneauFiche(publiee(), fictif, actions, { assets: true });
+    await vi.waitFor(() => expect(p.querySelector('input[name="48h-vues"]')).not.toBeNull());
+    saisir(p.querySelector('input[name="48h-vues"]'), '1000');
+    saisir(p.querySelector('input[name="48h-nouveaux_abonnes"]'), '4');
+    saisir(p.querySelector('input[name="48h-partages_envois"]'), '9');
+    p.querySelector('form.releve').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    await vi.waitFor(() => expect(p.querySelector('.stats-fiche').textContent).toContain('0,4 % d’abonnés par vue'));
+    expect(actions.enregistrerReleveContenu).toHaveBeenCalledWith('f1', '48h', expect.objectContaining({ vues: '1000', nouveaux_abonnes: '4', partages_envois: '9' }));
+    expect(p.querySelector('.etiquette-retard')).toBeNull();
+    expect(p.textContent).not.toContain('null');
+  });
+
+  it('affiche les erreurs de saisie', async () => {
+    const actions = actionsStats();
+    actions.enregistrerReleveContenu = vi.fn(async () => ({ ok: false, erreurs: ['Vues : valeur requise.'] }));
+    const p = panneauFiche(publiee(), fictif, actions, { assets: true });
+    await vi.waitFor(() => expect(p.querySelector('form.releve')).not.toBeNull());
+    p.querySelector('form.releve').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    await vi.waitFor(() => expect(p.querySelector('form.releve').textContent).toContain('Vues : valeur requise.'));
+  });
+
+  it('propose les clics sur la porte pour une story', async () => {
+    const p = panneauFiche({ ...publiee(), format: 'story' }, fictif, actionsStats(), { assets: true });
+    await vi.waitFor(() => expect(p.querySelector('input[name="48h-clics_porte"]')).not.toBeNull());
+  });
+});

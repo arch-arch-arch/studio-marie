@@ -60,4 +60,24 @@ describe('validerProfil', () => {
     expect(r.ok).toBe(false);
     expect(r.erreurs).toHaveLength(3);
   });
+
+  it('accepte des cibles valides et leur absence', () => {
+    const sans = structuredClone(fictif);
+    delete sans.regles_studio.cibles;
+    expect(validerProfil(sans).ok).toBe(true);
+    expect(validerProfil(fictif).ok).toBe(true);
+  });
+
+  it('refuse des cibles mal formées', () => {
+    const p = structuredClone(fictif);
+    p.regles_studio.cibles = { taux_abonnes_par_vue: 3, partages_par_post: -1, inconnue: 2, clics_porte_semaine: '30' };
+    expect(validerProfil(p).erreurs).toEqual([
+      'regles_studio.cibles.taux_abonnes_par_vue doit être compris entre 0 et 1 (0,003 pour 0,3 %).',
+      'regles_studio.cibles.partages_par_post doit être un nombre positif ou nul.',
+      'regles_studio.cibles.inconnue : indicateur inconnu.',
+      'regles_studio.cibles.clics_porte_semaine doit être un nombre positif ou nul.',
+    ]);
+    p.regles_studio.cibles = [];
+    expect(validerProfil(p).erreurs).toEqual(['regles_studio.cibles doit être un objet.']);
+  });
 });

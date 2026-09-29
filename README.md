@@ -17,7 +17,8 @@ et image de marque.
   - Calendrier jour / semaine / mois, avec les statuts Idée → Brouillon → Validé → Programmé → Publié
   - Fiche contenu : caption, hashtags, recommandations et score sur 100
     (Tunnel · Croissance · Marque · Conformité Instagram)
-  - Bulletin tendances hebdomadaire
+  - Bulletin tendances hebdomadaire, avec rétrospective des relevés
+  - Tableau de bord : taux d'abonnés par vue, partages et envois, croissance nette, clics sur la porte
 - **Veille hebdo** : tâche Claude programmée qui recherche les tendances Instagram
   et dépose des idées en brouillon dans le calendrier.
 - **Publication** : manuelle via Meta Business Suite.
@@ -58,6 +59,6 @@ enregistrée dans `config/veille`, dans la base, et n'est jamais versionnée.
 - [x] Plan 1 : fondations et calendrier (studio de test publié)
 - [x] Plan 2 : évaluation par Claude et studio réel
 - [x] Plan 3 : veille hebdo (routine hebdomadaire programmée)
-- [ ] Plan 4 : relevés de stats et tableau de bord
+- [x] Plan 4 : relevés de stats et tableau de bord
 
 > ⚠️ Dépôt **privé** : ne jamais y commiter de tokens, de mots de passe ni de médias.

@@ -58,4 +58,18 @@ describe('vueBulletin', () => {
     expect(el.querySelector('a')).toBeNull();
     expect(el.textContent).toContain('La veille n’est pas encore configurée.');
   });
+  it('affiche une rétrospective avec bilan', () => {
+    const b = bulletin();
+    b.retrospective = {
+      type: 'bilan', texte: '2 contenus relevés sur les 2 dernières semaines.',
+      meilleur: { fiche: 'a', accroche: 'Le meilleur', format: 'reel', taux: 0.009, partages_envois: 30 },
+      pire: { fiche: 'b', accroche: 'Le pire', format: 'reel', taux: 0.001, partages_envois: 2 },
+      ecarts: [{ indicateur: 'croissance_nette_semaine', libelle: 'Croissance nette de la semaine', valeur: 80, cible: 100, atteinte: false }],
+      manquants: [{ fiche: 'c', releve: '48h', accroche: 'Oubliée' }],
+    };
+    const el = vueBulletin(etat({ bulletin: b }), actions());
+    expect(el.textContent).toContain('Meilleur contenu : « Le meilleur » (0,9 % d’abonnés par vue, 30 partages et envois).');
+    expect(el.textContent).toContain('Croissance nette de la semaine : 80 pour une cible de 100 (en dessous).');
+    expect(el.textContent).toContain('Relevés manquants : Oubliée (48 h).');
+  });
 });

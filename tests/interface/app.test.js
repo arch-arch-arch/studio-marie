@@ -3,6 +3,7 @@ import { describe, it, expect, vi } from 'vitest';
 import fictif from '../../exemples/profil-fictif.json';
 import { creerFausseBase } from '../aides/fausseBase.js';
 import { demarrer } from '../../src/interface/app.js';
+import { creerRendu } from '../../src/interface/rendu.js';
 import { nouvelleFiche, appliquerEvaluation, changerStatut, empreinte } from '../../src/logique/fiche.js';
 
 const horloge = () => '2026-09-28T08:00:00.000Z';
@@ -233,5 +234,73 @@ describe('demarrer', () => {
     const app = await demarrer(racine, { use: async nom => (nom === 'db' ? db : null) }, { horloge });
     await app.actions.importerProfil(JSON.stringify(fictif));
     expect(app.etat.lire().bulletin).toBeNull();
+  });
+
+  it('affiche le tableau de bord avec les relevés de la base', async () => {
+    const db = creerFausseBase();
+    await db.doc('profil/courant').set({ ...fictif, version: 1 });
+    await db.doc('stats_contenu/a_7j').set({ fiche: 'a', releve: '7j', vues: 1000, nouveaux_abonnes: 5, partages_envois: 12, date_publication: '2026-09-15T10:00:00.000Z', format: 'reel', pilier: 'socio', accroche: 'Accroche fictive', score_total: 70 });
+    const racine = document.createElement('div');
+    const app = await demarrer(racine, { use: async nom => (nom === 'db' ? db : null) }, { horloge });
+    await app.actions.changerVue('tableau');
+    await vi.waitFor(() => expect(racine.textContent).toContain('Accroche fictive'));
+    expect(racine.textContent).toContain('Relevé du compte');
+  });
+
+  it('garde le formulaire du relevé du compte intact lors de son propre enregistrement', async () => {
+    const db = creerFausseBase();
+    await db.doc('profil/courant').set({ ...fictif, version: 1 });
+    await db.doc('stats_contenu/a_7j').set({ fiche: 'a', releve: '7j', vues: 1000, nouveaux_abonnes: 5, partages_envois: 12, date_publication: '2026-09-15T10:00:00.000Z', format: 'reel', pilier: 'socio', accroche: 'Accroche fictive', score_total: 70 });
+    const racine = document.createElement('div');
+    const app = await demarrer(racine, { use: async nom => (nom === 'db' ? db : null) }, { horloge });
+    await app.actions.changerVue('tableau');
+    await vi.waitFor(() => expect(racine.textContent).toContain('Accroche fictive'));
+
+    const select = racine.querySelector('select[name="semaine"]');
+    const semaineDerniere = select.options[1].value;
+    select.value = semaineDerniere;
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+    racine.querySelector('input[name="abonnes"]').value = '1234';
+    racine.querySelector('form.releve-compte').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+
+    await vi.waitFor(() => expect(db.ecritures.some(e => e.startsWith('releves_compte/'))).toBe(true));
+    await vi.waitFor(() => expect(racine.textContent).toContain('Relevé du compte enregistré.'));
+    // Requête le select à nouveau dans le DOM (et non la référence capturée avant l'écriture) : prouve
+    // que le formulaire n'a pas été reconstruit, pas seulement que l'ancienne référence garde sa valeur.
+    expect(racine.querySelector('select[name="semaine"]').value).toBe(semaineDerniere);
+    expect(racine.textContent).toContain('Dernier relevé');
+  });
+
+  it('ne reconstruit pas la vue Semaine quand seules les statistiques changent', async () => {
+    const db = creerFausseBase();
+    const racine = document.createElement('div');
+    const app = await demarrer(racine, { use: async nom => (nom === 'db' ? db : null) }, { horloge });
+    await app.actions.importerProfil(JSON.stringify(fictif));
+    await vi.waitFor(() => expect(app.etat.lire().vue).toBe('semaine'));
+    const avant = racine.querySelector('.vue > *');
+    app.etat.modifier({ stats: [{ id: 'x_7j', fiche: 'x', releve: '7j', vues: 1, nouveaux_abonnes: 1, partages_envois: 1, date_publication: T, format: 'reel', accroche: 'x', score_total: 1 }] });
+    expect(racine.querySelector('.vue > *')).toBe(avant);
+  });
+
+  it('quitte l’état de chargement du tableau de bord quand stats et relevesCompte arrivent après l’ouverture de l’onglet', () => {
+    const racine = document.createElement('div');
+    const actions = { enregistrerReleveCompte: vi.fn(async () => ({ ok: true, erreurs: [] })), allerAFiche: vi.fn() };
+    const rendre = creerRendu(racine, actions, {}, () => T);
+    const base = {
+      profil: fictif, fiches: [], vue: 'tableau', ancre: T, ficheOuverte: null, erreur: null, sauvegarde: 'ok',
+      reference: [], resultatReference: null, verificationReference: null, bulletin: undefined, configVeille: null,
+      stats: undefined, relevesCompte: undefined, fichesRecentes: [],
+    };
+    // Ouverture de l'onglet avant l'arrivée des instantanés (cas réel : ecouterStats/ecouterRelevesCompte sont asynchrones).
+    rendre(base);
+    expect(racine.textContent).toContain('Chargement du tableau de bord…');
+
+    // Les instantanés arrivent ensuite, dans des rendus séparés (comme le ferait etat.abonner dans app.js).
+    rendre({ ...base, stats: [] });
+    rendre({ ...base, stats: [], relevesCompte: [] });
+
+    expect(racine.textContent).not.toContain('Chargement du tableau de bord…');
+    expect(racine.querySelectorAll('figcaption').length).toBe(6);
+    expect(racine.querySelector('form.releve-compte')).not.toBeNull();
   });
 });
