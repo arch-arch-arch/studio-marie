@@ -74,4 +74,13 @@ describe('vueSemaine', () => {
     expect(vides[0].textContent).toBe('+ Reel · 12:00');
     expect(vides[0].closest('[data-jour]').dataset.jour).toBe('2026-10-01');
   });
+
+  it('signale l’absence de bulletin et mène à l’onglet Bulletin', () => {
+    const actions = { ...actionsFactices(), changerVue: vi.fn() };
+    const el = vueSemaine({ profil: fictif, fiches: [], ancre: ANCRE, bulletin: null }, actions);
+    expect(el.querySelector('.sans-bulletin').textContent).toContain('Pas de bulletin pour cette semaine.');
+    [...el.querySelectorAll('button')].find(b => b.textContent === 'Voir l’onglet Bulletin').click();
+    expect(actions.changerVue).toHaveBeenCalledWith('bulletin');
+    expect(vueSemaine({ profil: fictif, fiches: [], ancre: ANCRE, bulletin: undefined }, actionsFactices()).querySelector('.sans-bulletin')).toBeNull();
+  });
 });

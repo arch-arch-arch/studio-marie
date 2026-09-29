@@ -4,6 +4,7 @@ import { vueSemaine } from './vue-semaine.js';
 import { vueMois } from './vue-mois.js';
 import { vueJour } from './vue-jour.js';
 import { vueProfil } from './vue-profil.js';
+import { vueBulletin } from './vue-bulletin.js';
 import { panneauFiche } from './panneau-fiche.js';
 
 const LIBELLES_SAUVEGARDE = { ok: 'Enregistré', en_cours: 'Enregistrement…', erreur: 'Échec de l’enregistrement : nouvel essai à la prochaine modification' };
@@ -25,7 +26,7 @@ function barre(e, actions) {
   }, libelle);
   const elements = [
     h('h1', { class: 'titre' }, 'Studio'),
-    h('nav', { class: 'onglets', 'aria-label': 'Vues' }, onglet('semaine', 'Semaine'), onglet('mois', 'Mois'), onglet('jour', 'Jour'), onglet('profil', 'Profil')),
+    h('nav', { class: 'onglets', 'aria-label': 'Vues' }, onglet('semaine', 'Semaine'), onglet('mois', 'Mois'), onglet('jour', 'Jour'), onglet('bulletin', 'Bulletin'), onglet('profil', 'Profil')),
   ];
   if (aProfil && e.vue !== 'profil') {
     elements.push(h('div', { class: 'periode' },
@@ -42,6 +43,7 @@ function contenuVue(e, actions, capacites) {
   if (!e.profil || e.vue === 'profil') return vueProfil(e, actions, capacites);
   if (e.vue === 'mois') return vueMois(e, actions);
   if (e.vue === 'jour') return vueJour(e, actions);
+  if (e.vue === 'bulletin') return vueBulletin(e, actions);
   return vueSemaine(e, actions);
 }
 
@@ -67,7 +69,7 @@ export function creerRendu(racine, actions, capacites, horloge) {
     const estVueProfil = !e.profil || e.vue === 'profil';
     const reconstructionRequise = estVueProfil
       ? (memo.profil !== e.profil || memo.vue !== e.vue || memo.ancre !== e.ancre)
-      : (memo.profil !== e.profil || memo.fiches !== e.fiches || memo.vue !== e.vue || memo.ancre !== e.ancre);
+      : (memo.profil !== e.profil || memo.fiches !== e.fiches || memo.vue !== e.vue || memo.ancre !== e.ancre || memo.bulletin !== e.bulletin || memo.configVeille !== e.configVeille);
     if (reconstructionRequise) {
       elementVue = contenuVue(e2, actions, capacites);
       vue.replaceChildren(elementVue);
@@ -81,6 +83,7 @@ export function creerRendu(racine, actions, capacites, horloge) {
     memo = {
       profil: e.profil, fiches: e.fiches, vue: e.vue, ancre: e.ancre, ficheOuverte: e.ficheOuverte, panneauAffiche: !!ouverte,
       reference: e.reference, resultatReference: e.resultatReference, verificationReference: e.verificationReference,
+      bulletin: e.bulletin, configVeille: e.configVeille,
     };
   };
 }

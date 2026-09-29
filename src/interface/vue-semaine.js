@@ -5,12 +5,15 @@ import { creneauxLibres } from '../logique/creneaux.js';
 import { debutSemaine, joursDeLaSemaine, cleJour, heureLocale, libelleJour, depuisSaisieLocale } from '../logique/dates.js';
 import { LIBELLES_FORMAT } from '../logique/fiche.js';
 
-export function vueSemaine({ profil, fiches, ancre, maintenant }, actions) {
+export function vueSemaine({ profil, fiches, ancre, maintenant, bulletin }, actions) {
   const r = profil.regles_studio;
   const debut = debutSemaine(ancre, r.fuseau);
   const semaine = fichesDeLaSemaine(fiches, debut, r.fuseau);
   const libres = creneauxLibres(fiches, r, debut, maintenant ?? null);
   return h('div', { class: 'semaine' },
+    bulletin === null
+      ? h('p', { class: 'sans-bulletin' }, 'Pas de bulletin pour cette semaine. ', h('button', { type: 'button', class: 'bouton-lien', onclick: () => actions.changerVue('bulletin') }, 'Voir l’onglet Bulletin'))
+      : null,
     bandeau(controlerSemaine(fiches, r, debut)),
     h('div', { class: 'colonnes' }, joursDeLaSemaine(debut, r.fuseau).map(jour => colonne(jour, semaine, libres, r, actions))));
 }

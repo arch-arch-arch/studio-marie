@@ -60,5 +60,13 @@ export function creerDepot(db) {
     async effacerResultatReference() {
       await db.doc('reference_resultats/dernier').delete();
     },
+
+    ecouterBulletin(cle, rappel, erreur) {
+      return db.doc(`bulletins/${cle}`).onSnapshot(s => rappel(s.exists ? s.data() : null), erreur);
+    },
+
+    ecouterConfigVeille(rappel, erreur) {
+      return db.doc('config/veille').onSnapshot(s => rappel(s.exists ? s.data() : null), erreur);
+    },
   };
 }
