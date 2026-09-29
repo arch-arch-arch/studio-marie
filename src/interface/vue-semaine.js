@@ -10,8 +10,9 @@ export function vueSemaine({ profil, fiches, ancre, maintenant, bulletin }, acti
   const debut = debutSemaine(ancre, r.fuseau);
   const semaine = fichesDeLaSemaine(fiches, debut, r.fuseau);
   const libres = creneauxLibres(fiches, r, debut, maintenant ?? null);
+  const semainePassee = maintenant != null && debut < debutSemaine(maintenant, r.fuseau);
   return h('div', { class: 'semaine' },
-    bulletin === null
+    bulletin === null && !semainePassee
       ? h('p', { class: 'sans-bulletin' }, 'Pas de bulletin pour cette semaine. ', h('button', { type: 'button', class: 'bouton-lien', onclick: () => actions.changerVue('bulletin') }, 'Voir l’onglet Bulletin'))
       : null,
     bandeau(controlerSemaine(fiches, r, debut)),

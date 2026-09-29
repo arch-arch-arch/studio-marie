@@ -83,4 +83,10 @@ describe('vueSemaine', () => {
     expect(actions.changerVue).toHaveBeenCalledWith('bulletin');
     expect(vueSemaine({ profil: fictif, fiches: [], ancre: ANCRE, bulletin: undefined }, actionsFactices()).querySelector('.sans-bulletin')).toBeNull();
   });
+
+  it('n’affiche pas le bandeau sans bulletin pour une semaine déjà passée', () => {
+    const semainePassee = '2026-09-02T10:00:00.000Z';
+    const el = vueSemaine({ profil: fictif, fiches: [], ancre: semainePassee, maintenant: ANCRE, bulletin: null }, actionsFactices());
+    expect(el.querySelector('.sans-bulletin')).toBeNull();
+  });
 });
