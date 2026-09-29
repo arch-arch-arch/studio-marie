@@ -5,7 +5,7 @@ import { creerDepot } from '../../src/donnees/depot.js';
 import { creerEnregistreur } from '../../src/donnees/enregistreur.js';
 import { creerEtat } from '../../src/interface/etat.js';
 import { creerControleur, plageDeVue, fusionnerInstantane } from '../../src/interface/controleur.js';
-import { nouvelleFiche } from '../../src/logique/fiche.js';
+import { nouvelleFiche, empreinte } from '../../src/logique/fiche.js';
 
 const T = '2026-09-28T08:00:00.000Z';
 const FZ = 'Europe/Paris';
@@ -221,5 +221,73 @@ describe('relevés de statistiques', () => {
 
   it('expose l’horloge', () => {
     expect(monter().actions.maintenant()).toBe(T);
+  });
+});
+
+describe('confirmations', () => {
+  const prete = (extra = {}) => {
+    const f = { ...nouvelleFiche({ id: 'f1', format: 'reel', date_heure: '2026-10-01T10:00:00.000Z', pilier: 'socio', maintenant: T }), visuel: 'a1', visuel_type: 'image', caption: 'Une caption.', statut: 'valide', ...extra };
+    return { ...f, score: { total: 70, criteres: [], conformite: { etat: 'vert', causes: [] }, empreinte: empreinte(f) } };
+  };
+  const monte = extra => { const m = monter(); m.etat.modifier({ fiches: [prete(extra)] }); return { ...m, depot: creerDepot(m.db) }; };
+
+  it('confirme la programmation, met à jour l’état et écrit en base', async () => {
+    const { actions, etat, depot } = monte();
+    const r = await actions.confirmerProgrammation('f1', '2026-10-02T09:00:00.000Z', true);
+    expect(r.ok).toBe(true);
+    expect(etat.lire().fiches[0]).toMatchObject({ statut: 'programme', programme_pour: '2026-10-02T09:00:00.000Z', date_heure: '2026-10-02T09:00:00.000Z' });
+    expect(await depot.lireFiche('f1')).toMatchObject({ statut: 'programme', programme_pour: '2026-10-02T09:00:00.000Z' });
+  });
+
+  it('n’écrit rien quand la confirmation est refusée', async () => {
+    const { actions, etat, db } = monte();
+    expect(await actions.confirmerProgrammation('f1', '2026-10-02T09:00:00.000Z', false)).toEqual({ ok: false, raison: 'Coche la case pour confirmer.' });
+    expect(await actions.confirmerProgrammation('f1', '2026-09-27T09:00:00.000Z', true)).toMatchObject({ ok: false });
+    expect(await actions.confirmerPublication('f1', 'pas une date', true)).toEqual({ ok: false, raison: 'Indique une date et une heure valides.' });
+    expect(etat.lire().fiches[0].statut).toBe('valide');
+    expect(db.ecritures).toEqual([]);
+  });
+
+  it('confirme la publication directement depuis Validé', async () => {
+    const { actions, etat } = monte();
+    const r = await actions.confirmerPublication('f1', '2026-09-28T07:30:00.000Z', true);
+    expect(r.ok).toBe(true);
+    expect(etat.lire().fiches[0]).toMatchObject({ statut: 'publie', publie_le: '2026-09-28T07:30:00.000Z', programme_pour: null });
+  });
+
+  it('refuse une conformité devenue rouge avec le profil actuel', async () => {
+    const { actions } = monte({ caption: 'Un mindset.' });
+    const r = await actions.confirmerProgrammation('f1', '2026-10-02T09:00:00.000Z', true);
+    expect(r.ok).toBe(false);
+    expect(r.raison).toMatch(/^Conformité au rouge : /);
+  });
+
+  it('changerStatut n’accepte plus Programmé ni Publié', async () => {
+    const { actions } = monte();
+    expect(await actions.changerStatut('f1', 'programme')).toEqual({ ok: false, raison: 'Utilise « Confirmer la programmation » dans la fiche.' });
+    expect(await actions.changerStatut('f1', 'publie')).toEqual({ ok: false, raison: 'Utilise « Confirmer la publication » dans la fiche.' });
+  });
+
+  it('revenir en Validé efface la programmation', async () => {
+    const { actions, etat } = monte();
+    await actions.confirmerProgrammation('f1', '2026-10-02T09:00:00.000Z', true);
+    expect(await actions.changerStatut('f1', 'valide')).toEqual({ ok: true });
+    expect(etat.lire().fiches[0]).toMatchObject({ statut: 'valide', programme_pour: null });
+  });
+
+  it('déplacer une fiche programmée garde sa programmation', async () => {
+    const { actions, etat } = monte();
+    await actions.confirmerProgrammation('f1', '2026-10-01T10:00:00.000Z', true);
+    await actions.deplacerFiche('f1', '2026-10-02T10:00:00.000Z');
+    expect(etat.lire().fiches[0]).toMatchObject({ statut: 'programme', programme_pour: '2026-10-01T10:00:00.000Z', date_heure: '2026-10-02T10:00:00.000Z' });
+  });
+
+  it('une fiche programmée bloquée par le profil repasse en Brouillon sans confirmation', async () => {
+    const { actions, etat } = monte();
+    await actions.confirmerProgrammation('f1', '2026-10-02T09:00:00.000Z', true);
+    const profil = etat.lire().profil;
+    etat.modifier({ profil: { ...profil, regles_studio: { ...profil.regles_studio, mots_a_eviter: [...profil.regles_studio.mots_a_eviter, 'caption'] } } });
+    await actions.reverifierFiches();
+    expect(etat.lire().fiches[0]).toMatchObject({ statut: 'brouillon', programme_pour: null });
   });
 });

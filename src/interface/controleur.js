@@ -1,6 +1,6 @@
 import {
   nouvelId, nouvelleFiche, modifierFiche as appliquer, peutPasserA, changerStatut as appliquerStatut, deplacerFiche as deplacer,
-  appliquerEvaluation,
+  appliquerEvaluation, confirmerProgrammation as confirmerProg, confirmerPublication as confirmerPub, effacementsPour,
 } from '../logique/fiche.js';
 import { ajouterJours, ajouterMois, debutJour, debutSemaine, semainesDuMois } from '../logique/dates.js';
 import { verifierRegles } from '../logique/regles-score.js';
@@ -120,7 +120,7 @@ export function creerControleur({ etat, depot, enregistreur, assets, horloge, id
     if (g.statut !== 'valide' && g.statut !== 'programme') return g;
     const { profil } = etat.lire();
     const { conformite } = verifierRegles(g, profil.regles_studio);
-    return conformite.etat === 'rouge' ? { ...g, statut: 'brouillon' } : g;
+    return conformite.etat === 'rouge' ? { ...g, statut: 'brouillon', ...effacementsPour('brouillon') } : g;
   }
 
   async function evaluerFiche(id, { signal } = {}) {
@@ -183,6 +183,19 @@ export function creerControleur({ etat, depot, enregistreur, assets, horloge, id
       etat.modifier({ erreur: `${aRetrograder.length} fiche(s) repassée(s) en Brouillon : le profil actuel les bloque.` });
     }
     return aRetrograder.length;
+  }
+
+  async function confirmer(id, dateIso, coche, appliquerConfirmation) {
+    const f = trouver(id);
+    if (!f) return { ok: false, raison: 'Fiche introuvable.' };
+    const r = appliquerConfirmation(f, { date: dateIso, coche }, horloge());
+    if (!r.ok) return r;
+    const { conformite } = verifierRegles(r.fiche, etat.lire().profil.regles_studio);
+    if (conformite.etat === 'rouge') return { ok: false, raison: `Conformité au rouge : ${conformite.causes.join(' ; ')}.` };
+    remplacer(r.fiche);
+    etat.modifier({ erreur: null });
+    await ecrireMaintenant(r.fiche);
+    return { ok: true, fiche: r.fiche };
   }
 
   let controleurReference = null;
@@ -259,6 +272,8 @@ export function creerControleur({ etat, depot, enregistreur, assets, horloge, id
     importerReference,
     verifierReference,
     arreterReference: () => controleurReference?.abort(),
+    confirmerProgrammation: (id, dateIso, coche) => confirmer(id, dateIso, coche, confirmerProg),
+    confirmerPublication: (id, dateIso, coche) => confirmer(id, dateIso, coche, confirmerPub),
 
     async creerFiche({ format, date_heure }) {
       await fermerPanneau();
@@ -280,6 +295,8 @@ export function creerControleur({ etat, depot, enregistreur, assets, horloge, id
     async changerStatut(id, cible) {
       const f = trouver(id);
       if (!f) return { ok: false, raison: 'Fiche introuvable.' };
+      if (cible === 'programme') return { ok: false, raison: 'Utilise « Confirmer la programmation » dans la fiche.' };
+      if (cible === 'publie') return { ok: false, raison: 'Utilise « Confirmer la publication » dans la fiche.' };
       const verification = peutPasserA(f, cible);
       if (!verification.ok) {
         etat.modifier({ erreur: verification.raison });

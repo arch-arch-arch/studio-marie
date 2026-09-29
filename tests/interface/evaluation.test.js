@@ -311,7 +311,7 @@ describe('reverifierFiches', () => {
   it('repasse en brouillon les fiches validées ou programmées bloquées par le profil actuel, et pose le message', async () => {
     const { db, etat, actions } = await monter();
     await actions.evaluerFiche('f1');
-    expect(await actions.changerStatut('f1', 'programme')).toEqual({ ok: true });
+    expect((await actions.confirmerProgrammation('f1', '2026-10-01T10:00:00.000Z', true)).ok).toBe(true);
     const profil = etat.lire().profil;
     etat.modifier({ profil: { ...profil, regles_studio: { ...profil.regles_studio, mots_a_eviter: [...profil.regles_studio.mots_a_eviter, 'ligne'] } } });
     const n = await actions.reverifierFiches();
