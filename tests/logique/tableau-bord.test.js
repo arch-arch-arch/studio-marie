@@ -114,13 +114,13 @@ describe('retrospective', () => {
     });
     expect(r.texte).toBe('1 contenu relevé sur les 2 dernières semaines. 1 relevé manquant.');
   });
-  it('ignore un relevé de compte trop ancien pour la croissance nette', () => {
-    const VIEUX = '2026-07-27T22:00:00.000Z';
+  it('ignore des relevés de compte trop anciens pour la croissance nette et les clics sur la porte', () => {
+    const W30 = '2026-07-19T22:00:00.000Z'; const W31 = '2026-07-26T22:00:00.000Z';
     const r = retrospective({
       stats: [stat('a', '48h', { date_publication: '2026-09-15T10:00:00.000Z' })],
-      relevesCompte: [compte('2026-W31', VIEUX, 900)],
+      relevesCompte: [compte('2026-W30', W30, 900), compte('2026-W31', W31, 950, { clics_porte: 8 })],
       fiches: [fiche('a', '2026-09-15T10:00:00.000Z')],
-      cibles: { croissance_nette_semaine: 100 }, fuseau: FZ, debutSemaineVisee: W40, maintenant: '2026-09-27T18:00:00.000Z',
+      cibles: { croissance_nette_semaine: 40, clics_porte_semaine: 5 }, fuseau: FZ, debutSemaineVisee: W40, maintenant: '2026-09-27T18:00:00.000Z',
     });
     expect(r.ecarts).toEqual([]);
   });
