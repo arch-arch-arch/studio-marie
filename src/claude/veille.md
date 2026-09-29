@@ -15,9 +15,10 @@ Interdits :
 - Lance `node scripts/veille.mjs doit-tourner --profil veille-tmp/profil/courant.json`. Si la sortie est `non`, arrête-toi là : c'est le deuxième déclenchement de la nuit. Réponds « Veille déjà faite ou hors horaire. »
 
 ## 2. Lire la semaine suivante
-- Lance `node scripts/veille.mjs plage --profil veille-tmp/profil/courant.json`. Tu obtiens `{ semaine, debut, fin }`.
-- `ArtifactData` `query` sur `STUDIO`, avec `collection: "fiches"` et `query: { where: [["date_heure", ">=", debut], ["date_heure", "<", fin]] }`, avec `out_dir` = `veille-tmp/`. Les fichiers arrivent dans `veille-tmp/fiches/`.
+- Lance `node scripts/veille.mjs plage --profil veille-tmp/profil/courant.json`. Tu obtiens `{ semaine, debut, fin, lecture_debut, lecture_fin }`.
+- `ArtifactData` `query` sur `STUDIO`, avec `collection: "fiches"` et `query: { where: [["date_heure", ">=", lecture_debut], ["date_heure", "<", lecture_fin]] }`, avec `out_dir` = `veille-tmp/`. Les fichiers arrivent dans `veille-tmp/fiches/`. Cette plage élargie (14 jours avant, 28 jours après la semaine visée) permet de retrouver les idées de ce bulletin déplacées vers une autre semaine.
 - `ArtifactData` `get` sur `STUDIO`, avec `collection: "bulletins"` et `doc_id` = `semaine`, avec `out_dir` = `veille-tmp/`. S'il n'existe pas, c'est le premier passage.
+- Après chaque lecture avec `out_dir` (fiches puis bulletin), recopie les versions affichées dans le résultat de l'outil (ligne `- "<doc_id>"  N bytes  version V  "<chemin>"`) dans `veille-tmp/versions.json`, au format `{ "fiches/<id>": V, "bulletins/<semaine>": V }`.
 
 ## 3. Chercher les tendances
 - Avec `WebSearch` (et `WebFetch` pour lire une page), cherche sur les 14 derniers jours :
@@ -34,6 +35,8 @@ Interdits :
 Pour chaque idée : format, pilier (une clé de `regles_studio.piliers`), rôle de caption, appel à l'action ou non, accroche, caption et hashtags, dans la voix du profil.
 
 Respecte le contrôle de semaine du profil (cadence, part d'appels à l'action, rotation des rôles, ragebait) en tenant compte des fiches déjà présentes.
+
+Ne repropose pas une idée proche d'une fiche déjà présente dans `veille-tmp/fiches/` (même angle ou accroche voisine), même si son accroche a été retouchée.
 
 Évalue ensuite chaque idée comme une éditrice exigeante, au format `"jugement"` :
 
@@ -60,12 +63,12 @@ Règles du jugement :
   "idees": [{ "format": "reel", "pilier": "…", "role_caption": "engagement", "cta": false, "format_valide": "", "accroche": "…", "caption": "…", "hashtags": ["…"], "tendance": "titre de la tendance ou null", "jugement": { … } }] }
 ```
 
-Lance ensuite `node scripts/veille.mjs construire --profil veille-tmp/profil/courant.json --fiches veille-tmp/fiches --entree veille-tmp/entree.json --sortie veille-tmp/ecritures.json --bulletin veille-tmp/bulletins/<semaine>.json`.
+Lance ensuite `node scripts/veille.mjs construire --profil veille-tmp/profil/courant.json --fiches veille-tmp/fiches --entree veille-tmp/entree.json --sortie veille-tmp/ecritures.json --bulletin veille-tmp/bulletins/<semaine>.json --versions veille-tmp/versions.json`.
 
 Si la commande échoue, elle affiche les erreurs. Corrige `entree.json` et relance. Au plus 3 exécutions de `construire` au total. Tant que le code de sortie n'est pas 0, n'applique rien. Si elle échoue encore après ces 3 exécutions, arrête-toi sans rien écrire et rends compte des erreurs.
 
 ## 6. Appliquer en un seul lot
-Lis `veille-tmp/ecritures.json`, puis appelle une seule fois `ArtifactData` `batch` sur `STUDIO`, avec la liste `ecritures` telle quelle en paramètre `writes`. Relis ensuite `bulletins/<semaine>` pour vérifier. Si le lot échoue (conflit de version, refus), n'écris rien d'autre, ne réessaie pas entrée par entrée, et rends compte de l'erreur.
+Lis `veille-tmp/ecritures.json`, puis appelle une seule fois `ArtifactData` `batch` sur `STUDIO`, avec la liste `ecritures` telle quelle en paramètre `writes`. Relis ensuite `bulletins/<semaine>` pour vérifier. Si le lot échoue sur un conflit de version, autorise-toi une seule reprise depuis l'étape 2 (nouvelle lecture, nouvelle construction). Pour tout autre échec (refus, erreur), n'écris rien d'autre, ne réessaie pas entrée par entrée, et rends compte de l'erreur.
 
 ## 7. Compte rendu
 Termine par une ligne : le `resume` du script, puis « Sources : complètes » ou « Sources : indisponibles ».
