@@ -146,6 +146,24 @@ describe('construire', () => {
     expect(bulletin.retrospective.type).toBe('bilan');
     expect(bulletin.retrospective.meilleur.fiche).toBe('x');
   });
+  it('--maintenant non normalisé (avec décalage) donne la même semaine et la même rétrospective que sa forme UTC', () => {
+    const fichiers = {
+      'p.json': fictif, 'e.json': entree,
+      'st/x_7j.json': { fiche: 'x', releve: '7j', vues: 1000, nouveaux_abonnes: 4, partages_envois: 12, date_publication: '2026-09-22T10:00:00.000Z', format: 'reel', accroche: 'Accroche x', score_total: 70 },
+    };
+    const avecDecalage = deps(fichiers, '2026-09-27T18:00:00.000Z');
+    const rDecalage = executer(['construire', '--profil', 'p.json', '--fiches', 'fi', '--entree', 'e.json', '--sortie', 's.json', '--stats', 'st', '--releves', 'rc', '--maintenant', '2026-09-27T20:00:00+02:00'], avecDecalage);
+    const avecUtc = deps(fichiers, '2026-09-27T18:00:00.000Z');
+    const rUtc = executer(['construire', '--profil', 'p.json', '--fiches', 'fi', '--entree', 'e.json', '--sortie', 's.json', '--stats', 'st', '--releves', 'rc', '--maintenant', '2026-09-27T18:00:00.000Z'], avecUtc);
+    expect(rDecalage.code).toBe(0);
+    // Les identifiants générés portent un aléa (nouvelId) : on compare le résumé, la semaine et la rétrospective, pas l'égalité stricte des écritures.
+    expect(rDecalage.sortie).toBe(rUtc.sortie);
+    const bulletinDecalage = avecDecalage.ecrits['s.json'].ecritures.find(e => e.collection === 'bulletins').data;
+    const bulletinUtc = avecUtc.ecrits['s.json'].ecritures.find(e => e.collection === 'bulletins').data;
+    expect(bulletinDecalage.semaine).toBe(bulletinUtc.semaine);
+    expect(bulletinDecalage.genere_le).toBe(bulletinUtc.genere_le);
+    expect(bulletinDecalage.retrospective).toEqual(bulletinUtc.retrospective);
+  });
   it('échoue sans rien écrire si une fiche est corrompue (listerJson lève une erreur)', () => {
     const ecrits = {};
     const d = {

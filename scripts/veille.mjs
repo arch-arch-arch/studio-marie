@@ -27,10 +27,11 @@ const document = brut => brut?.data ?? brut;
 export function executer(argv, { lireJson, listerJson, ecrireJson, maintenant }) {
   const commande = argv[0];
   const o = options(argv);
-  const quand = o.maintenant ?? maintenant();
+  const brut = o.maintenant ?? maintenant();
   try {
     if (!['plage', 'doit-tourner', 'construire'].includes(commande)) return { code: 1, sortie: USAGE };
-    if (Number.isNaN(new Date(quand).getTime())) return { code: 1, sortie: 'Date --maintenant invalide.' };
+    if (Number.isNaN(new Date(brut).getTime())) return { code: 1, sortie: 'Date --maintenant invalide.' };
+    const quand = new Date(brut).toISOString();
     const profil = document(lireJson(o.profil));
     const fz = profil?.regles_studio?.fuseau;
     if (!fuseauValide(fz)) return { code: 1, sortie: 'Fuseau du profil absent ou invalide.' };
