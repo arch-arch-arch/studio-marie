@@ -4,6 +4,7 @@ import { creerControleur, plageDeVue, fusionnerInstantane } from './controleur.j
 import { creerRendu } from './rendu.js';
 import { creerDepot } from '../donnees/depot.js';
 import { creerEnregistreur } from '../donnees/enregistreur.js';
+import { cleSemaineIso, debutSemaine } from '../logique/dates.js';
 
 function messageErreurBase(e) {
   if (e?.code === 'revoked') return 'L’accès au studio a été retiré pour cette vue.';
@@ -23,7 +24,7 @@ export async function demarrer(racine, claude, { horloge = () => new Date().toIS
   const assets = (await claude.use('assets')) ?? null;
   const sample = (await claude.use('sample')) ?? null;
   const depot = creerDepot(db);
-  const etat = creerEtat({ profil: undefined, fiches: [], vue: 'semaine', ancre: horloge(), ficheOuverte: null, erreur: null, sauvegarde: 'ok', reference: [], resultatReference: null, verificationReference: null });
+  const etat = creerEtat({ profil: undefined, fiches: [], vue: 'semaine', ancre: horloge(), ficheOuverte: null, erreur: null, sauvegarde: 'ok', reference: [], resultatReference: null, verificationReference: null, bulletin: undefined, configVeille: null });
   const enregistreur = creerEnregistreur(
     async fiche => {
       etat.modifier({ sauvegarde: 'en_cours' });
@@ -42,6 +43,8 @@ export async function demarrer(racine, claude, { horloge = () => new Date().toIS
 
   let arreterFiches = null;
   let plageCourante = '';
+  let arreterBulletin = null;
+  let cleBulletinCourante = '';
   let derniereVersionVerifiee = null;
   etat.abonner(e => {
     if (e.profil && e.profil.version !== derniereVersionVerifiee) {
@@ -49,7 +52,8 @@ export async function demarrer(racine, claude, { horloge = () => new Date().toIS
       actions.reverifierFiches();
     }
     if (e.profil) {
-      const [debut, fin] = plageDeVue(e.vue, e.ancre, e.profil.regles_studio.fuseau);
+      const fz = e.profil.regles_studio.fuseau;
+      const [debut, fin] = plageDeVue(e.vue, e.ancre, fz);
       if (`${debut}|${fin}` !== plageCourante) {
         plageCourante = `${debut}|${fin}`;
         arreterFiches?.();
@@ -59,6 +63,13 @@ export async function demarrer(racine, claude, { horloge = () => new Date().toIS
             actions.reverifierFiches();
           },
           err => etat.modifier({ erreur: messageErreurBase(err) }));
+      }
+      const cle = cleSemaineIso(debutSemaine(e.ancre, fz), fz);
+      if (cle !== cleBulletinCourante) {
+        cleBulletinCourante = cle;
+        arreterBulletin?.();
+        etat.modifier({ bulletin: undefined });
+        arreterBulletin = depot.ecouterBulletin(cle, bulletin => etat.modifier({ bulletin }), err => etat.modifier({ erreur: messageErreurBase(err), bulletin: null }));
       }
     }
     rendre(etat.lire());
@@ -70,6 +81,7 @@ export async function demarrer(racine, claude, { horloge = () => new Date().toIS
   );
   depot.ecouterReference(reference => etat.modifier({ reference }), err => etat.modifier({ erreur: messageErreurBase(err) }));
   depot.ecouterResultatReference(resultatReference => etat.modifier({ resultatReference }), err => etat.modifier({ erreur: messageErreurBase(err) }));
+  depot.ecouterConfigVeille(configVeille => etat.modifier({ configVeille }), err => etat.modifier({ erreur: messageErreurBase(err) }));
   if (typeof window !== 'undefined') window.addEventListener('pagehide', () => { enregistreur.viderTout(); });
   if (typeof document !== 'undefined') {
     const bloquerDepotFichier = e => { if (e.dataTransfer?.types?.includes?.('Files')) e.preventDefault(); };

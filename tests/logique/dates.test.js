@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   partiesLocales, versUtc, ajouterJours, debutJour, debutSemaine, joursDeLaSemaine,
-  debutMois, ajouterMois, semainesDuMois, cleJour, heureLocale, depuisSaisieLocale, libelleJour,
+  debutMois, ajouterMois, semainesDuMois, cleJour, heureLocale, depuisSaisieLocale, libelleJour, cleSemaineIso,
 } from '../../src/logique/dates.js';
 
 const FZ = 'Europe/Paris';
@@ -62,5 +62,15 @@ describe('mois', () => {
     expect(s).toHaveLength(5);
     expect(s[0]).toBe('2026-09-27T22:00:00.000Z');
     expect(s[4]).toBe('2026-10-25T23:00:00.000Z');
+  });
+});
+
+describe('cleSemaineIso', () => {
+  it('donne la semaine ISO locale, y compris en fin d’année', () => {
+    expect(cleSemaineIso('2026-09-28T10:00:00.000Z', 'Europe/Paris')).toBe('2026-W40');
+    expect(cleSemaineIso('2026-10-04T21:30:00.000Z', 'Europe/Paris')).toBe('2026-W40');
+    expect(cleSemaineIso('2026-10-04T22:30:00.000Z', 'Europe/Paris')).toBe('2026-W41');
+    expect(cleSemaineIso('2027-01-01T12:00:00.000Z', 'Europe/Paris')).toBe('2026-W53');
+    expect(cleSemaineIso('2027-01-04T12:00:00.000Z', 'Europe/Paris')).toBe('2027-W01');
   });
 });

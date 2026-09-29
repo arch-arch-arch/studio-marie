@@ -85,3 +85,11 @@ export function depuisSaisieLocale(date, heure, fuseau) {
 export function libelleJour(iso, fuseau) {
   return new Intl.DateTimeFormat('fr-FR', { timeZone: fuseau, weekday: 'short', day: 'numeric' }).format(new Date(iso));
 }
+
+export function cleSemaineIso(iso, fuseau) {
+  const p = partiesLocales(iso, fuseau);
+  const jeudi = Date.UTC(p.annee, p.mois - 1, p.jour) + (4 - p.jourSemaine) * 86400000;
+  const annee = new Date(jeudi).getUTCFullYear();
+  const semaine = 1 + Math.floor((jeudi - Date.UTC(annee, 0, 1)) / (7 * 86400000));
+  return `${annee}-W${String(semaine).padStart(2, '0')}`;
+}

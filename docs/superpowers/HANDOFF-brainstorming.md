@@ -111,10 +111,68 @@ Révisée à partir du profil de marque réel (fourni par Jean, conservé hors d
 - **Tests** : règles calculées en JS testées avec Vitest ; réponses de Claude validées par un schéma ; jeu de référence gardé hors de git ; un studio de test et le studio réel.
 - **Test de la routine cloud** : réussi le 2026-09-28. La veille tournera dans le cloud.
 
-## Reste à faire
+## État du projet (mis à jour le 2026-09-29)
 
-1. Plan 3 : veille hebdo (consignes `src/claude/veille.md`, routine cloud, vue Bulletin).
-2. Plan 4 : relevés de stats et tableau de bord.
+### Où en est chaque plan
+| Plan | Contenu | Branche / état git | Tests |
+|---|---|---|---|
+| 1. Fondations et calendrier | Semaine, mois, jour, fiche, contrôle de semaine, créneaux, glisser-déposer, import du profil | Fusionné dans `main`, poussé | 114 tests au moment de la fusion |
+| 2. Évaluation par Claude | Règles calculées, score pondéré par format, verrou de conformité, évaluation via `sample`, suggestions, jeu de référence | Branche `plan-2-evaluation` poussée ; **PR ouverte, non fusionnée** | 240 tests |
+| 3. Veille hebdo | Script `scripts/veille.mjs`, logique `src/logique/veille.js`, consignes `src/claude/veille.md`, onglet Bulletin | Branche `plan-3-veille` (issue de `plan-2-evaluation`), poussée, dernier commit `968f58d` ; pas encore de PR | **302 tests verts**, build OK (72 Ko) |
+| 4. Stats et tableau de bord | Relevés à 48 h et à 7 jours, relevé hebdo du compte, tableau de bord, rétrospective du bulletin | Pas commencé | — |
+
+### Studios publiés (URL dans `.studio.local.json`, non versionné)
+- **Studio de test** : profil fictif, jeu de référence fictif, version de la page avec l'onglet Bulletin (republiée le 2026-09-29). Capacités : `db`, `assets`, `sample`.
+- **Studio réel** : profil réel (version 1, e-mail retiré) et 10 contenus réels de référence, **uniquement dans sa base**. Même page, même capacités.
+- La checklist à l'écran des plans 2 et 3 et le partage du studio réel avec la créatrice (Éditrice) sont **à faire par Jean**.
+
+### Décisions structurantes prises pendant l'exécution
+Elles sont toutes détaillées dans le registre de chaque plan (`.superpowers/sdd/<plan>/progress.md`, non versionné) :
+- **Verrou de conformité fermé par défaut.**
+  - Au rouge, le score est plafonné à 40.
+  - L'empreinte couvre accroche, caption, visuel, hashtags, format, pilier, rôle, appel à l'action, géotag et porte.
+  - Une fiche validée ou programmée repasse en Brouillon dès qu'elle devient bloquante : après une modification, une réévaluation, un nouveau profil, ou à chaque instantané de fiches.
+- **Règles calculées.**
+  - Liens : `https?://`, `www.`, `domaine/chemin`, domaines « link in bio » connus.
+  - Géotag : marqueurs d'adresse ou de domicile, code postal, numéro suivi d'un type de voie.
+  - Mots à éviter : comparaison normalisée, avec frontières de mot.
+  - Les motifs sont linéaires : aucune regex à retour arrière catastrophique.
+- **Consigne envoyée à Claude.**
+  - Tailles mesurées en octets : profil ≤ 30 000 octets, prompt ≤ 60 000 octets.
+  - `regles_studio` n'est jamais retiré.
+  - Réponse validée champ par champ ; rien n'est écrit en cas d'échec.
+- **Veille.**
+  - Semaine visée : celle de `maintenant + 1 jour`, c'est-à-dire la semaine suivante le dimanche soir et la semaine en cours en semaine.
+  - Une relance ne remplace que ses propres idées restées intactes : `brouillon`, non modifiées, `maj_le === cree_le`.
+  - Pas de doublon : dédoublonnage sur l'accroche et plafond de 5 idées par bulletin.
+  - Lecture élargie de −14 j à +28 j.
+  - Écritures épinglées (`if_version`) grâce à `veille-tmp/versions.json`, que l'agent recopie depuis le résultat d'`ArtifactData` : les fichiers `out_dir` contiennent le document seul.
+  - `doit-tourner` : répond « non » seulement un dimanche entre 18:30 et 21:29 hors 20 h (heure locale) ; `--forcer` force l'exécution.
+- **Deux exceptions au processus**, une au plan 2 et une au plan 3 : une courte passe résiduelle après la relecture finale, pour ne pas mettre en service avec un risque de perte de données.
+
+### Mise en service de la veille (Task 6 du plan 3, terminée le 2026-09-29)
+- **Essai à blanc sur le studio de test** : réussi, avec un bulletin 2026-W40 et 4 idées.
+  - WebSearch fonctionne dans le cloud.
+  - WebFetch est bloqué par le proxy réseau sur certains domaines. On s'en passe : les résultats de recherche suffisent.
+- **Relance** : réussie.
+  - Les 4 idées intactes ont été remplacées par 5 nouvelles, par des suppressions épinglées `if_version`.
+  - Le bulletin est passé en version 2. La fiche manuelle n'a pas été touchée.
+  - Aucun doublon, aucune collision de créneau.
+  - Une première tentative avait été coupée par la limite d'utilisation avant toute écriture : sans effet, le lot est atomique.
+- **Routine hebdomadaire du studio réel créée** :
+  - `cron 0 0,1 * * 1` UTC, modèle Sonnet, outils prévus par le plan ;
+  - premier passage le dimanche 4 octobre 2026 à 20 h, heure locale ;
+  - `doit-tourner` écarte le créneau hors 20 h.
+- **`config/veille`** (`url_routine`) est écrit dans les deux studios. La routine ponctuelle de test reste désactivée : on la relance à la main, depuis le lien.
+
+### Prochaine étape
+1. **Jean** : vérification à l'écran des deux studios.
+   - Onglet Bulletin, idées dans le calendrier, bouton « Relancer la veille ».
+   - Partager le studio réel avec la créatrice, en Éditrice.
+2. **Après le 4 octobre** : lire le compte rendu de la première exécution réelle (`list_runs` sur la routine du studio réel).
+3. **Fusion** : ouvrir la PR `plan-3-veille`, puis fusionner les PR 2 et 3 dans l'ordre.
+4. **Après la fusion** : retirer du prompt de la routine la ligne « Passe sur la branche `plan-3-veille` ».
+5. **Plan 4** : statistiques et tableau de bord, qui alimentera aussi la rétrospective du bulletin.
 
 ## Contraintes
 

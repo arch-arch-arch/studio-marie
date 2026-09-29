@@ -85,3 +85,20 @@ describe('jeu de référence', () => {
     expect(db._docs.has('reference_resultats/dernier')).toBe(false);
   });
 });
+
+describe('bulletin et configuration de la veille', () => {
+  it('écoute un bulletin par semaine et la configuration', async () => {
+    const db = creerFausseBase();
+    const depot = creerDepot(db);
+    const bulletins = [];
+    depot.ecouterBulletin('2026-W41', b => bulletins.push(b));
+    expect(bulletins[0]).toBeNull();
+    await db.doc('bulletins/2026-W41').set({ semaine: '2026-W41', statut: 'complet' });
+    expect(bulletins.at(-1)).toEqual({ semaine: '2026-W41', statut: 'complet' });
+    const configs = [];
+    depot.ecouterConfigVeille(c => configs.push(c));
+    expect(configs[0]).toBeNull();
+    await db.doc('config/veille').set({ url_routine: 'https://exemple.test/routine' });
+    expect(configs.at(-1)).toEqual({ url_routine: 'https://exemple.test/routine' });
+  });
+});

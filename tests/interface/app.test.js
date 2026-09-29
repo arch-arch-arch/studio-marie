@@ -207,4 +207,31 @@ describe('demarrer', () => {
     await app.actions.creerFiche({ format: 'reel', date_heure: '2026-09-28T10:00:00.000Z' });
     expect([...racine.querySelectorAll('button')].some(b => b.textContent === 'Évaluer')).toBe(true);
   });
+
+  it('affiche le bulletin de la semaine dans l’onglet Bulletin', async () => {
+    const db = creerFausseBase();
+    const racine = document.createElement('div');
+    const app = await demarrer(racine, { use: async nom => (nom === 'db' ? db : null) }, { horloge });
+    await app.actions.importerProfil(JSON.stringify(fictif));
+    await db.doc('bulletins/2026-W40').set({ semaine: '2026-W40', genere_le: horloge(), statut: 'complet', sources_indisponibles: false, retrospective: { type: 'rappel', texte: 'Rappel.' }, tendances: [], ecartees: [], alertes: [], idees: [], hors_creneau: [], controle: [] });
+    await app.actions.changerVue('bulletin');
+    expect(racine.textContent).toContain('Semaine 2026-W40');
+  });
+
+  it('débloque l’onglet Bulletin (au lieu de rester sur « Chargement… ») quand l’écoute du bulletin échoue', async () => {
+    const reelle = creerFausseBase();
+    const db = {
+      ...reelle,
+      doc(chemin) {
+        if (chemin.startsWith('bulletins/')) {
+          return { ...reelle.doc(chemin), onSnapshot: (suivant, erreur) => { erreur({ code: 'revoked' }); return () => {}; } };
+        }
+        return reelle.doc(chemin);
+      },
+    };
+    const racine = document.createElement('div');
+    const app = await demarrer(racine, { use: async nom => (nom === 'db' ? db : null) }, { horloge });
+    await app.actions.importerProfil(JSON.stringify(fictif));
+    expect(app.etat.lire().bulletin).toBeNull();
+  });
 });

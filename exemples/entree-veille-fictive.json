@@ -1,0 +1,139 @@
+{
+  "sources_indisponibles": false,
+  "tendances": [
+    {
+      "titre": "Format \"nuit blanche express\" : montage de 3 lieux en une soirée",
+      "source": "https://exemple.test/tendance-nuit-blanche",
+      "date": "2026-09-30",
+      "pourquoi": "Beaucoup de comptes nocturnes reprennent ce montage rapide cette semaine, l'énergie colle au pilier nuit.",
+      "adaptation": "Filmer trois adresses fictives visitées dans la même soirée, cut sec entre chaque lieu, voix off ironique.",
+      "duree_vie": "1 à 2 semaines",
+      "son_a_verifier": true
+    },
+    {
+      "titre": "Carrousel \"typologie\" à la sociologue amatrice",
+      "source": "https://exemple.test/tendance-typologie",
+      "date": "2026-09-29",
+      "pourquoi": "Le format typologie humoristique tourne bien sur les comptes qui observent des comportements de groupe.",
+      "adaptation": "Décliner une typologie fictive des habitués d'un bar de quartier, un profil par slide, ton pince-sans-rire.",
+      "duree_vie": "3 semaines",
+      "son_a_verifier": false
+    },
+    {
+      "titre": "Story \"vote entre deux options\" avant la sortie",
+      "source": "https://exemple.test/tendance-vote-sortie",
+      "date": "2026-09-28",
+      "pourquoi": "Le sticker de vote avant une sortie du soir génère beaucoup d'interactions cette semaine.",
+      "adaptation": "Proposer un vote fictif entre deux bars imaginaires avant de révéler lequel a été choisi en story suivante.",
+      "duree_vie": "1 semaine",
+      "son_a_verifier": false
+    }
+  ],
+  "ecartees": [
+    {
+      "titre": "Défi chorégraphié repris de la pop du moment",
+      "raison": "Hors positionnement : le compte ne fait pas de danse, l'humour sec y perdrait sa cohérence."
+    }
+  ],
+  "alertes": [
+    {
+      "texte": "Plusieurs comptes du même créneau nocturne ajoutent un pilier \"vie de quartier\" plus posé, en complément du pilier nuit.",
+      "proposition_profil": "Envisager un pilier \"quartier\" pour les observations de jour, en complément du pilier nuit déjà en place."
+    }
+  ],
+  "idees": [
+    {
+      "format": "reel",
+      "pilier": "nuit",
+      "role_caption": "engagement",
+      "cta": false,
+      "format_valide": "",
+      "accroche": "Trois bars, une soirée, zéro logique.",
+      "caption": "Montage express d'une soirée fictive dans trois lieux différents, cut sec entre chaque adresse.",
+      "hashtags": ["nuit", "sortie", "club"],
+      "tendance": "Format \"nuit blanche express\" : montage de 3 lieux en une soirée",
+      "jugement": {
+        "notes": { "accroche": 8, "voix": 7, "mecanique": 7 },
+        "phrases": {
+          "accroche": "L'accroche installe le rythme rapide du montage dès la première seconde.",
+          "voix": "Le ton reste sec et ironique, cohérent avec le pilier nuit.",
+          "mecanique": "La structure en trois cuts tient la promesse de l'accroche jusqu'à la fin."
+        },
+        "conformite": { "etat": "vert", "causes": [] },
+        "captions": [
+          { "role": "engagement", "texte": "Lequel des trois lieux fictifs aurait eu ta préférence ce soir-là ?" },
+          { "role": "deadpan", "texte": "Aucun des trois n'existe, mais l'ambiance si." }
+        ],
+        "accroches": ["Trois bars, une soirée, zéro logique.", "La nuit n'a jamais eu de plan."],
+        "hashtags": ["nuit", "sortie", "club"],
+        "recommandations": [
+          "Garder les cuts sous une seconde pour conserver le rythme.",
+          "Ajouter un sous-titre discret sur le troisième lieu.",
+          "Terminer sur un plan fixe pour laisser respirer la chute."
+        ]
+      }
+    },
+    {
+      "format": "carrousel",
+      "pilier": "socio",
+      "role_caption": "cta",
+      "cta": true,
+      "format_valide": "",
+      "accroche": "La typologie du bar de quartier, en cinq profils.",
+      "caption": "Carrousel qui dresse le portrait de cinq habitués fictifs d'un bar de quartier imaginaire, un profil par slide.",
+      "hashtags": ["socio", "observation", "quartier"],
+      "tendance": "Carrousel \"typologie\" à la sociologue amatrice",
+      "jugement": {
+        "notes": { "accroche": 7, "voix": 8, "mecanique": 7 },
+        "phrases": {
+          "accroche": "L'accroche pose clairement le principe du carrousel dès le premier slide.",
+          "voix": "Le regard de sociologue amatrice est constant sur chaque profil décrit.",
+          "mecanique": "Chaque slide garde la même structure, ce qui facilite la lecture rapide."
+        },
+        "conformite": { "etat": "vert", "causes": [] },
+        "captions": [
+          { "role": "cta", "texte": "Dis-nous en commentaire quel profil tu reconnais le plus autour de toi." },
+          { "role": "deadpan", "texte": "Toute ressemblance avec un vrai bar de quartier est probablement fondée." }
+        ],
+        "accroches": ["La typologie du bar de quartier, en cinq profils.", "Cinq habitués, un seul comptoir."],
+        "hashtags": ["socio", "observation", "quartier"],
+        "recommandations": [
+          "Garder un visuel identique par slide pour renforcer l'effet de série.",
+          "Numéroter chaque profil pour guider la lecture.",
+          "Réserver la chute la plus drôle pour le dernier slide."
+        ]
+      }
+    },
+    {
+      "format": "story",
+      "pilier": "humour_sec",
+      "role_caption": "deadpan",
+      "cta": false,
+      "format_valide": "",
+      "accroche": "Deux bars imaginaires, un seul vote.",
+      "caption": "Sticker de vote fictif entre deux bars imaginaires avant de révéler le choix final en story suivante.",
+      "hashtags": ["humour", "vote", "soiree"],
+      "tendance": "Story \"vote entre deux options\" avant la sortie",
+      "jugement": {
+        "notes": { "accroche": 6, "voix": 7, "mecanique": 6 },
+        "phrases": {
+          "accroche": "L'accroche annonce simplement le principe du vote à venir.",
+          "voix": "Le ton reste pince-sans-rire, sans verser dans l'humour appuyé.",
+          "mecanique": "Le sticker de vote suffit à porter l'interaction attendue."
+        },
+        "conformite": { "etat": "vert", "causes": [] },
+        "captions": [
+          { "role": "engagement", "texte": "Option A ou option B, le vote est ouvert." },
+          { "role": "deadpan", "texte": "Les deux bars sont fictifs, ton indécision non." }
+        ],
+        "accroches": ["Deux bars imaginaires, un seul vote.", "Un vote sans conséquence réelle."],
+        "hashtags": ["humour", "vote", "soiree"],
+        "recommandations": [
+          "Révéler le résultat dans la story suivante pour garder l'engagement.",
+          "Utiliser un visuel neutre pour ne pas influencer le vote.",
+          "Ajouter une chute pince-sans-rire au moment de la révélation."
+        ]
+      }
+    }
+  ]
+}

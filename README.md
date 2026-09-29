@@ -34,6 +34,8 @@ docs/superpowers/specs/   Spécifications de conception
 docs/superpowers/plans/   Plans d'implémentation
 exemples/                 Profil fictif et fixtures (aucune donnée réelle)
 scripts/build.mjs         Assemble dist/studio.html
+scripts/veille.mjs        Outil de la veille (plage, doit-tourner, construire)
+src/claude/               Consignes et contrats pour Claude (évaluation, veille)
 src/logique/              Règles métier pures (testées)
 src/donnees/              Accès à la base du studio
 src/interface/            Vues et panneau de fiche
@@ -43,6 +45,10 @@ publisher/                Phase 2 : publication automatique
 
 Commandes : `npm test` (tests) et `npm run build` (page à publier).
 
+Veille : une routine cloud claude.ai lit `src/claude/veille.md` chaque dimanche à 20 h,
+heure du profil, et écrit dans la base du studio. L'adresse de la routine est
+enregistrée dans `config/veille`, dans la base, et n'est jamais versionnée.
+
 ## Statut
 
 - [x] Choix de l'approche (hybride, puis automatique)
@@ -51,7 +57,7 @@ Commandes : `npm test` (tests) et `npm run build` (page à publier).
 - [x] Spec écrite et validée
 - [x] Plan 1 : fondations et calendrier (studio de test publié)
 - [x] Plan 2 : évaluation par Claude et studio réel
-- [ ] Plan 3 : veille hebdo
+- [x] Plan 3 : veille hebdo (routine hebdomadaire programmée)
 - [ ] Plan 4 : relevés de stats et tableau de bord
 
 > ⚠️ Dépôt **privé** : ne jamais y commiter de tokens, de mots de passe ni de médias.
