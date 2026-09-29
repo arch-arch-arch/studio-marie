@@ -1,7 +1,7 @@
 import { RELEVES, CIBLES, LIBELLES_CIBLES, tauxAbonnesParVue, etatReleves } from './indicateurs.js';
 import { ajouterJours, cleSemaineIso } from './dates.js';
 
-export const RAPPEL_RETROSPECTIVE = 'Aucun relevé de statistiques pour la semaine écoulée : saisis-les pour obtenir la rétrospective.';
+export const RAPPEL_RETROSPECTIVE = 'Aucun relevé de statistiques sur les 2 dernières semaines : saisis-les pour obtenir la rétrospective.';
 const moyenne = xs => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
 const parDate = (a, b) => (a.date_publication < b.date_publication ? -1 : a.date_publication > b.date_publication ? 1 : 0);
 
@@ -35,10 +35,11 @@ export function classerContenus(stats, n = 3) {
   return { meilleurs, pires };
 }
 
-export function ecartsCibles({ stats, relevesCompte, cibles, fuseau }) {
+export function ecartsCibles({ stats, relevesCompte, cibles, fuseau, depuis = null }) {
   if (!cibles || typeof cibles !== 'object') return [];
   const ref = relevesParFiche(stats);
-  const derniere = croissancesNettes(relevesCompte, fuseau).at(-1);
+  const semaines = croissancesNettes(relevesCompte, fuseau);
+  const derniere = [...semaines].reverse().find(s => depuis == null || s.debut >= depuis);
   const mesures = {
     taux_abonnes_par_vue: moyenne(ref.filter(s => s.format === 'reel').map(tauxAbonnesParVue).filter(v => v != null)),
     partages_par_post: moyenne(ref.filter(s => s.format !== 'story').map(s => s.partages_envois).filter(v => v != null)),
@@ -88,7 +89,7 @@ export function retrospective({ stats, relevesCompte, fiches, cibles, fuseau, de
     texte: morceaux.join(' '),
     meilleur: resume(meilleurs[0]),
     pire: resume(pires[0]),
-    ecarts: ecartsCibles({ stats: periode, relevesCompte: comptes, cibles, fuseau }),
+    ecarts: ecartsCibles({ stats: periode, relevesCompte: comptes, cibles, fuseau, depuis }),
     manquants,
   };
 }
