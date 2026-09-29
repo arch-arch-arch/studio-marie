@@ -121,6 +121,6 @@ export const nombreComparable = stats => relevesParFiche(stats).filter(s => taux
 export function resumeVolume(stats) {
   const n = relevesParFiche(stats).length;
   if (!n) return 'Aucun contenu relevé sur 12 semaines.';
-  const parts = resultatsParFormat(stats).map(f => `${f.nombre} ${PLURIELS_FORMAT[f.format][f.nombre > 1 ? 1 : 0]}`);
+  const parts = resultatsParFormat(stats).map(f => `${f.nombre} ${(PLURIELS_FORMAT[f.format] ?? [f.format, f.format])[f.nombre > 1 ? 1 : 0]}`);
   return `${n} contenu${n > 1 ? 's' : ''} relevé${n > 1 ? 's' : ''} sur 12 semaines (${parts.join(', ')}).`;
 }

@@ -220,7 +220,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .recommandations .pourquoi { color: var(--texte-2); }
 
 .volume { margin: 0; font-weight: 600; }
-.tableaux-resultats { display: grid; gap: 16px; }
+.tableau > * { min-width: 0; }
+.tableaux-resultats { display: grid; gap: 16px; min-width: 0; }
 .tableaux-resultats table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .tableaux-resultats th, .tableaux-resultats td { text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--trait); }
-.tableaux-resultats section { overflow-x: auto; }
+.tableaux-resultats section { overflow-x: auto; min-width: 0; }
