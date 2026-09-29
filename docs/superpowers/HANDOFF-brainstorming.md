@@ -150,21 +150,29 @@ Elles sont toutes détaillées dans le registre de chaque plan (`.superpowers/sd
   - `doit-tourner` : répond « non » seulement un dimanche entre 18:30 et 21:29 hors 20 h (heure locale) ; `--forcer` force l'exécution.
 - **Deux exceptions au processus**, une au plan 2 et une au plan 3 : une courte passe résiduelle après la relecture finale, pour ne pas mettre en service avec un risque de perte de données.
 
-### En cours au moment de cette mise à jour (Task 6 du plan 3)
-- Une routine cloud **ponctuelle**, « Veille studio de test (ponctuelle) », a été lancée le 2026-09-29 à 01:42 UTC sur le **studio de test**, avec `--forcer`, en branche `plan-3-veille`. C'est l'exécution à blanc. Il faut vérifier :
-  1. le compte rendu de la routine (`list_runs` puis `get_run_log`) et le bon fonctionnement de `WebSearch` dans le cloud ;
-  2. le bulletin de la semaine visée et 3 à 5 idées en `brouillon`, avec un score ;
-  3. qu'une **seconde** exécution ponctuelle (relance) ne crée pas de doublon, porte bien les `if_version` et que le lot est accepté.
+### Mise en service de la veille (Task 6 du plan 3, terminée le 2026-09-29)
+- **Essai à blanc sur le studio de test** : réussi, avec un bulletin 2026-W40 et 4 idées.
+  - WebSearch fonctionne dans le cloud.
+  - WebFetch est bloqué par le proxy réseau sur certains domaines. On s'en passe : les résultats de recherche suffisent.
+- **Relance** : réussie.
+  - Les 4 idées intactes ont été remplacées par 5 nouvelles, par des suppressions épinglées `if_version`.
+  - Le bulletin est passé en version 2. La fiche manuelle n'a pas été touchée.
+  - Aucun doublon, aucune collision de créneau.
+  - Une première tentative avait été coupée par la limite d'utilisation avant toute écriture : sans effet, le lot est atomique.
+- **Routine hebdomadaire du studio réel créée** :
+  - `cron 0 0,1 * * 1` UTC, modèle Sonnet, outils prévus par le plan ;
+  - premier passage le dimanche 4 octobre 2026 à 20 h, heure locale ;
+  - `doit-tourner` écarte le créneau hors 20 h.
+- **`config/veille`** (`url_routine`) est écrit dans les deux studios. La routine ponctuelle de test reste désactivée : on la relance à la main, depuis le lien.
 
 ### Prochaine étape
-1. Terminer la vérification à blanc ci-dessus. S'il y a un problème : correction en TDD, push, nouvel essai.
-2. Créer la routine hebdomadaire du **studio réel**.
-   - `cron` : les deux heures UTC qui encadrent le dimanche 20 h du fuseau du profil réel. Pour un fuseau UTC−4 ou −5, c'est `0 0,1 * * 1`.
-   - Outils : Bash, Read, Write, Glob, Grep, ToolSearch, ArtifactData, WebSearch, WebFetch.
-   - Prompt : « Lis `src/claude/veille.md` et applique-le exactement. STUDIO = <URL réelle> », précédé de la consigne de passer sur `plan-3-veille` tant que la branche n'est pas fusionnée.
-   - Écrire ensuite `config/veille` (`url_routine`) dans les deux studios.
-3. Cocher le plan 3 dans le README, ouvrir la PR `plan-3-veille`, et faire fusionner les PR 2 puis 3.
-4. Plan 4 : statistiques et tableau de bord, qui alimentera aussi la rétrospective du bulletin.
+1. **Jean** : vérification à l'écran des deux studios.
+   - Onglet Bulletin, idées dans le calendrier, bouton « Relancer la veille ».
+   - Partager le studio réel avec la créatrice, en Éditrice.
+2. **Après le 4 octobre** : lire le compte rendu de la première exécution réelle (`list_runs` sur la routine du studio réel).
+3. **Fusion** : ouvrir la PR `plan-3-veille`, puis fusionner les PR 2 et 3 dans l'ordre.
+4. **Après la fusion** : retirer du prompt de la routine la ligne « Passe sur la branche `plan-3-veille` ».
+5. **Plan 4** : statistiques et tableau de bord, qui alimentera aussi la rétrospective du bulletin.
 
 ## Contraintes
 
