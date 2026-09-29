@@ -69,7 +69,7 @@ export async function demarrer(racine, claude, { horloge = () => new Date().toIS
         cleBulletinCourante = cle;
         arreterBulletin?.();
         etat.modifier({ bulletin: undefined });
-        arreterBulletin = depot.ecouterBulletin(cle, bulletin => etat.modifier({ bulletin }), err => etat.modifier({ erreur: messageErreurBase(err) }));
+        arreterBulletin = depot.ecouterBulletin(cle, bulletin => etat.modifier({ bulletin }), err => etat.modifier({ erreur: messageErreurBase(err), bulletin: null }));
       }
     }
     rendre(etat.lire());

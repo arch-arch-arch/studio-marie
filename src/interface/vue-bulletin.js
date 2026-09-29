@@ -3,7 +3,7 @@ import { LIBELLES_FORMAT } from '../logique/fiche.js';
 import { heureLocale, libelleJour } from '../logique/dates.js';
 import { bandeau } from './carte.js';
 
-const lienRelance = config => (config?.url_routine
+const lienRelance = config => (config?.url_routine?.startsWith('https://')
   ? h('a', { href: config.url_routine, target: '_blank', rel: 'noopener', class: 'bouton-secondaire' }, 'Relancer la veille')
   : h('p', { class: 'aide' }, 'La veille n’est pas encore configurée.'));
 
@@ -25,8 +25,8 @@ export function vueBulletin({ profil, fiches, bulletin, configVeille }, actions)
     bulletin.sources_indisponibles ? h('p', { class: 'bulletin-partiel', role: 'status' }, 'Sources indisponibles : bulletin partiel.') : null,
     h('section', {}, h('h3', {}, 'Rétrospective'), h('p', {}, bulletin.retrospective?.texte ?? '')),
     h('section', {}, h('h3', {}, 'Tendances'),
-      bulletin.tendances.length
-        ? h('ul', { class: 'tendances' }, bulletin.tendances.map(t => h('li', { class: 'tendance' },
+      (bulletin.tendances ?? []).length
+        ? h('ul', { class: 'tendances' }, (bulletin.tendances ?? []).map(t => h('li', { class: 'tendance' },
           h('strong', {}, t.titre), t.son_a_verifier ? h('span', { class: 'etiquette' }, 'Son à vérifier dans l’app') : null,
           h('p', {}, `Pourquoi : ${t.pourquoi}`), h('p', {}, `Adaptation : ${t.adaptation}`),
           h('p', { class: 'aide' }, 'Source : ', source(t.source), ` · ${t.date} · durée de vie : ${t.duree_vie}`))))
@@ -40,7 +40,7 @@ export function vueBulletin({ profil, fiches, bulletin, configVeille }, actions)
         a.proposition_profil ? h('p', { class: 'aide' }, `Proposition de mise à jour du profil : ${a.proposition_profil}`) : null))))
       : null,
     h('section', {}, h('h3', {}, 'Idées déposées'),
-      h('ul', { class: 'idees' }, bulletin.idees.map(id => {
+      h('ul', { class: 'idees' }, (bulletin.idees ?? []).map(id => {
         const f = parId.get(id);
         if (!f) return h('li', { class: 'aide' }, 'Idée supprimée ou hors de cette semaine.');
         return h('li', { class: 'idee' },

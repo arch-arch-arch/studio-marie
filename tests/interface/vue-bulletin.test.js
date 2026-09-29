@@ -45,4 +45,17 @@ describe('vueBulletin', () => {
   it('pendant le chargement', () => {
     expect(vueBulletin(etat({ bulletin: undefined }), actions()).textContent).toContain('Chargement du bulletin…');
   });
+  it('un bulletin mal formé, sans tendances ni idées, s’affiche sans erreur', () => {
+    const b = bulletin();
+    delete b.tendances;
+    delete b.idees;
+    expect(() => vueBulletin(etat({ bulletin: b }), actions())).not.toThrow();
+    const el = vueBulletin(etat({ bulletin: b }), actions());
+    expect(el.textContent).toContain('Aucune tendance retenue cette semaine.');
+  });
+  it('n’affiche pas de lien de relance pour une url_routine qui n’est pas en https', () => {
+    const el = vueBulletin(etat({ bulletin: null, configVeille: { url_routine: 'javascript:alert(1)' } }), actions());
+    expect(el.querySelector('a')).toBeNull();
+    expect(el.textContent).toContain('La veille n’est pas encore configurée.');
+  });
 });

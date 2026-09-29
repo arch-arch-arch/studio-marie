@@ -163,7 +163,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .bilan-ok { --etat: var(--vert); } .bilan-ko { --etat: var(--rouge); }
 
 /* Bulletin */
-.bulletin { display: grid; gap: 16px; max-width: 760px; }
+.bulletin { display: grid; gap: 16px; max-width: 760px; overflow-wrap: anywhere; }
 .bulletin-tete { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 16px; }
 .bulletin-tete h2 { margin: 0; font-size: 18px; }
 .bulletin h3 { margin: 0 0 6px; font-size: 15px; }

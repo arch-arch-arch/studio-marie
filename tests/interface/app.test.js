@@ -217,4 +217,21 @@ describe('demarrer', () => {
     await app.actions.changerVue('bulletin');
     expect(racine.textContent).toContain('Semaine 2026-W40');
   });
+
+  it('débloque l’onglet Bulletin (au lieu de rester sur « Chargement… ») quand l’écoute du bulletin échoue', async () => {
+    const reelle = creerFausseBase();
+    const db = {
+      ...reelle,
+      doc(chemin) {
+        if (chemin.startsWith('bulletins/')) {
+          return { ...reelle.doc(chemin), onSnapshot: (suivant, erreur) => { erreur({ code: 'revoked' }); return () => {}; } };
+        }
+        return reelle.doc(chemin);
+      },
+    };
+    const racine = document.createElement('div');
+    const app = await demarrer(racine, { use: async nom => (nom === 'db' ? db : null) }, { horloge });
+    await app.actions.importerProfil(JSON.stringify(fictif));
+    expect(app.etat.lire().bulletin).toBeNull();
+  });
 });
