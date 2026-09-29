@@ -44,7 +44,10 @@ describe('plage', () => {
   it('donne la semaine suivante', () => {
     const r = executer(['plage', '--profil', 'p.json', '--maintenant', '2026-10-05T00:00:00.000Z'], deps({ 'p.json': NEW_YORK }));
     expect(r.code).toBe(0);
-    expect(JSON.parse(r.sortie)).toEqual({ semaine: '2026-W41', debut: '2026-10-05T04:00:00.000Z', fin: '2026-10-12T04:00:00.000Z' });
+    expect(JSON.parse(r.sortie)).toEqual({
+      semaine: '2026-W41', debut: '2026-10-05T04:00:00.000Z', fin: '2026-10-12T04:00:00.000Z',
+      lecture_debut: '2026-09-21T04:00:00.000Z', lecture_fin: '2026-11-09T05:00:00.000Z',
+    });
   });
 });
 
@@ -78,6 +81,27 @@ describe('construire', () => {
     const ecritures = d.ecrits['s.json'].ecritures;
     const bulletinEcriture = ecritures.find(e => e.op === 'set' && e.collection === 'bulletins');
     expect(bulletinEcriture).toMatchObject({ if_version: 2 });
+  });
+  it('--versions pose les épingles sur un delete de fiche et le set du bulletin', () => {
+    const remplacable = { format: 'reel', date_heure: '2026-10-06T16:00:00.000Z', statut: 'brouillon', origine: { type: 'veille', bulletin: '2026-W41' }, modifiee_depuis_creation: false };
+    const d = deps({
+      'p.json': NEW_YORK, 'e.json': entree, 'f/r.json': remplacable,
+      'v.json': { 'fiches/r': 4, 'bulletins/2026-W41': 2 },
+    });
+    const r = executer(['construire', '--profil', 'p.json', '--fiches', 'f', '--entree', 'e.json', '--sortie', 's.json', '--versions', 'v.json'], d);
+    expect(r.code).toBe(0);
+    const ecritures = d.ecrits['s.json'].ecritures;
+    expect(ecritures.find(e => e.op === 'delete' && e.doc_id === 'r')).toMatchObject({ if_version: 4 });
+    expect(ecritures.find(e => e.op === 'set' && e.collection === 'bulletins')).toMatchObject({ if_version: 2 });
+  });
+  it('sans --versions et sans version dans les fichiers, aucune épingle n’est posée', () => {
+    const remplacable = { format: 'reel', date_heure: '2026-10-06T16:00:00.000Z', statut: 'brouillon', origine: { type: 'veille', bulletin: '2026-W41' }, modifiee_depuis_creation: false };
+    const d = deps({ 'p.json': NEW_YORK, 'e.json': entree, 'f/r.json': remplacable });
+    const r = executer(['construire', '--profil', 'p.json', '--fiches', 'f', '--entree', 'e.json', '--sortie', 's.json'], d);
+    expect(r.code).toBe(0);
+    const ecritures = d.ecrits['s.json'].ecritures;
+    expect(ecritures.find(e => e.op === 'delete' && e.doc_id === 'r')).not.toHaveProperty('if_version');
+    expect(ecritures.find(e => e.op === 'set' && e.collection === 'bulletins')).not.toHaveProperty('if_version');
   });
   it('échoue sans rien écrire si l’entrée est invalide', () => {
     const d = deps({ 'p.json': NEW_YORK, 'e.json': { ...entree, idees: [] } });

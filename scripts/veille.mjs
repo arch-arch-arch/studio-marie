@@ -6,7 +6,7 @@ import { ajouterJours, debutSemaine, cleSemaineIso, partiesLocales } from '../sr
 import { nouvelId } from '../src/logique/fiche.js';
 import { fuseauValide } from '../src/logique/profil.js';
 
-const USAGE = 'Usage : veille.mjs plage|doit-tourner|construire --profil <fichier> [--fiches <dossier> --entree <fichier> --sortie <fichier> --bulletin <fichier>] [--maintenant <iso>] [--forcer]';
+const USAGE = 'Usage : veille.mjs plage|doit-tourner|construire --profil <fichier> [--fiches <dossier> --entree <fichier> --sortie <fichier> --bulletin <fichier> --versions <fichier>] [--maintenant <iso>] [--forcer]';
 const FENETRE_DEBUT = 18 * 60 + 30;
 const FENETRE_FIN = 21 * 60 + 29;
 
@@ -35,8 +35,11 @@ export function executer(argv, { lireJson, listerJson, ecrireJson, maintenant })
     const fz = profil?.regles_studio?.fuseau;
     if (!fuseauValide(fz)) return { code: 1, sortie: 'Fuseau du profil absent ou invalide.' };
     if (commande === 'plage') {
-      const debut = debutSemaine(ajouterJours(quand, 7, fz), fz);
-      return { code: 0, sortie: JSON.stringify({ semaine: cleSemaineIso(debut, fz), debut, fin: ajouterJours(debut, 7, fz) }) };
+      const debut = debutSemaine(ajouterJours(quand, 1, fz), fz);
+      const fin = ajouterJours(debut, 7, fz);
+      const lecture_debut = ajouterJours(debut, -14, fz);
+      const lecture_fin = ajouterJours(fin, 28, fz);
+      return { code: 0, sortie: JSON.stringify({ semaine: cleSemaineIso(debut, fz), debut, fin, lecture_debut, lecture_fin }) };
     }
     if (commande === 'doit-tourner') {
       if (o.forcer) return { code: 0, sortie: 'oui' };
@@ -62,11 +65,18 @@ export function executer(argv, { lireJson, listerJson, ecrireJson, maintenant })
         if (e.code !== 'ENOENT') throw e;
       }
     }
+    const versionsFichier = o.versions ? (lireJson(o.versions) ?? {}) : {};
     const r = construireVeille({ profil, fiches, entree: lireJson(o.entree), maintenant: quand, idAleatoire: nouvelId });
     if (!r.ok) return { code: 1, sortie: r.erreurs.join('\n') };
     const ecritures = r.ecritures.map(e => {
-      if (e.op === 'delete' && e.collection === 'fiches' && versions.has(e.doc_id)) return { ...e, if_version: versions.get(e.doc_id) };
-      if (e.op === 'set' && e.collection === 'bulletins' && bulletinVersion != null) return { ...e, if_version: bulletinVersion };
+      if (e.op === 'delete' && e.collection === 'fiches') {
+        const v = versionsFichier[`fiches/${e.doc_id}`] ?? (versions.has(e.doc_id) ? versions.get(e.doc_id) : null);
+        return v != null ? { ...e, if_version: v } : e;
+      }
+      if (e.op === 'set' && e.collection === 'bulletins') {
+        const v = versionsFichier[`bulletins/${e.doc_id}`] ?? bulletinVersion;
+        return v != null ? { ...e, if_version: v } : e;
+      }
       return e;
     });
     const remplacees = ecritures.filter(e => e.op === 'delete').length;
