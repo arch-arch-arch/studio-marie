@@ -164,6 +164,8 @@ describe('construireDemande', () => {
     const { sections } = extraireProfilDetaille(gros);
     expect(sections).toContain('regles_studio');
     expect(sections).not.toContain('exemples_de_reference');
+    expect(sections).not.toContain('formats_de_contenu');
+    expect(sections).toContain('ton_et_voix');
   });
 });
 
