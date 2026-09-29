@@ -133,3 +133,15 @@ describe('relevés', () => {
     expect(recus.at(-1)).toEqual([{ id: '2026-W40', semaine: '2026-W40', debut: '2026-09-27T22:00:00.000Z', abonnes: 100 }]);
   });
 });
+
+describe('sauvegarde', () => {
+  it('lit une collection entière et écrit un document quelconque', async () => {
+    const db = creerFausseBase();
+    const depot = creerDepot(db);
+    await depot.ecrireDocument('bulletins', '2026-W40', { semaine: '2026-W40' });
+    await depot.ecrireDocument('profil', 'courant', { version: 3 });
+    expect(await depot.lireCollection('bulletins')).toEqual([{ id: '2026-W40', data: { semaine: '2026-W40' } }]);
+    expect(await depot.lireCollection('profil')).toEqual([{ id: 'courant', data: { version: 3 } }]);
+    expect(await depot.lireCollection('config')).toEqual([]);
+  });
+});
