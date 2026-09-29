@@ -62,6 +62,6 @@ function aFaire(semaine, actionsParId, fz, actions) {
       ? h('ul', {}, lignes.map(({ f, a }) => h('li', { class: a.retard ? 'action-retard' : null },
         h('span', {}, `${LIBELLES_FORMAT[f.format]} · ${libelleJour(f.date_heure, fz)} ${heureLocale(f.date_heure, fz)} · ${f.accroche || 'Sans accroche'}`),
         h('strong', {}, a.libelle),
-        h('button', { type: 'button', class: 'bouton-lien', onclick: () => actions.ouvrirFiche(f.id) }, 'Ouvrir'))))
+        h('button', { type: 'button', class: 'bouton-lien', 'aria-label': `Ouvrir « ${f.accroche || 'Sans accroche'} »`, onclick: () => actions.ouvrirFiche(f.id) }, 'Ouvrir'))))
       : h('p', { class: 'aide' }, 'Rien à faire cette semaine.'));
 }

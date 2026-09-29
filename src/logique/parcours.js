@@ -17,14 +17,16 @@ export function prochaineAction(fiche, releves, maintenant, fuseau) {
     if (!fiche.score) return action('evaluer', 'Évaluer', '', passee);
     if (aReevaluer(fiche)) return action('reevaluer', 'Réévaluer', '', passee);
     if (fiche.score.conformite?.etat === 'rouge') return action('corriger', 'Corriger la conformité', (fiche.score.conformite.causes ?? []).join(' ; '), passee);
+    if (fiche.score.conformite?.etat !== 'vert' && fiche.score.conformite?.etat !== 'orange') return action('reevaluer', 'Réévaluer', '', passee);
     return action('valider', 'Valider la fiche', '', passee);
   }
   if (fiche.statut === 'valide') return action('programmer', 'Confirmer la programmation', '', passee);
   if (fiche.statut === 'programme') {
-    if (!fiche.programme_pour || fiche.programme_pour !== fiche.date_heure) {
-      return action('reconfirmer', 'Reconfirmer la programmation', 'La date a changé depuis la confirmation.', passee);
-    }
     if (passee) return action('publier', 'Confirmer la publication', '', Date.parse(maintenant) - Date.parse(fiche.date_heure) > RETARD_PUBLICATION_MS);
+    if (!fiche.programme_pour || fiche.programme_pour !== fiche.date_heure) {
+      const detail = fiche.programme_pour ? 'La date a changé depuis la confirmation.' : 'Confirme la date programmée dans Meta Business Suite.';
+      return action('reconfirmer', 'Reconfirmer la programmation', detail, passee);
+    }
     return action('attendre', `Programmé pour le ${quand(fiche.date_heure, fuseau)}`);
   }
   const e = etatReleves(fiche, releves, maintenant);

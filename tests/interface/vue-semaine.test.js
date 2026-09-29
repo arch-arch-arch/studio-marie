@@ -107,7 +107,9 @@ describe('parcours dans la semaine', () => {
     const lignes = [...el.querySelectorAll('.a-faire li')];
     expect(lignes.map(l => l.textContent.includes('En retard'))).toEqual([true, false]);
     expect(lignes[0].classList.contains('action-retard')).toBe(true);
-    [...lignes[0].querySelectorAll('button')].find(b => b.textContent === 'Ouvrir').click();
+    const bouton = [...lignes[0].querySelectorAll('button')].find(b => b.textContent === 'Ouvrir');
+    expect(bouton.getAttribute('aria-label')).toBe('Ouvrir « En retard »');
+    bouton.click();
     expect(actions.ouvrirFiche).toHaveBeenCalledWith('a');
   });
 

@@ -48,6 +48,7 @@ Règles :
 - **Revenir à un statut antérieur** efface les confirmations devenues fausses :
   - vers `valide`, `brouillon` ou `idee` : `programme_pour = null` et `publie_le = null` ;
   - vers `programme` : `publie_le = null`.
+  - Dans l'interface, on ne revient pas directement de Publié à Programmé : on repasse par Validé puis on reconfirme la programmation.
 - **Déplacer une fiche programmée** (date modifiée, glisser-déposer) ne change ni son statut ni `programme_pour`. L'écart entre `date_heure` et `programme_pour` demande une reconfirmation (§4).
 - **Date de départ des relevés** : `publie_le ?? date_heure`, notée `datePublication(fiche)`. Elle est utilisée par :
   - les échéances à 48 h et à 7 jours (`etatReleves`) ;
@@ -86,10 +87,11 @@ Logique pure : `prochaineAction(fiche, releves, maintenant, fuseau)` dans `src/l
 | idée ou brouillon | pas de score | `evaluer` | « Évaluer » |
 | idée ou brouillon | fiche changée depuis l'évaluation (`aReevaluer`) | `reevaluer` | « Réévaluer » |
 | idée ou brouillon | conformité rouge | `corriger` | « Corriger la conformité » (`detail` : les causes) |
+| idée ou brouillon | conformité ni verte ni orange | `reevaluer` | « Réévaluer » |
 | idée ou brouillon | sinon | `valider` | « Valider la fiche » |
 | validé | toujours | `programmer` | « Confirmer la programmation » |
-| programmé | `programme_pour` absent ou ≠ `date_heure` | `reconfirmer` | « Reconfirmer la programmation » (`detail` : « La date a changé depuis la confirmation. ») |
 | programmé | maintenant ≥ `date_heure` | `publier` | « Confirmer la publication » |
+| programmé | `programme_pour` absent ou ≠ `date_heure` | `reconfirmer` | « Reconfirmer la programmation » (`detail` : « La date a changé depuis la confirmation. » si `programme_pour` existe, sinon « Confirme la date programmée dans Meta Business Suite. ») |
 | programmé | sinon | `attendre` | « Programmé pour le <date locale> » |
 | publié | un relevé dû n'est pas saisi | `stats` | « Saisir les stats à 48 h » / « … à 7 jours » / « … à 48 h et à 7 jours » |
 | publié | le relevé à 7 jours n'est pas encore dû | `attendre` | « Prochain relevé le <date locale> » |

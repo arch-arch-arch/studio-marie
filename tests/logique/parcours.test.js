@@ -33,6 +33,9 @@ describe('prochaineAction : préparation', () => {
     expect(action(evaluee())).toMatchObject({ cle: 'valider', libelle: 'Valider la fiche' });
     expect(action(evaluee({ statut: 'brouillon' })).cle).toBe('valider');
   });
+  it('demande de réévaluer si la conformité n’est ni verte ni orange', () => {
+    expect(action(evaluee({}, { etat: undefined, causes: [] })).cle).toBe('reevaluer');
+  });
   it('signale le retard quand la date prévue est passée', () => {
     expect(action(base({ date_heure: '2026-09-28T10:00:00.000Z' })).retard).toBe(true);
   });
@@ -43,8 +46,11 @@ describe('prochaineAction : programmation et publication', () => {
     expect(action(evaluee({ statut: 'valide' }))).toEqual({ cle: 'programmer', libelle: 'Confirmer la programmation', detail: '', retard: false });
     expect(action(evaluee({ statut: 'valide', date_heure: '2026-09-28T10:00:00.000Z' })).retard).toBe(true);
   });
-  it('une programmation sans date confirmée ou décalée demande une reconfirmation', () => {
-    expect(action(evaluee({ statut: 'programme' })).cle).toBe('reconfirmer');
+  it('une programmation sans date confirmée demande une reconfirmation, avec le détail adapté', () => {
+    expect(action(evaluee({ statut: 'programme' })))
+      .toEqual({ cle: 'reconfirmer', libelle: 'Reconfirmer la programmation', detail: 'Confirme la date programmée dans Meta Business Suite.', retard: false });
+  });
+  it('une programmation décalée demande une reconfirmation', () => {
     expect(action(evaluee({ statut: 'programme', programme_pour: '2026-09-30T10:00:00.000Z' })))
       .toEqual({ cle: 'reconfirmer', libelle: 'Reconfirmer la programmation', detail: 'La date a changé depuis la confirmation.', retard: false });
   });
@@ -57,6 +63,13 @@ describe('prochaineAction : programmation et publication', () => {
     const f = evaluee({ statut: 'programme', programme_pour: D, date_heure: D });
     expect(action(f, [], '2026-10-01T12:00:00.000Z')).toEqual({ cle: 'publier', libelle: 'Confirmer la publication', detail: '', retard: false });
     expect(action(f, [], '2026-10-02T10:00:01.000Z').retard).toBe(true);
+  });
+  it('une date passée l’emporte sur la reconfirmation, même sans programme_pour ou avec une date décalée', () => {
+    expect(action(evaluee({ statut: 'programme', date_heure: '2026-09-29T09:00:00.000Z' })))
+      .toEqual({ cle: 'publier', libelle: 'Confirmer la publication', detail: '', retard: false });
+    expect(action(evaluee({ statut: 'programme', date_heure: '2026-09-28T04:00:00.000Z' })).retard).toBe(true);
+    expect(action(evaluee({ statut: 'programme', programme_pour: '2026-09-30T10:00:00.000Z', date_heure: '2026-09-29T09:00:00.000Z' })).cle)
+      .toBe('publier');
   });
 });
 
