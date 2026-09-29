@@ -1,6 +1,6 @@
 import { RELEVES, CIBLES, LIBELLES_CIBLES, tauxAbonnesParVue, etatReleves } from './indicateurs.js';
 import { ajouterJours, cleSemaineIso } from './dates.js';
-import { datePublication } from './fiche.js';
+import { datePublication, FORMATS } from './fiche.js';
 
 export const RAPPEL_RETROSPECTIVE = 'Aucun relevé de statistiques sur les 2 dernières semaines : saisis-les pour obtenir la rétrospective.';
 const moyenne = xs => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
@@ -93,4 +93,34 @@ export function retrospective({ stats, relevesCompte, fiches, cibles, fuseau, de
     ecarts: ecartsCibles({ stats: periode, relevesCompte: comptes, cibles, fuseau, depuis }),
     manquants,
   };
+}
+
+export const SEUIL_COMPARAISON = 5;
+const PLURIELS_FORMAT = { reel: ['Reel', 'Reels'], carrousel: ['carrousel', 'carrousels'], story: ['story', 'stories'], post: ['post', 'posts'] };
+
+export function resultatsParContenu(stats) {
+  return relevesParFiche(stats).slice().reverse().map(s => ({
+    fiche: s.fiche, date: s.date_publication, format: s.format, accroche: s.accroche ?? '', vues: s.vues,
+    nouveaux_abonnes: s.nouveaux_abonnes, taux: tauxAbonnesParVue(s), partages_envois: s.partages_envois, releve: s.releve,
+  }));
+}
+
+export function resultatsParFormat(stats) {
+  const lignes = relevesParFiche(stats);
+  return FORMATS.map(format => {
+    const duFormat = lignes.filter(s => s.format === format);
+    if (!duFormat.length) return null;
+    const taux = duFormat.map(tauxAbonnesParVue).filter(v => v != null);
+    const partages = duFormat.map(s => s.partages_envois).filter(v => v != null);
+    return { format, nombre: duFormat.length, taux_moyen: moyenne(taux), partages_moyens: moyenne(partages) };
+  }).filter(Boolean);
+}
+
+export const nombreComparable = stats => relevesParFiche(stats).filter(s => tauxAbonnesParVue(s) != null).length;
+
+export function resumeVolume(stats) {
+  const n = relevesParFiche(stats).length;
+  if (!n) return 'Aucun contenu relevé sur 12 semaines.';
+  const parts = resultatsParFormat(stats).map(f => `${f.nombre} ${PLURIELS_FORMAT[f.format][f.nombre > 1 ? 1 : 0]}`);
+  return `${n} contenu${n > 1 ? 's' : ''} relevé${n > 1 ? 's' : ''} sur 12 semaines (${parts.join(', ')}).`;
 }

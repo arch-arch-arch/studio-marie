@@ -13,11 +13,12 @@ describe('vueTableau', () => {
     expect(vueTableau(etat({ stats: undefined }), actions()).textContent).toContain('Chargement du tableau de bord…');
   });
   it('affiche les six graphiques et le classement', () => {
-    const v = vueTableau(etat(), actions());
+    const v = vueTableau(etat({ stats: ['a', 'b', 'c', 'd', 'e'].map((id, i) => stat(id, { nouveaux_abonnes: i + 1 })) }), actions());
     expect([...v.querySelectorAll('figcaption')].map(f => f.textContent)).toEqual([
       'Taux d’abonnés par vue des Reels', 'Partages et envois par post', 'Croissance nette hebdomadaire',
       'Clics sur la porte', 'Meilleurs et pires contenus', 'Score prévu / performance réelle',
     ]);
+    expect(v.querySelector('.graphique ol')).not.toBeNull();
     expect(v.textContent).toContain('Accroche a');
     expect(v.textContent).not.toContain('null');
   });
@@ -54,5 +55,34 @@ describe('vueTableau', () => {
     v.mettreAJour(etat({ stats: nouveauxStats }));
     expect(v.querySelector('input[name="abonnes"]').value).toBe('999');
     expect(v.textContent).toContain('Accroche c');
+  });
+});
+
+describe('faible volume', () => {
+  const cinq = ['a', 'b', 'c', 'd', 'e'].map((id, i) => stat(id, { nouveaux_abonnes: i + 1 }));
+  it('affiche le volume, les tableaux, et masque les comparaisons sous le seuil', () => {
+    const v = vueTableau(etat({ stats: cinq.slice(0, 4) }), actions());
+    expect(v.querySelector('.volume').textContent).toBe('4 contenus relevés sur 12 semaines (4 Reels).');
+    expect(v.querySelectorAll('.resultats-contenus tbody tr')).toHaveLength(4);
+    expect(v.querySelectorAll('.resultats-formats tbody tr')).toHaveLength(1);
+    expect(v.textContent).toContain('Il faut au moins 5 contenus relevés pour comparer (actuellement 4).');
+    expect(v.querySelector('.graphique .point[cx]') ?? null).not.toBeNull();
+    expect(v.textContent).not.toContain('NaN');
+  });
+  it('affiche les comparaisons à partir de 5 contenus', () => {
+    const v = vueTableau(etat({ stats: cinq }), actions());
+    expect(v.textContent).not.toContain('Il faut au moins 5 contenus relevés');
+    expect(v.textContent).toContain('Meilleurs');
+  });
+  it('place les tableaux avant les graphiques', () => {
+    const v = vueTableau(etat({ stats: cinq }), actions());
+    const tout = [...v.querySelectorAll('.resultats-contenus, .graphiques')];
+    expect(tout[0].classList.contains('resultats-contenus')).toBe(true);
+  });
+  it('met à jour le volume et les tableaux sans reconstruire la vue', () => {
+    const v = vueTableau(etat({ stats: [] }), actions());
+    v.mettreAJour({ ...etat({ stats: cinq }) });
+    expect(v.querySelector('.volume').textContent).toBe('5 contenus relevés sur 12 semaines (5 Reels).');
+    expect(v.querySelectorAll('.resultats-contenus tbody tr')).toHaveLength(5);
   });
 });
