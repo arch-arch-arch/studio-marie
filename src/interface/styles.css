@@ -214,3 +214,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .a-faire ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
 .a-faire li { display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; }
 .a-faire li.action-retard strong { color: var(--orange); }
+.examen { font-size: 13px; color: var(--texte-2); }
+.examen summary { cursor: pointer; }
+.examen ul { margin: 6px 0 0; padding-left: 18px; }
+.recommandations .pourquoi { color: var(--texte-2); }
