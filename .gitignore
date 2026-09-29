@@ -20,6 +20,7 @@ media/
 # Données réelles de la créatrice (ne jamais versionner)
 *profil_marque*.json
 data/
+veille-tmp/
 
 # Espace de travail des sous-agents (non versionné)
 .superpowers/
