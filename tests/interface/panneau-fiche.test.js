@@ -281,6 +281,7 @@ describe('section Statistiques', () => {
   it('n’apparaît pas avant la publication', () => {
     const p = panneauFiche(fiche(), fictif, actionsStats(), { assets: true });
     expect(p.querySelector('.stats-fiche')).toBeNull();
+    expect(p.textContent).not.toContain('null');
   });
 
   it('signale le relevé à 48 h en retard', async () => {
@@ -302,6 +303,7 @@ describe('section Statistiques', () => {
     await vi.waitFor(() => expect(p.querySelector('.stats-fiche').textContent).toContain('0,4 % d’abonnés par vue'));
     expect(actions.enregistrerReleveContenu).toHaveBeenCalledWith('f1', '48h', expect.objectContaining({ vues: '1000', nouveaux_abonnes: '4', partages_envois: '9' }));
     expect(p.querySelector('.etiquette-retard')).toBeNull();
+    expect(p.textContent).not.toContain('null');
   });
 
   it('affiche les erreurs de saisie', async () => {

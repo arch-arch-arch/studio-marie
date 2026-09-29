@@ -260,10 +260,11 @@ export function panneauFiche(fiche, profil, actions, capacites) {
 
     function dessiner(releves) {
       const etats = etatReleves(brouillon, releves, actions.maintenant());
-      zone.replaceChildren(
+      zone.replaceChildren(...[
         h('h3', {}, 'Statistiques'),
         etats.enRetard ? h('span', { class: 'etiquette etiquette-retard' }, 'Stats à saisir') : null,
-        ...RELEVES.map(r => formulaire(r, releves.find(s => s.releve === r), etats[r], releves)));
+        ...RELEVES.map(r => formulaire(r, releves.find(s => s.releve === r), etats[r], releves)),
+      ].filter(Boolean));
     }
 
     actions.lireRelevesFiche(id).then(res => {
@@ -280,7 +281,7 @@ export function panneauFiche(fiche, profil, actions, capacites) {
       h('header', { class: 'panneau-tete' },
         h('h2', {}, LIBELLES_FORMAT[brouillon.format]),
         h('button', { type: 'button', class: 'fermer', 'aria-label': 'Fermer la fiche', onclick: () => actions.fermerPanneau() }, '×')),
-      elementStatut, sectionType(), sectionDate(), sectionVisuel(), sectionTexte(), elementScore, sectionStats(), message, sectionSuppression());
+      ...[elementStatut, sectionType(), sectionDate(), sectionVisuel(), sectionTexte(), elementScore, sectionStats(), message, sectionSuppression()].filter(Boolean));
   }
 
   construire();
