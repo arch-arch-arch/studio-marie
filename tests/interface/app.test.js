@@ -314,4 +314,13 @@ describe('demarrer', () => {
     expect(racine.querySelectorAll('figcaption').length).toBe(6);
     expect(racine.querySelector('form.releve-compte')).not.toBeNull();
   });
+
+  it('passe downloads au contrôleur quand la capacité est disponible', async () => {
+    const db = creerFausseBase();
+    const save = vi.fn(async () => ({ status: 'saved' }));
+    const racine = document.createElement('div');
+    const app = await demarrer(racine, { use: async nom => (nom === 'db' ? db : nom === 'downloads' ? { save } : null) }, { horloge });
+    expect(await app.actions.exporterDonnees()).toEqual({ ok: true, message: 'Export enregistré.' });
+    await vi.waitFor(() => expect(racine.querySelector('.sauvegarde button')?.textContent).toBe('Exporter les données'));
+  });
 });

@@ -225,3 +225,6 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .tableaux-resultats table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .tableaux-resultats th, .tableaux-resultats td { text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--trait); }
 .tableaux-resultats section { overflow-x: auto; min-width: 0; }
+
+.sauvegarde { display: grid; gap: 10px; }
+.apercu-restauration { display: grid; gap: 8px; }

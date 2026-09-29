@@ -28,6 +28,8 @@ export function vueProfil({ profil, reference = [], resultatReference = null, ve
     enfants.push(ref.element);
   }
 
+  enfants.push(sectionSauvegarde(actions, capacites));
+
   const racine = h('div', { class: 'profil' }, ...enfants);
   racine.mettreAJour = e => ref?.mettreAJour(e);
   return racine;
@@ -106,4 +108,51 @@ function resume(profil) {
       h('dt', {}, 'Créneaux'), h('dd', {}, r.creneaux.map(c => `${c.jours.map(j => jours[j]).join(' ')} ${c.debut}–${c.fin}`).join(' · ')),
       h('dt', {}, "Appels à l'action"), h('dd', {}, `au plus ${Math.round(r.cta_ratio_max * 100)} % du feed`),
       h('dt', {}, 'Stories vers la porte'), h('dd', {}, `${r.stories_porte.min} à ${r.stories_porte.max} par semaine`)));
+}
+
+function sectionSauvegarde(actions, capacites) {
+  const message = h('p', { class: 'aide', role: 'status' });
+  const erreurs = h('ul', { class: 'erreurs', 'aria-live': 'polite' });
+  const apercu = h('div', { class: 'apercu-restauration' });
+  const afficherErreurs = liste => erreurs.replaceChildren(...liste.map(m => h('li', {}, m)));
+
+  async function exporter() {
+    message.textContent = 'Préparation de l’export…';
+    const r = await actions.exporterDonnees();
+    message.textContent = r.ok ? r.message : r.raison;
+  }
+
+  async function restaurer(validation, sauvegarder) {
+    apercu.replaceChildren();
+    message.textContent = 'Restauration en cours…';
+    const r = await actions.restaurerDonnees(validation, { sauvegarder });
+    if (r.ok) { message.textContent = r.message; erreurs.replaceChildren(); return; }
+    message.textContent = '';
+    afficherErreurs(r.erreurs);
+  }
+
+  async function choisir(fichier) {
+    if (!fichier) return;
+    erreurs.replaceChildren();
+    apercu.replaceChildren();
+    message.textContent = '';
+    const r = await actions.analyserRestauration(await fichier.text());
+    if (!r.ok) { afficherErreurs(r.erreurs); return; }
+    apercu.replaceChildren(
+      h('p', {}, r.resume),
+      h('div', { class: 'evaluation-actions' },
+        capacites.downloads ? h('button', { type: 'button', class: 'bouton-principal', onclick: () => restaurer(r.validation, true) }, 'Sauvegarder l’état actuel puis restaurer') : null,
+        h('button', { type: 'button', class: 'bouton-secondaire', onclick: () => restaurer(r.validation, false) }, 'Restaurer sans sauvegarde'),
+        h('button', { type: 'button', class: 'bouton-lien', onclick: () => apercu.replaceChildren() }, 'Annuler')));
+  }
+
+  return h('section', { class: 'sauvegarde' },
+    h('h2', {}, 'Sauvegarde'),
+    h('p', { class: 'aide' }, 'L’export contient le profil, les fiches, les bulletins, les statistiques et le jeu de référence. Les visuels ne sont pas inclus : seuls leurs identifiants le sont.'),
+    capacites.downloads
+      ? h('button', { type: 'button', class: 'bouton-secondaire', onclick: exporter }, 'Exporter les données')
+      : h('p', { class: 'aide' }, 'L’export n’est pas disponible dans cette vue.'),
+    h('label', { class: 'champ' }, h('span', { class: 'champ-libelle' }, 'Restaurer depuis un export…'),
+      h('input', { type: 'file', accept: '.json,application/json', onchange: e => choisir(e.target.files?.[0]) })),
+    apercu, message, erreurs);
 }
