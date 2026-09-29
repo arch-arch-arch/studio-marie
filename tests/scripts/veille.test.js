@@ -56,6 +56,29 @@ describe('construire', () => {
     expect(d.ecrits['s.json'].ecritures.at(-1)).toMatchObject({ collection: 'bulletins', doc_id: '2026-W41' });
     expect(d.ecrits['s.json'].resume).toMatch(/^Bulletin 2026-W41 : \d idée\(s\), 0 remplacée\(s\)/);
   });
+  it('épingle la version des fiches remplacées et n’ajoute rien sans --bulletin', () => {
+    const remplacable = { id: 'r', version: 4, data: { format: 'reel', date_heure: '2026-10-06T16:00:00.000Z', statut: 'brouillon', origine: { type: 'veille', bulletin: '2026-W41' }, modifiee_depuis_creation: false } };
+    const d = deps({ 'p.json': { id: 'courant', data: NEW_YORK }, 'e.json': entree, 'f/r.json': remplacable });
+    const r = executer(['construire', '--profil', 'p.json', '--fiches', 'f', '--entree', 'e.json', '--sortie', 's.json'], d);
+    expect(r.code).toBe(0);
+    const ecritures = d.ecrits['s.json'].ecritures;
+    const suppression = ecritures.find(e => e.op === 'delete' && e.doc_id === 'r');
+    expect(suppression).toMatchObject({ if_version: 4 });
+    const bulletinEcriture = ecritures.find(e => e.op === 'set' && e.collection === 'bulletins');
+    expect(bulletinEcriture.if_version).toBeUndefined();
+  });
+  it('épingle la version du bulletin existant fourni via --bulletin', () => {
+    const d = deps({
+      'p.json': { id: 'courant', data: NEW_YORK }, 'e.json': entree,
+      'f/x.json': { id: 'x', data: { format: 'reel', date_heure: '2026-10-06T16:00:00.000Z', statut: 'valide', origine: { type: 'manuelle' } } },
+      'b.json': { id: '2026-W41', data: { semaine: '2026-W41' }, version: 2 },
+    });
+    const r = executer(['construire', '--profil', 'p.json', '--fiches', 'f', '--entree', 'e.json', '--sortie', 's.json', '--bulletin', 'b.json'], d);
+    expect(r.code).toBe(0);
+    const ecritures = d.ecrits['s.json'].ecritures;
+    const bulletinEcriture = ecritures.find(e => e.op === 'set' && e.collection === 'bulletins');
+    expect(bulletinEcriture).toMatchObject({ if_version: 2 });
+  });
   it('échoue sans rien écrire si l’entrée est invalide', () => {
     const d = deps({ 'p.json': NEW_YORK, 'e.json': { ...entree, idees: [] } });
     const r = executer(['construire', '--profil', 'p.json', '--fiches', 'f', '--entree', 'e.json', '--sortie', 's.json'], d);

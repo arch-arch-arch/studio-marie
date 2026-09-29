@@ -6,7 +6,7 @@ import { ajouterJours, debutSemaine, cleSemaineIso, partiesLocales } from '../sr
 import { nouvelId } from '../src/logique/fiche.js';
 import { fuseauValide } from '../src/logique/profil.js';
 
-const USAGE = 'Usage : veille.mjs plage|doit-tourner|construire --profil <fichier> [--fiches <dossier> --entree <fichier> --sortie <fichier>] [--maintenant <iso>] [--forcer]';
+const USAGE = 'Usage : veille.mjs plage|doit-tourner|construire --profil <fichier> [--fiches <dossier> --entree <fichier> --sortie <fichier> --bulletin <fichier>] [--maintenant <iso>] [--forcer]';
 const FENETRE_DEBUT = 18 * 60 + 30;
 const FENETRE_FIN = 21 * 60 + 29;
 
@@ -47,12 +47,31 @@ export function executer(argv, { lireJson, listerJson, ecrireJson, maintenant })
       return { code: 0, sortie: fenetre && !bonMoment ? 'non' : 'oui' };
     }
     if (!o.fiches || !o.entree || !o.sortie) return { code: 1, sortie: 'Il manque --fiches, --entree ou --sortie.' };
-    const fiches = listerJson(o.fiches).map(({ nom, contenu }) => ({ id: contenu?.id ?? nom.replace(/\.json$/, ''), ...document(contenu) }));
+    const versions = new Map();
+    const fiches = listerJson(o.fiches).map(({ nom, contenu }) => {
+      const id = contenu?.id ?? nom.replace(/\.json$/, '');
+      if (contenu?.version != null) versions.set(id, contenu.version);
+      return { id, ...document(contenu) };
+    });
+    let bulletinVersion = null;
+    if (o.bulletin) {
+      try {
+        const brut = lireJson(o.bulletin);
+        bulletinVersion = brut?.version ?? null;
+      } catch (e) {
+        if (e.code !== 'ENOENT') throw e;
+      }
+    }
     const r = construireVeille({ profil, fiches, entree: lireJson(o.entree), maintenant: quand, idAleatoire: nouvelId });
     if (!r.ok) return { code: 1, sortie: r.erreurs.join('\n') };
-    const remplacees = r.ecritures.filter(e => e.op === 'delete').length;
+    const ecritures = r.ecritures.map(e => {
+      if (e.op === 'delete' && e.collection === 'fiches' && versions.has(e.doc_id)) return { ...e, if_version: versions.get(e.doc_id) };
+      if (e.op === 'set' && e.collection === 'bulletins' && bulletinVersion != null) return { ...e, if_version: bulletinVersion };
+      return e;
+    });
+    const remplacees = ecritures.filter(e => e.op === 'delete').length;
     const resume = `Bulletin ${r.cle} : ${r.fichesCreees.length} idée(s), ${remplacees} remplacée(s), statut ${r.bulletin.statut}.`;
-    ecrireJson(o.sortie, { ecritures: r.ecritures, resume });
+    ecrireJson(o.sortie, { ecritures, resume });
     return { code: 0, sortie: resume };
   } catch (e) {
     return { code: 1, sortie: `Erreur : ${e.message}` };
