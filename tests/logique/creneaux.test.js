@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import fictif from '../../exemples/profil-fictif.json';
 import { depuisSaisieLocale } from '../../src/logique/dates.js';
 import { nouvelleFiche } from '../../src/logique/fiche.js';
-import { creneauxLibres } from '../../src/logique/creneaux.js';
+import { creneauxLibres, creneauxDisponibles } from '../../src/logique/creneaux.js';
 
 const R = fictif.regles_studio;
 const LUNDI = '2026-09-27T22:00:00.000Z';
@@ -43,5 +43,14 @@ describe('creneauxLibres', () => {
   it('écarte les créneaux déjà passés quand on donne l’heure actuelle', () => {
     expect(creneauxLibres([], R, LUNDI, '2026-10-01T14:00:00.000Z')).toEqual([]);
     expect(creneauxLibres([], R, LUNDI, '2026-09-29T09:59:00.000Z').map(c => c.date_heure)).toEqual(['2026-09-29T10:00:00.000Z', '2026-10-01T10:00:00.000Z']);
+  });
+});
+
+describe('creneauxDisponibles', () => {
+  it('liste tous les créneaux libres, sans plafond de cadence', () => {
+    const pleins = ['2026-09-30', '2026-10-02', '2026-10-03', '2026-10-04'].map(j => fiche('reel', j, '18:00'));
+    expect(creneauxLibres(pleins, R, LUNDI).map(c => c.format)).toEqual(['carrousel', 'carrousel']);
+    expect(creneauxDisponibles([...pleins, fiche('carrousel', '2026-09-29', '13:00')], R, LUNDI))
+      .toEqual(['2026-09-28T10:00:00.000Z', '2026-10-01T10:00:00.000Z']);
   });
 });

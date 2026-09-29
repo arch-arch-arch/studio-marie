@@ -3,13 +3,9 @@ import { fichesDeLaSemaine } from './controle.js';
 
 const FEED = new Set(['reel', 'carrousel', 'post']);
 
-export function creneauxLibres(fiches, regles, debutIso, maintenantIso = null) {
+export function creneauxDisponibles(fiches, regles, debutIso, maintenantIso = null) {
   const fz = regles.fuseau;
   const feed = fichesDeLaSemaine(fiches, debutIso, fz).filter(f => FEED.has(f.format));
-  const manque = format => Math.max(0, regles.cadence[format] - feed.filter(f => f.format === format).length);
-  const aPlacer = [...Array(manque('reel')).fill('reel'), ...Array(manque('carrousel')).fill('carrousel')];
-  if (aPlacer.length === 0) return [];
-
   const libres = [];
   for (let i = 0; i < 7; i++) {
     const cle = cleJour(ajouterJours(debutIso, i, fz), fz);
@@ -26,5 +22,15 @@ export function creneauxLibres(fiches, regles, debutIso, maintenantIso = null) {
       libres.push(debutCreneau);
     }
   }
-  return libres.sort().slice(0, aPlacer.length).map((date_heure, i) => ({ date_heure, format: aPlacer[i] }));
+  return libres.sort();
+}
+
+export function creneauxLibres(fiches, regles, debutIso, maintenantIso = null) {
+  const feed = fichesDeLaSemaine(fiches, debutIso, regles.fuseau).filter(f => FEED.has(f.format));
+  const manque = format => Math.max(0, regles.cadence[format] - feed.filter(f => f.format === format).length);
+  const aPlacer = [...Array(manque('reel')).fill('reel'), ...Array(manque('carrousel')).fill('carrousel')];
+  if (aPlacer.length === 0) return [];
+  return creneauxDisponibles(fiches, regles, debutIso, maintenantIso)
+    .slice(0, aPlacer.length)
+    .map((date_heure, i) => ({ date_heure, format: aPlacer[i] }));
 }
