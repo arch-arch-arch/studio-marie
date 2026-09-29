@@ -4,9 +4,9 @@ import {
 } from '../logique/fiche.js';
 import { ajouterJours, ajouterMois, debutJour, debutSemaine, semainesDuMois } from '../logique/dates.js';
 import { verifierRegles } from '../logique/regles-score.js';
-import { composerScore } from '../logique/score.js';
+import { composerScore, construireExamen } from '../logique/score.js';
 import { fichesDeLaSemaine } from '../logique/controle.js';
-import { construirePrompt, validerReponse, messageErreurSample, CODES_INDISPONIBLES } from '../claude/evaluation.js';
+import { construireDemande, validerReponse, messageErreurSample, CODES_INDISPONIBLES } from '../claude/evaluation.js';
 import { validerReference, ficheDeReference, verifierClassement } from '../logique/reference.js';
 import { RELEVES, validerReleveContenu, validerReleveCompte, documentReleveContenu, documentReleveCompte } from '../logique/indicateurs.js';
 
@@ -86,24 +86,32 @@ export function creerControleur({ etat, depot, enregistreur, assets, horloge, id
     const { profil } = etat.lire();
     const verification = verifierRegles(fiche, profil.regles_studio);
     let images;
-    if (fiche.visuel && fiche.visuel_type === 'image') {
-      try {
-        const limites = await sample.limits();
-        if (limites?.images) {
-          const blob = await chargerImage(fiche.visuel);
-          const { mediaTypes, maxInputBytes } = limites.images;
-          const typeOk = !mediaTypes || mediaTypes.includes(blob.type);
-          const tailleOk = maxInputBytes == null || blob.size <= maxInputBytes;
-          if (typeOk && tailleOk) images = blob;
+    let visuel = fiche.visuel ? 'non_joint' : 'aucun';
+    let raisonVisuel = null;
+    if (fiche.visuel && fiche.visuel_type === 'video') raisonVisuel = 'video';
+    else if (fiche.visuel) {
+      raisonVisuel = 'indisponible';
+      if (fiche.visuel_type === 'image') {
+        try {
+          const limites = await sample.limits();
+          if (limites?.images) {
+            const blob = await chargerImage(fiche.visuel);
+            const { mediaTypes, maxInputBytes } = limites.images;
+            const typeOk = !mediaTypes || mediaTypes.includes(blob.type);
+            const tailleOk = maxInputBytes == null || blob.size <= maxInputBytes;
+            if (typeOk && tailleOk) images = blob;
+            else raisonVisuel = !typeOk ? 'type' : 'taille';
+          }
+        } catch {
+          images = undefined;
         }
-      } catch {
-        images = undefined;
       }
     }
-    const prompt = construirePrompt({ fiche, profil, verification, fichesSemaine, avecImage: !!images });
+    if (images) { visuel = 'joint'; raisonVisuel = null; }
+    const demande = construireDemande({ fiche, profil, verification, fichesSemaine, avecImage: !!images });
     let brute;
     try {
-      brute = await sample.json(prompt, images ? { signal, images } : { signal });
+      brute = await sample.json(demande.texte, images ? { signal, images } : { signal });
     } catch (e) {
       if (e?.code === 'cancelled') return { ok: false, annule: true };
       const indisponible = CODES_INDISPONIBLES.has(e?.code);
@@ -112,7 +120,8 @@ export function creerControleur({ etat, depot, enregistreur, assets, horloge, id
     }
     const reponse = validerReponse(brute);
     if (!reponse.ok) return { ok: false, raison: 'La réponse de Claude était incomplète : réessaie. Rien n’a été modifié.' };
-    const score = composerScore({ fiche, verification, jugement: reponse.jugement, versionProfil: profil.version, maintenant: horloge() });
+    const examen = construireExamen({ visuel, raison_visuel: raisonVisuel, version_profil: profil.version ?? null, sections_profil: demande.sections_profil, contenus_semaine: demande.contenus_semaine, verification });
+    const score = composerScore({ fiche, verification, jugement: reponse.jugement, versionProfil: profil.version, maintenant: horloge(), examen });
     return { ok: true, score, jugement: reponse.jugement };
   }
 
