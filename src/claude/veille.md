@@ -1,6 +1,6 @@
 # Veille hebdomadaire du studio
 
-Tu prépares la semaine suivante d'un compte Instagram. L'URL du studio (un Artifact claude.ai) t'est donnée dans ta mission : on l'appelle ci-dessous `STUDIO`. Travaille dans le dépôt cloné, dans le dossier de travail `veille-tmp/`, que tu crées.
+Tu prépares la semaine visée (renvoyée par `plage`) d'un compte Instagram. L'URL du studio (un Artifact claude.ai) t'est donnée dans ta mission : on l'appelle ci-dessous `STUDIO`. Travaille dans le dépôt cloné, dans le dossier de travail `veille-tmp/`, que tu crées.
 
 Interdits :
 - Ne modifie jamais le profil.
@@ -14,11 +14,11 @@ Interdits :
 - Si ta mission indique un déclenchement manuel ou un test, ajoute `--forcer` à `doit-tourner`.
 - Lance `node scripts/veille.mjs doit-tourner --profil veille-tmp/profil/courant.json`. Si la sortie est `non`, arrête-toi là : c'est le deuxième déclenchement de la nuit. Réponds « Veille déjà faite ou hors horaire. »
 
-## 2. Lire la semaine suivante
+## 2. Lire la semaine visée (renvoyée par `plage`)
 - Lance `node scripts/veille.mjs plage --profil veille-tmp/profil/courant.json`. Tu obtiens `{ semaine, debut, fin, lecture_debut, lecture_fin }`.
 - `ArtifactData` `query` sur `STUDIO`, avec `collection: "fiches"` et `query: { where: [["date_heure", ">=", lecture_debut], ["date_heure", "<", lecture_fin]] }`, avec `out_dir` = `veille-tmp/`. Les fichiers arrivent dans `veille-tmp/fiches/`. Cette plage élargie (14 jours avant, 28 jours après la semaine visée) permet de retrouver les idées de ce bulletin déplacées vers une autre semaine.
 - `ArtifactData` `get` sur `STUDIO`, avec `collection: "bulletins"` et `doc_id` = `semaine`, avec `out_dir` = `veille-tmp/`. S'il n'existe pas, c'est le premier passage.
-- Après chaque lecture avec `out_dir` (fiches puis bulletin), recopie les versions affichées dans le résultat de l'outil (ligne `- "<doc_id>"  N bytes  version V  "<chemin>"`) dans `veille-tmp/versions.json`, au format `{ "fiches/<id>": V, "bulletins/<semaine>": V }`.
+- Après chaque lecture avec `out_dir` (fiches puis bulletin), recopie les versions affichées dans le résultat de l'outil (ligne `- "<doc_id>"  N bytes  version V  "<chemin>"`) dans `veille-tmp/versions.json`, au format `{ "fiches/<id>": V, "bulletins/<semaine>": V }`. Crée toujours ce fichier : `{}` si aucune lecture n'a renvoyé de document. Un seul objet pour toutes les lectures (fiches et bulletin). Chaque version est un nombre entier, sans guillemets.
 
 ## 3. Chercher les tendances
 - Avec `WebSearch` (et `WebFetch` pour lire une page), cherche sur les 14 derniers jours :
@@ -68,7 +68,7 @@ Lance ensuite `node scripts/veille.mjs construire --profil veille-tmp/profil/cou
 Si la commande échoue, elle affiche les erreurs. Corrige `entree.json` et relance. Au plus 3 exécutions de `construire` au total. Tant que le code de sortie n'est pas 0, n'applique rien. Si elle échoue encore après ces 3 exécutions, arrête-toi sans rien écrire et rends compte des erreurs.
 
 ## 6. Appliquer en un seul lot
-Lis `veille-tmp/ecritures.json`, puis appelle une seule fois `ArtifactData` `batch` sur `STUDIO`, avec la liste `ecritures` telle quelle en paramètre `writes`. Relis ensuite `bulletins/<semaine>` pour vérifier. Si le lot échoue sur un conflit de version, autorise-toi une seule reprise depuis l'étape 2 (nouvelle lecture, nouvelle construction). Pour tout autre échec (refus, erreur), n'écris rien d'autre, ne réessaie pas entrée par entrée, et rends compte de l'erreur.
+Lis `veille-tmp/ecritures.json`, puis appelle une seule fois `ArtifactData` `batch` sur `STUDIO`, avec la liste `ecritures` telle quelle en paramètre `writes`. Relis ensuite `bulletins/<semaine>` pour vérifier. Si le lot échoue sur un conflit de version, autorise-toi une seule reprise depuis l'étape 2 (nouvelle lecture, nouvelle construction). Pour cette reprise : vide `veille-tmp/fiches/`, relis comme à l'étape 2 (fiches, bulletin) et réécris `versions.json`. Garde `veille-tmp/entree.json` tel quel, sans nouvelle recherche web. Relance `construire`, avec de nouveau au plus 3 exécutions. Pour tout autre échec (refus, erreur), n'écris rien d'autre, ne réessaie pas entrée par entrée, et rends compte de l'erreur.
 
 ## 7. Compte rendu
 Termine par une ligne : le `resume` du script, puis « Sources : complètes » ou « Sources : indisponibles ».

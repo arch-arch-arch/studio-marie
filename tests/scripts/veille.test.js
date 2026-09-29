@@ -103,6 +103,20 @@ describe('construire', () => {
     expect(ecritures.find(e => e.op === 'delete' && e.doc_id === 'r')).not.toHaveProperty('if_version');
     expect(ecritures.find(e => e.op === 'set' && e.collection === 'bulletins')).not.toHaveProperty('if_version');
   });
+  it('--versions absent (ENOENT) vaut objet vide, comme --bulletin : code 0, sans épingle', () => {
+    const remplacable = { format: 'reel', date_heure: '2026-10-06T16:00:00.000Z', statut: 'brouillon', origine: { type: 'veille', bulletin: '2026-W41' }, modifiee_depuis_creation: false };
+    const d = deps({ 'p.json': NEW_YORK, 'e.json': entree, 'f/r.json': remplacable });
+    const lireJsonOriginal = d.lireJson;
+    d.lireJson = p => {
+      if (p === 'v.json') { const err = new Error('absent : v.json'); err.code = 'ENOENT'; throw err; }
+      return lireJsonOriginal(p);
+    };
+    const r = executer(['construire', '--profil', 'p.json', '--fiches', 'f', '--entree', 'e.json', '--sortie', 's.json', '--versions', 'v.json'], d);
+    expect(r.code).toBe(0);
+    const ecritures = d.ecrits['s.json'].ecritures;
+    expect(ecritures.find(e => e.op === 'delete' && e.doc_id === 'r')).not.toHaveProperty('if_version');
+    expect(ecritures.find(e => e.op === 'set' && e.collection === 'bulletins')).not.toHaveProperty('if_version');
+  });
   it('échoue sans rien écrire si l’entrée est invalide', () => {
     const d = deps({ 'p.json': NEW_YORK, 'e.json': { ...entree, idees: [] } });
     const r = executer(['construire', '--profil', 'p.json', '--fiches', 'f', '--entree', 'e.json', '--sortie', 's.json'], d);

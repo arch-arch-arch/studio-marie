@@ -65,7 +65,14 @@ export function executer(argv, { lireJson, listerJson, ecrireJson, maintenant })
         if (e.code !== 'ENOENT') throw e;
       }
     }
-    const versionsFichier = o.versions ? (lireJson(o.versions) ?? {}) : {};
+    let versionsFichier = {};
+    if (o.versions) {
+      try {
+        versionsFichier = lireJson(o.versions) ?? {};
+      } catch (e) {
+        if (e.code !== 'ENOENT') throw e;
+      }
+    }
     const r = construireVeille({ profil, fiches, entree: lireJson(o.entree), maintenant: quand, idAleatoire: nouvelId });
     if (!r.ok) return { code: 1, sortie: r.erreurs.join('\n') };
     const ecritures = r.ecritures.map(e => {

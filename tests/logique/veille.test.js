@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import fictif from '../../exemples/profil-fictif.json';
 import { nouvelleFiche } from '../../src/logique/fiche.js';
-import { depuisSaisieLocale } from '../../src/logique/dates.js';
+import { depuisSaisieLocale, cleJour, ajouterJours } from '../../src/logique/dates.js';
 import { fichesRemplacables, placerIdees, validerEntreeVeille, construireVeille } from '../../src/logique/veille.js';
 import entreeFictive from '../../exemples/entree-veille-fictive.json';
 
@@ -83,6 +83,21 @@ describe('placerIdees', () => {
     expect(r.map(p => p.idee.format)).toEqual(['reel', 'reel', 'story']);
     expect(r.map(p => p.horsCreneau)).toEqual([false, false, true]);
     expect(r.map(p => p.date_heure)).toEqual(['2026-09-28T10:00:00.000Z', '2026-09-29T10:00:00.000Z', '2026-09-28T13:00:00.000Z']);
+  });
+  it('un candidat de secours antérieur à maintenant passe au jour suivant', () => {
+    const MERCREDI_SOIR = '2026-09-30T16:00:00.000Z'; // mercredi 18h Paris : après l’heure de secours (15h)
+    const jeudiPris = fiche('reel', '2026-10-01', '12:00'); // seul créneau restant de la semaine, occupé
+    const r = placerIdees([idee()], [jeudiPris], R, LUNDI, MERCREDI_SOIR);
+    expect(r[0].horsCreneau).toBe(true);
+    expect(r[0].date_heure >= MERCREDI_SOIR).toBe(true);
+  });
+  it('le secours ne dépasse jamais le dimanche de la semaine visée : il reste sur le dernier jour, avec décalage en cas de collision', () => {
+    const SAMEDI = '2026-10-03T08:00:00.000Z'; // samedi 10h Paris, dans la semaine visée
+    const r = placerIdees([idee(), idee(), idee()], [], R, LUNDI, SAMEDI);
+    expect(r.every(p => p.horsCreneau)).toBe(true);
+    const dimanche = cleJour(ajouterJours(LUNDI, 6, R.fuseau), R.fuseau);
+    expect(r.every(p => cleJour(p.date_heure, R.fuseau) <= dimanche)).toBe(true);
+    expect(new Set(r.map(p => p.date_heure)).size).toBe(3);
   });
 });
 
@@ -202,6 +217,13 @@ describe('construireVeille', () => {
     expect(r.ok).toBe(true);
     expect(r.cle).toBe('2026-W40');
     expect(r.fichesCreees.every(f => f.date_heure >= MERCREDI)).toBe(true);
+  });
+
+  it('une relance en fin de journée envoie le secours au jour suivant, jamais avant maintenant', () => {
+    const MERCREDI_SOIR = '2026-09-30T16:00:00.000Z'; // mercredi 18h Paris
+    const r = construireVeille({ profil, fiches: [], entree: entreeFictive, maintenant: MERCREDI_SOIR, idAleatoire: id });
+    expect(r.ok).toBe(true);
+    expect(r.fichesCreees.every(f => f.date_heure >= MERCREDI_SOIR)).toBe(true);
   });
 
   it('une idée gardée de ce bulletin déplacée vers une autre semaine compte dans le plafond et dans bulletin.idees', () => {

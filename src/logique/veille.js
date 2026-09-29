@@ -21,14 +21,21 @@ export function placerIdees(idees, fiches, regles, debutIso, maintenantIso = nul
   const heureSecours = regles.creneaux[0]?.fin ?? '15:00';
   const debutJourMaintenant = maintenantIso ? debutJour(maintenantIso, fz) : null;
   const departSecours = debutJourMaintenant && debutJourMaintenant > debutIso ? debutJourMaintenant : debutIso;
+  const finSemaine = ajouterJours(debutIso, 6, fz);
   const prises = new Set(fiches.map(f => f.date_heure));
   let rang = 0;
   const placer = idee => {
     const date_heure = libres.shift();
     if (date_heure) return { idee, date_heure, horsCreneau: false };
-    const jourSecours = cleJour(ajouterJours(departSecours, rang % 7, fz), fz);
+    let jourSecours = ajouterJours(departSecours, rang, fz);
+    if (jourSecours > finSemaine) jourSecours = finSemaine;
     rang += 1;
-    let candidat = depuisSaisieLocale(jourSecours, heureSecours, fz);
+    let candidat = depuisSaisieLocale(cleJour(jourSecours, fz), heureSecours, fz);
+    while (maintenantIso && candidat < maintenantIso && jourSecours < finSemaine) {
+      jourSecours = ajouterJours(jourSecours, 1, fz);
+      if (jourSecours > finSemaine) jourSecours = finSemaine;
+      candidat = depuisSaisieLocale(cleJour(jourSecours, fz), heureSecours, fz);
+    }
     for (let tentative = 0; tentative < 10 && prises.has(candidat); tentative += 1) {
       candidat = new Date(new Date(candidat).getTime() + 30 * 60000).toISOString();
     }
