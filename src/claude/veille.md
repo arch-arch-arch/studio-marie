@@ -21,7 +21,7 @@ Interdits :
 - Après chaque lecture avec `out_dir` (fiches puis bulletin), recopie les versions affichées dans le résultat de l'outil (ligne `- "<doc_id>"  N bytes  version V  "<chemin>"`) dans `veille-tmp/versions.json`, au format `{ "fiches/<id>": V, "bulletins/<semaine>": V }`. Crée toujours ce fichier : `{}` si aucune lecture n'a renvoyé de document. Un seul objet pour toutes les lectures (fiches et bulletin). Chaque version est un nombre entier, sans guillemets.
 - Lis aussi les relevés de statistiques :
   - `ArtifactData` `query` sur `STUDIO`, avec `collection: "stats_contenu"` et `query: { where: [["date_publication", ">=", lecture_debut], ["date_publication", "<", debut]] }`, avec `out_dir` = `veille-tmp/`. Les fichiers arrivent dans `veille-tmp/stats_contenu/` ;
-  - `ArtifactData` `list` sur `STUDIO`, avec `collection: "releves_compte"`, avec `out_dir` = `veille-tmp/`. Les fichiers arrivent dans `veille-tmp/releves_compte/`.
+  - `ArtifactData` `query` sur `STUDIO`, avec `collection: "releves_compte"` et `query: { where: [["debut", ">=", lecture_debut], ["debut", "<", debut]] }`, avec `out_dir` = `veille-tmp/`. Les fichiers arrivent dans `veille-tmp/releves_compte/`.
   - Ces lectures ne sont pas écrites ensuite : elles n'entrent pas dans `versions.json`. Si une collection est vide, continue.
 
 ## 3. Chercher les tendances
