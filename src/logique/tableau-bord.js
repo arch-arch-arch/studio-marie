@@ -1,5 +1,6 @@
 import { RELEVES, CIBLES, LIBELLES_CIBLES, tauxAbonnesParVue, etatReleves } from './indicateurs.js';
 import { ajouterJours, cleSemaineIso } from './dates.js';
+import { datePublication } from './fiche.js';
 
 export const RAPPEL_RETROSPECTIVE = 'Aucun relevé de statistiques sur les 2 dernières semaines : saisis-les pour obtenir la rétrospective.';
 const moyenne = xs => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
@@ -73,7 +74,7 @@ export function retrospective({ stats, relevesCompte, fiches, cibles, fuseau, de
   const dansPeriode = iso => iso >= depuis && iso < debutSemaineVisee;
   const periode = stats.filter(s => dansPeriode(s.date_publication));
   const manquants = fiches
-    .filter(f => f.statut === 'publie' && dansPeriode(f.date_heure))
+    .filter(f => f.statut === 'publie' && dansPeriode(datePublication(f)))
     .flatMap(f => {
       const e = etatReleves(f, stats.filter(s => s.fiche === f.id), maintenant);
       return RELEVES.filter(r => e[r].etat === 'a_saisir').map(r => ({ fiche: f.id, releve: r, accroche: f.accroche ?? '' }));

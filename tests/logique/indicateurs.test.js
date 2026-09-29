@@ -65,6 +65,10 @@ describe('etatReleves', () => {
   it('l’échéance est atteinte pile à 48 h', () => {
     expect(etatReleves(publiee, [], '2026-09-22T10:00:00.000Z')['48h'].etat).toBe('a_saisir');
   });
+  it('part de la date réelle de publication quand elle existe', () => {
+    const e = etatReleves({ ...publiee, publie_le: '2026-09-21T10:00:00.000Z' }, [], '2026-09-22T12:00:00.000Z');
+    expect(e['48h']).toEqual({ du_le: '2026-09-23T10:00:00.000Z', etat: 'pas_encore' });
+  });
 });
 
 describe('documents', () => {
@@ -80,6 +84,10 @@ describe('documents', () => {
   it('score_total vaut null pour une fiche non évaluée', () => {
     const v = validerReleveContenu({ vues: 1, nouveaux_abonnes: 0, partages_envois: 0 }).valeurs;
     expect(documentReleveContenu({ ...publiee, score: null }, '48h', v, 'x').score_total).toBeNull();
+  });
+  it('date_publication reprend la date réelle de publication', () => {
+    const v = validerReleveContenu({ vues: 1, nouveaux_abonnes: 0, partages_envois: 0 }).valeurs;
+    expect(documentReleveContenu({ ...publiee, publie_le: '2026-09-21T09:00:00.000Z' }, '48h', v, 'x').date_publication).toBe('2026-09-21T09:00:00.000Z');
   });
   it('le relevé du compte porte la clé de semaine ISO', () => {
     const doc = documentReleveCompte('2026-09-27T22:00:00.000Z', 'Europe/Paris', { abonnes: 100, vues_moyennes_stories: null, clics_porte: null }, 'x');

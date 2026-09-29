@@ -1,4 +1,5 @@
 import { cleSemaineIso } from './dates.js';
+import { datePublication } from './fiche.js';
 
 export const RELEVES = ['48h', '7j'];
 export const DELAIS_RELEVE = { '48h': 48 * 3600000, '7j': 7 * 24 * 3600000 };
@@ -55,7 +56,7 @@ export const idReleve = (ficheId, releve) => `${ficheId}_${releve}`;
 
 export function etatReleves(fiche, releves, maintenant) {
   const resultat = {};
-  const publication = new Date(fiche.date_heure).getTime();
+  const publication = new Date(datePublication(fiche)).getTime();
   for (const r of RELEVES) {
     const du_le = new Date(publication + DELAIS_RELEVE[r]).toISOString();
     const saisi = releves.some(s => s.releve === r);
@@ -68,7 +69,7 @@ export function etatReleves(fiche, releves, maintenant) {
 export function documentReleveContenu(fiche, releve, valeurs, maintenant) {
   return {
     id: idReleve(fiche.id, releve), fiche: fiche.id, releve, ...valeurs, saisi_le: maintenant,
-    date_publication: fiche.date_heure, format: fiche.format, pilier: fiche.pilier ?? '', accroche: fiche.accroche ?? '',
+    date_publication: datePublication(fiche), format: fiche.format, pilier: fiche.pilier ?? '', accroche: fiche.accroche ?? '',
     score_total: fiche.score?.total ?? null,
   };
 }
