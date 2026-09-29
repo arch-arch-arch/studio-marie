@@ -79,10 +79,11 @@ export function panneauFiche(fiche, profil, actions, capacites, releves = []) {
 
   const appliquerStatutRenvoye = statut => {
     if (statut == null || statut === brouillon.statut) return;
-    brouillon = { ...brouillon, statut };
+    brouillon = { ...brouillon, statut, ...effacementsPour(statut) };
     const nouvelElement = sectionStatut();
     elementStatut.replaceWith(nouvelElement);
     elementStatut = nouvelElement;
+    majAction();
     afficher('La fiche est repassée en Brouillon : réévalue-la.');
   };
   const changer = changements => {
@@ -157,6 +158,7 @@ export function panneauFiche(fiche, profil, actions, capacites, releves = []) {
     const v = await actions.changerStatut(id, s);
     if (!v.ok) { afficher(v.raison); return; }
     brouillon = { ...brouillon, statut: s, ...effacementsPour(s) };
+    zoneConfirmation.replaceChildren();
     construire();
     afficher('');
   }
@@ -170,16 +172,18 @@ export function panneauFiche(fiche, profil, actions, capacites, releves = []) {
     const coche = h('input', { type: 'checkbox', name: 'confirmation-coche' });
     const retour = h('p', { class: 'aide', role: 'status' });
     const titre = publication ? 'Confirmer la publication' : 'Confirmer la programmation';
+    const boutonEnvoyer = h('button', { type: 'submit', class: 'bouton-principal' }, titre);
     const form = h('form', {
       class: `confirmation confirmation-${type}`,
       onsubmit: async ev => {
         ev.preventDefault();
         if (!date.value || !heure.value) { retour.textContent = 'Indique la date et l’heure.'; return; }
         const iso = depuisSaisieLocale(date.value, heure.value, fz);
+        boutonEnvoyer.disabled = true;
         const res = publication
           ? await actions.confirmerPublication(id, iso, coche.checked)
           : await actions.confirmerProgrammation(id, iso, coche.checked);
-        if (!res.ok) { retour.textContent = res.raison; return; }
+        if (!res.ok) { boutonEnvoyer.disabled = false; retour.textContent = res.raison; return; }
         brouillon = { ...brouillon, ...res.fiche };
         zoneConfirmation.replaceChildren();
         construire();
@@ -192,7 +196,7 @@ export function panneauFiche(fiche, profil, actions, capacites, releves = []) {
       champ(`Heure (${fz})`, heure)),
     h('label', { class: 'case' }, coche, publication ? 'Le contenu est en ligne' : 'J’ai programmé ce contenu dans Meta Business Suite'),
     h('div', { class: 'evaluation-actions' },
-      h('button', { type: 'submit', class: 'bouton-principal' }, titre),
+      boutonEnvoyer,
       h('button', { type: 'button', class: 'bouton-secondaire', onclick: () => zoneConfirmation.replaceChildren() }, 'Annuler')),
     retour);
     zoneConfirmation.replaceChildren(form);

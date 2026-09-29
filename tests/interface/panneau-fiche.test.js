@@ -405,4 +405,26 @@ describe('parcours dans la fiche', () => {
     const p2 = panneauFiche(f, fictif, actionsParcours(), { assets: true }, [{ releve: '48h' }]);
     expect(p2.querySelector('.prochaine-action').textContent).toContain('Prochain relevé le');
   });
+
+  it('remplacer le visuel d’une fiche programmée efface les confirmations et met à jour le bandeau', async () => {
+    const actions = actionsParcours();
+    actions.televerserVisuel = vi.fn(async () => ({ ok: true, id: 'as9', type: 'image', statut: 'brouillon' }));
+    const f = prete({ statut: 'programme', programme_pour: '2026-10-01T10:00:00.000Z' });
+    const p = panneauFiche(f, fictif, actions, { assets: true });
+    expect(p.querySelector('.prochaine-action').textContent).toContain('Programmé pour le');
+    const entree = p.querySelector('input[type="file"]');
+    Object.defineProperty(entree, 'files', { value: [{ type: 'image/png' }] });
+    entree.dispatchEvent(new Event('change', { bubbles: true }));
+    await vi.waitFor(() => expect(p.querySelector('.prochaine-action').textContent).not.toContain('Programmé pour le'));
+  });
+
+  it('une évaluation qui renvoie le statut en Brouillon met aussi à jour le bandeau d’une fiche programmée', async () => {
+    const actions = actionsParcours();
+    const f = prete({ statut: 'programme', programme_pour: '2026-10-01T10:00:00.000Z' });
+    actions.evaluerFiche = vi.fn(async () => ({ ok: true, fiche: { ...f, statut: 'brouillon' } }));
+    const p = panneauFiche(f, fictif, actions, { assets: true, sample: true });
+    expect(p.querySelector('.prochaine-action').textContent).toContain('Programmé pour le');
+    bouton(p, 'Réévaluer').click();
+    await vi.waitFor(() => expect(p.querySelector('.prochaine-action').textContent).not.toContain('Programmé pour le'));
+  });
 });
