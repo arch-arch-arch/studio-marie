@@ -1,7 +1,10 @@
-import { FORMATS, analyserHashtags } from './fiche.js';
-import { depuisSaisieLocale, cleJour } from './dates.js';
+import { FORMATS, analyserHashtags, nouvelleFiche, appliquerEvaluation } from './fiche.js';
+import { depuisSaisieLocale, cleJour, ajouterJours, debutSemaine, cleSemaineIso } from './dates.js';
 import { creneauxDisponibles } from './creneaux.js';
 import { validerReponse } from '../claude/evaluation.js';
+import { verifierRegles } from './regles-score.js';
+import { composerScore } from './score.js';
+import { controlerSemaine } from './controle.js';
 
 export const ROLES_CAPTION = ['engagement', 'cta', 'deadpan'];
 const texte = v => typeof v === 'string' && v.trim().length > 0;
@@ -71,4 +74,56 @@ export function validerEntreeVeille(entree, regles) {
       idees: normalisees,
     },
   };
+}
+
+const RAPPEL_RETROSPECTIVE = 'Aucun relevé de statistiques pour la semaine écoulée : saisis-les pour obtenir la rétrospective.';
+
+export function construireVeille({ profil, fiches, entree, maintenant, idAleatoire }) {
+  const r = profil.regles_studio;
+  const fz = r.fuseau;
+  const verification = validerEntreeVeille(entree, r);
+  if (!verification.ok) return { ok: false, erreurs: verification.erreurs };
+  const debut = debutSemaine(ajouterJours(maintenant, 7, fz), fz);
+  const cle = cleSemaineIso(debut, fz);
+  const remplacables = fichesRemplacables(fiches, cle);
+  const aRemplacer = new Set(remplacables.map(f => f.id));
+  const gardees = fiches.filter(f => !aRemplacer.has(f.id));
+  const places = placerIdees(verification.entree.idees, gardees, r, debut);
+
+  const fichesCreees = places.map(({ idee, date_heure }) => {
+    const base = {
+      ...nouvelleFiche({ id: idAleatoire(), format: idee.format, date_heure, pilier: idee.pilier, maintenant, origine: { type: 'veille', bulletin: cle } }),
+      statut: 'brouillon', role_caption: idee.role_caption, cta: idee.cta, format_valide: idee.format_valide,
+      accroche: idee.accroche, caption: idee.caption, hashtags: idee.hashtags,
+    };
+    const score = composerScore({ fiche: base, verification: verifierRegles(base, r), jugement: idee.jugement, versionProfil: profil.version, maintenant });
+    return appliquerEvaluation(base, {
+      score,
+      variantes: idee.jugement.captions,
+      suggestions: { accroches: idee.jugement.accroches, hashtags: idee.jugement.hashtags },
+      recommandations: idee.jugement.recommandations,
+    }, maintenant);
+  });
+
+  const e = verification.entree;
+  const bulletin = {
+    semaine: cle,
+    genere_le: maintenant,
+    statut: e.sources_indisponibles ? 'partiel' : 'complet',
+    sources_indisponibles: e.sources_indisponibles,
+    retrospective: { type: 'rappel', texte: RAPPEL_RETROSPECTIVE },
+    tendances: e.tendances,
+    ecartees: e.ecartees,
+    alertes: e.alertes,
+    idees: fichesCreees.map(f => f.id),
+    hors_creneau: places.map((p, i) => (p.horsCreneau ? fichesCreees[i].id : null)).filter(Boolean),
+    controle: controlerSemaine([...gardees, ...fichesCreees], r, debut),
+  };
+
+  const ecritures = [
+    ...remplacables.map(f => ({ op: 'delete', collection: 'fiches', doc_id: f.id })),
+    ...fichesCreees.map(({ id, ...data }) => ({ op: 'set', collection: 'fiches', doc_id: id, data })),
+    { op: 'set', collection: 'bulletins', doc_id: cle, data: bulletin },
+  ];
+  return { ok: true, cle, debut, bulletin, fichesCreees, ecritures };
 }

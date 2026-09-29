@@ -2,7 +2,8 @@ import { describe, it, expect } from 'vitest';
 import fictif from '../../exemples/profil-fictif.json';
 import { nouvelleFiche } from '../../src/logique/fiche.js';
 import { depuisSaisieLocale } from '../../src/logique/dates.js';
-import { fichesRemplacables, placerIdees, validerEntreeVeille } from '../../src/logique/veille.js';
+import { fichesRemplacables, placerIdees, validerEntreeVeille, construireVeille } from '../../src/logique/veille.js';
+import entreeFictive from '../../exemples/entree-veille-fictive.json';
 
 const R = fictif.regles_studio;
 const LUNDI = '2026-09-27T22:00:00.000Z';
@@ -89,5 +90,63 @@ describe('validerEntreeVeille', () => {
   it('refuse 6 tendances même avec sources_indisponibles', () => {
     const tendances = [tendance('T1'), tendance('T2'), tendance('T3'), tendance('T4'), tendance('T5'), tendance('T6')];
     expect(validerEntreeVeille(entree({ tendances, sources_indisponibles: true }), R).erreurs).toContain('tendances : 5 au maximum.');
+  });
+});
+
+describe('construireVeille', () => {
+  const MAINTENANT = '2026-10-04T18:00:00.000Z';
+  const profil = { ...fictif, version: 2 };
+  let k = 0;
+  const id = () => `idee-${++k}`;
+
+  it('vise la semaine suivante, dépose des idées évaluées en brouillon et un bulletin', () => {
+    const r = construireVeille({ profil, fiches: [], entree: entreeFictive, maintenant: MAINTENANT, idAleatoire: id });
+    expect(r.ok).toBe(true);
+    expect(r.cle).toBe('2026-W41');
+    expect(r.debut).toBe('2026-10-04T22:00:00.000Z');
+    expect(r.fichesCreees).toHaveLength(entreeFictive.idees.length);
+    for (const f of r.fichesCreees) {
+      expect(f).toMatchObject({ statut: 'brouillon', modifiee_depuis_creation: false, origine: { type: 'veille', bulletin: '2026-W41' } });
+      expect(f.score.version_profil).toBe(2);
+      expect(f.score.total).toBeGreaterThan(0);
+      expect(f.variantes).toHaveLength(2);
+    }
+    expect(r.bulletin).toMatchObject({ semaine: '2026-W41', genere_le: MAINTENANT, statut: 'complet', sources_indisponibles: false });
+    expect(r.bulletin.retrospective.type).toBe('rappel');
+    expect(r.bulletin.idees).toEqual(r.fichesCreees.map(f => f.id));
+    expect(r.bulletin.controle.map(p => p.cle)).toEqual(['reels', 'carrousels', 'stories', 'cta', 'roles', 'ragebait', 'porte', 'piliers']);
+    expect(r.ecritures.at(-1)).toMatchObject({ op: 'set', collection: 'bulletins', doc_id: '2026-W41' });
+    expect(r.ecritures.filter(e => e.op === 'set' && e.collection === 'fiches').every(e => !('id' in e.data))).toBe(true);
+  });
+
+  it('relance : remplace ses propres idées intactes, garde celles modifiées ou validées', () => {
+    const premiere = construireVeille({ profil, fiches: [], entree: entreeFictive, maintenant: MAINTENANT, idAleatoire: id });
+    const [a, b, c] = premiere.fichesCreees;
+    const modifiee = { ...b, modifiee_depuis_creation: true, accroche: 'Réécrite' };
+    const validee = { ...c, statut: 'valide' };
+    const seconde = construireVeille({ profil, fiches: [a, modifiee, validee], entree: entreeFictive, maintenant: MAINTENANT, idAleatoire: id });
+    const suppressions = seconde.ecritures.filter(e => e.op === 'delete').map(e => e.doc_id);
+    expect(suppressions).toEqual([a.id]);
+    const placees = seconde.fichesCreees.map(f => f.date_heure);
+    expect(placees).not.toContain(modifiee.date_heure);
+    expect(placees).not.toContain(validee.date_heure);
+  });
+
+  it('sources indisponibles : bulletin partiel, idées quand même', () => {
+    const r = construireVeille({ profil, fiches: [], entree: { ...entreeFictive, sources_indisponibles: true, tendances: [] }, maintenant: MAINTENANT, idAleatoire: id });
+    expect(r.ok).toBe(true);
+    expect(r.bulletin).toMatchObject({ statut: 'partiel', sources_indisponibles: true, tendances: [] });
+    expect(r.fichesCreees.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('entrée invalide : aucune écriture', () => {
+    const r = construireVeille({ profil, fiches: [], entree: { ...entreeFictive, idees: [] }, maintenant: MAINTENANT, idAleatoire: id });
+    expect(r).toEqual({ ok: false, erreurs: ['idees : 3 à 5 idées attendues.'] });
+  });
+
+  it('signale les idées placées hors créneau', () => {
+    const occupees = ['2026-10-05', '2026-10-06', '2026-10-08'].map(j => fiche('reel', j, '12:00'));
+    const r = construireVeille({ profil, fiches: occupees, entree: entreeFictive, maintenant: MAINTENANT, idAleatoire: id });
+    expect(r.bulletin.hors_creneau).toEqual(r.fichesCreees.map(f => f.id));
   });
 });
