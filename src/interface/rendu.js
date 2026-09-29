@@ -71,12 +71,13 @@ export function creerRendu(racine, actions, capacites, horloge) {
     const estVueProfil = !e.profil || e.vue === 'profil';
     const reconstructionRequise = estVueProfil
       ? (memo.profil !== e.profil || memo.vue !== e.vue || memo.ancre !== e.ancre)
-      : (memo.profil !== e.profil || memo.fiches !== e.fiches || memo.vue !== e.vue || memo.ancre !== e.ancre || memo.bulletin !== e.bulletin || memo.configVeille !== e.configVeille
-        || memo.stats !== e.stats || memo.relevesCompte !== e.relevesCompte || memo.fichesRecentes !== e.fichesRecentes);
+      : (memo.profil !== e.profil || memo.fiches !== e.fiches || memo.vue !== e.vue || memo.ancre !== e.ancre || memo.bulletin !== e.bulletin || memo.configVeille !== e.configVeille);
     if (reconstructionRequise) {
       elementVue = contenuVue(e2, actions, capacites);
       vue.replaceChildren(elementVue);
     } else if (estVueProfil && (memo.reference !== e.reference || memo.resultatReference !== e.resultatReference || memo.verificationReference !== e.verificationReference)) {
+      elementVue?.mettreAJour?.(e2);
+    } else if (e.vue === 'tableau' && (memo.stats !== e.stats || memo.relevesCompte !== e.relevesCompte || memo.fichesRecentes !== e.fichesRecentes)) {
       elementVue?.mettreAJour?.(e2);
     }
     const ouverte = e.profil && e.ficheOuverte ? e.fiches.find(f => f.id === e.ficheOuverte) : null;

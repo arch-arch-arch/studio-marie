@@ -46,4 +46,13 @@ describe('vueTableau', () => {
     expect(a.enregistrerReleveCompte.mock.calls[0][0]).toBe('2026-09-27T22:00:00.000Z');
     expect(a.enregistrerReleveCompte.mock.calls[0][1]).toMatchObject({ abonnes: '1500' });
   });
+  it('mettreAJour conserve la saisie en cours et met à jour le classement', () => {
+    const v = vueTableau(etat(), actions());
+    const input = v.querySelector('input[name="abonnes"]');
+    input.value = '999';
+    const nouveauxStats = [stat('a'), stat('b', { nouveaux_abonnes: 1 }), stat('c', { accroche: 'Accroche c', nouveaux_abonnes: 50, vues: 100 })];
+    v.mettreAJour(etat({ stats: nouveauxStats }));
+    expect(v.querySelector('input[name="abonnes"]').value).toBe('999');
+    expect(v.textContent).toContain('Accroche c');
+  });
 });

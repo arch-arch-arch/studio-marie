@@ -22,20 +22,28 @@ function aSaisir(fichesRecentes, stats, maintenant, fz, actions) {
       : h('p', { class: 'aide' }, 'Tous les relevés dus sont saisis.'));
 }
 
-function releveCompte(relevesCompte, maintenant, fz, actions) {
+function releveCompte(relevesCompteInitial, maintenant, fz, actions) {
+  let relevesActuels = relevesCompteInitial;
   const cette = debutSemaine(maintenant, fz);
   const semaines = [[cette, `Cette semaine (${cleSemaineIso(cette, fz)})`], [ajouterJours(cette, -7, fz), `Semaine dernière (${cleSemaineIso(ajouterJours(cette, -7, fz), fz)})`]];
   const choix = h('select', { name: 'semaine' }, semaines.map(([v, t]) => h('option', { value: v }, t)));
   const entrees = CHAMPS_COMPTE.map(c => h('input', { type: 'number', min: '0', step: '1', inputmode: 'numeric', name: c.cle }));
   const retour = h('p', { class: 'aide', role: 'status' });
+  const dernierReleve = h('p', { class: 'dernier-releve aide' });
   const remplir = () => {
-    const existant = relevesCompte.find(r => r.semaine === cleSemaineIso(choix.value, fz));
+    const existant = relevesActuels.find(r => r.semaine === cleSemaineIso(choix.value, fz));
     CHAMPS_COMPTE.forEach((c, i) => { entrees[i].value = existant?.[c.cle] ?? ''; });
+  };
+  const majDernierReleve = () => {
+    const derniere = croissancesNettes(relevesActuels, fz).at(-1);
+    dernierReleve.textContent = derniere
+      ? `Dernier relevé : ${derniere.semaine}, ${entier(derniere.abonnes)} abonnés${derniere.croissance != null ? `, croissance nette ${derniere.croissance >= 0 ? '+' : ''}${entier(derniere.croissance)}` : ''}.`
+      : '';
   };
   choix.addEventListener('change', remplir);
   remplir();
-  const derniere = croissancesNettes(relevesCompte, fz).at(-1);
-  return h('form', {
+  majDernierReleve();
+  const form = h('form', {
     class: 'releve-compte',
     onsubmit: async ev => {
       ev.preventDefault();
@@ -46,11 +54,18 @@ function releveCompte(relevesCompte, maintenant, fz, actions) {
     },
   },
   h('h3', {}, 'Relevé du compte'),
-  derniere ? h('p', { class: 'aide' }, `Dernier relevé : ${derniere.semaine}, ${entier(derniere.abonnes)} abonnés${derniere.croissance != null ? `, croissance nette ${derniere.croissance >= 0 ? '+' : ''}${entier(derniere.croissance)}` : ''}.`) : null,
+  dernierReleve,
   h('label', { class: 'champ' }, h('span', { class: 'champ-libelle' }, 'Semaine'), choix),
   h('div', { class: 'grille-champs' }, CHAMPS_COMPTE.map((c, i) => h('label', { class: 'champ' }, h('span', { class: 'champ-libelle' }, c.libelle), entrees[i]))),
   h('button', { type: 'submit', class: 'bouton-secondaire' }, 'Enregistrer le relevé'),
   retour);
+  return {
+    element: form,
+    mettreAJour(nouveauxReleves) {
+      relevesActuels = nouveauxReleves;
+      majDernierReleve();
+    },
+  };
 }
 
 function classement({ meilleurs, pires }) {
@@ -62,20 +77,40 @@ function classement({ meilleurs, pires }) {
   return f;
 }
 
+function graphiquesTableau(stats, relevesCompte, cibles, fz) {
+  const c = cibles ?? {};
+  const s = seriesTableau({ stats, relevesCompte, fuseau: fz });
+  const jour = iso => new Date(iso).toLocaleDateString('fr-FR', { timeZone: fz, day: 'numeric', month: 'short' });
+  return [
+    figure('Taux d’abonnés par vue des Reels', svgCourbe({ points: s.reels.map(p => ({ etiquette: jour(p.date), valeur: p.valeur, titre: p.libelle })), cible: c.taux_abonnes_par_vue ?? null, format: pct }), VIDE),
+    figure('Partages et envois par post', svgBarres({ valeurs: s.partages.slice(-12).map(p => ({ etiquette: jour(p.date), valeur: p.valeur, titre: p.libelle })), cible: c.partages_par_post ?? null, format: entier }), VIDE),
+    figure('Croissance nette hebdomadaire', svgBarres({ valeurs: s.croissance.map(p => ({ etiquette: p.semaine.slice(5), valeur: p.valeur, titre: p.semaine })), cible: c.croissance_nette_semaine ?? null, format: entier }), 'Il faut deux relevés du compte consécutifs.'),
+    figure('Clics sur la porte', svgBarres({ valeurs: s.porte.map(p => ({ etiquette: p.semaine.slice(5), valeur: p.valeur, titre: p.semaine })), cible: c.clics_porte_semaine ?? null, format: entier }), VIDE),
+    classement(s.classement),
+    figure('Score prévu / performance réelle', svgNuage({ points: s.scoreReel.map(p => ({ x: p.score, y: p.valeur, titre: p.libelle })), formatY: pct }), 'Aucun contenu évalué et relevé.'),
+  ];
+}
+
 export function vueTableau({ profil, stats, relevesCompte, fichesRecentes = [], maintenant }, actions) {
   const r = profil.regles_studio;
   const fz = r.fuseau;
   if (stats === undefined || relevesCompte === undefined) return h('div', { class: 'tableau' }, h('p', { class: 'aide' }, 'Chargement du tableau de bord…'));
-  const c = r.cibles ?? {};
-  const s = seriesTableau({ stats, relevesCompte, fuseau: fz });
-  const jour = iso => new Date(iso).toLocaleDateString('fr-FR', { timeZone: fz, day: 'numeric', month: 'short' });
-  return h('div', { class: 'tableau' },
-    h('div', { class: 'tableau-saisie' }, aSaisir(fichesRecentes, stats, maintenant, fz, actions), releveCompte(relevesCompte, maintenant, fz, actions)),
-    h('div', { class: 'graphiques' },
-      figure('Taux d’abonnés par vue des Reels', svgCourbe({ points: s.reels.map(p => ({ etiquette: jour(p.date), valeur: p.valeur, titre: p.libelle })), cible: c.taux_abonnes_par_vue ?? null, format: pct }), VIDE),
-      figure('Partages et envois par post', svgBarres({ valeurs: s.partages.slice(-12).map(p => ({ etiquette: jour(p.date), valeur: p.valeur, titre: p.libelle })), cible: c.partages_par_post ?? null, format: entier }), VIDE),
-      figure('Croissance nette hebdomadaire', svgBarres({ valeurs: s.croissance.map(p => ({ etiquette: p.semaine.slice(5), valeur: p.valeur, titre: p.semaine })), cible: c.croissance_nette_semaine ?? null, format: entier }), 'Il faut deux relevés du compte consécutifs.'),
-      figure('Clics sur la porte', svgBarres({ valeurs: s.porte.map(p => ({ etiquette: p.semaine.slice(5), valeur: p.valeur, titre: p.semaine })), cible: c.clics_porte_semaine ?? null, format: entier }), VIDE),
-      classement(s.classement),
-      figure('Score prévu / performance réelle', svgNuage({ points: s.scoreReel.map(p => ({ x: p.score, y: p.valeur, titre: p.libelle })), formatY: pct }), 'Aucun contenu évalué et relevé.')));
+
+  let elementASaisir = aSaisir(fichesRecentes, stats, maintenant, fz, actions);
+  const releve = releveCompte(relevesCompte, maintenant, fz, actions);
+  const graphiques = h('div', { class: 'graphiques' }, ...graphiquesTableau(stats, relevesCompte, r.cibles, fz));
+
+  const racine = h('div', { class: 'tableau' },
+    h('div', { class: 'tableau-saisie' }, elementASaisir, releve.element),
+    graphiques);
+
+  racine.mettreAJour = e2 => {
+    const nouveau = aSaisir(e2.fichesRecentes ?? [], e2.stats, e2.maintenant, fz, actions);
+    elementASaisir.replaceWith(nouveau);
+    elementASaisir = nouveau;
+    releve.mettreAJour(e2.relevesCompte);
+    graphiques.replaceChildren(...graphiquesTableau(e2.stats, e2.relevesCompte, r.cibles, fz));
+  };
+
+  return racine;
 }

@@ -245,4 +245,37 @@ describe('demarrer', () => {
     await vi.waitFor(() => expect(racine.textContent).toContain('Accroche fictive'));
     expect(racine.textContent).toContain('Relevé du compte');
   });
+
+  it('garde le formulaire du relevé du compte intact lors de son propre enregistrement', async () => {
+    const db = creerFausseBase();
+    await db.doc('profil/courant').set({ ...fictif, version: 1 });
+    await db.doc('stats_contenu/a_7j').set({ fiche: 'a', releve: '7j', vues: 1000, nouveaux_abonnes: 5, partages_envois: 12, date_publication: '2026-09-15T10:00:00.000Z', format: 'reel', pilier: 'socio', accroche: 'Accroche fictive', score_total: 70 });
+    const racine = document.createElement('div');
+    const app = await demarrer(racine, { use: async nom => (nom === 'db' ? db : null) }, { horloge });
+    await app.actions.changerVue('tableau');
+    await vi.waitFor(() => expect(racine.textContent).toContain('Accroche fictive'));
+
+    const select = racine.querySelector('select[name="semaine"]');
+    const semaineDerniere = select.options[1].value;
+    select.value = semaineDerniere;
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+    racine.querySelector('input[name="abonnes"]').value = '1234';
+    racine.querySelector('form.releve-compte').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+
+    await vi.waitFor(() => expect(db.ecritures.some(e => e.startsWith('releves_compte/'))).toBe(true));
+    await vi.waitFor(() => expect(racine.textContent).toContain('Relevé du compte enregistré.'));
+    expect(select.value).toBe(semaineDerniere);
+    expect(racine.textContent).toContain('Dernier relevé');
+  });
+
+  it('ne reconstruit pas la vue Semaine quand seules les statistiques changent', async () => {
+    const db = creerFausseBase();
+    const racine = document.createElement('div');
+    const app = await demarrer(racine, { use: async nom => (nom === 'db' ? db : null) }, { horloge });
+    await app.actions.importerProfil(JSON.stringify(fictif));
+    await vi.waitFor(() => expect(app.etat.lire().vue).toBe('semaine'));
+    const avant = racine.querySelector('.vue > *');
+    app.etat.modifier({ stats: [{ id: 'x_7j', fiche: 'x', releve: '7j', vues: 1, nouveaux_abonnes: 1, partages_envois: 1, date_publication: T, format: 'reel', accroche: 'x', score_total: 1 }] });
+    expect(racine.querySelector('.vue > *')).toBe(avant);
+  });
 });
