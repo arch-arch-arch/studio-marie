@@ -23,7 +23,7 @@ export function nouvelleFiche({ id, format, date_heure, pilier = '', maintenant,
 export function empreinte(f) {
   const texte = [
     f.accroche ?? '', f.caption ?? '', f.visuel ?? '', (f.hashtags ?? []).join(' '),
-    f.format ?? '', f.pilier ?? '', f.role_caption ?? '', f.cta ? '1' : '0',
+    f.format ?? '', f.pilier ?? '', f.role_caption ?? '', f.cta ? '1' : '0', f.geotag ?? '', f.porte ? '1' : '0',
   ].join('␞');
   let h = 0x811c9dc5;
   for (let i = 0; i < texte.length; i++) {
@@ -96,3 +96,11 @@ export function analyserHashtags(texte) {
 export const formaterHashtags = tags => (tags ?? []).map(t => `#${t}`).join(' ');
 
 export const texteAPublier = f => [f.caption?.trim(), formaterHashtags(f.hashtags)].filter(Boolean).join('\n\n');
+
+export function appliquerEvaluation(fiche, { score, variantes, suggestions, recommandations }, maintenant) {
+  const resultat = { ...fiche, score, variantes, suggestions, recommandations, maj_le: maintenant };
+  if ((resultat.statut === 'valide' || resultat.statut === 'programme') && !peutPasserA(resultat, resultat.statut).ok) {
+    resultat.statut = 'brouillon';
+  }
+  return resultat;
+}

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   FORMATS, STATUTS, nouvelId, nouvelleFiche, empreinte, aReevaluer, modifierFiche, peutPasserA,
-  changerStatut, deplacerFiche, analyserHashtags, formaterHashtags, texteAPublier,
+  changerStatut, deplacerFiche, analyserHashtags, formaterHashtags, texteAPublier, appliquerEvaluation,
 } from '../../src/logique/fiche.js';
 
 const T0 = '2026-09-27T20:00:00.000Z';
@@ -41,14 +41,16 @@ describe('empreinte et réévaluation', () => {
     expect(aReevaluer({ ...f, caption: 'changée' })).toBe(true);
     expect(aReevaluer(base())).toBe(false);
   });
-  it('couvre le format, le pilier, le rôle et le cta, mais pas la date, le statut ni le geotag', () => {
+  it('couvre le format, le pilier, le rôle, le cta, le geotag et la porte, mais pas la date ni le statut', () => {
     const f = base();
     expect(empreinte({ ...f, format: 'post' })).not.toBe(empreinte(f));
     expect(empreinte({ ...f, pilier: 'autre' })).not.toBe(empreinte(f));
     expect(empreinte({ ...f, role_caption: 'cta' })).not.toBe(empreinte(f));
     expect(empreinte({ ...f, cta: true })).not.toBe(empreinte(f));
+    expect(empreinte({ ...f, geotag: 'Paris' })).not.toBe(empreinte(f));
+    expect(empreinte({ ...f, porte: true })).not.toBe(empreinte(f));
     expect(empreinte({ ...f, date_heure: '2026-10-01T00:00:00.000Z' })).toBe(empreinte(f));
-    expect(empreinte({ ...f, geotag: 'Paris' })).toBe(empreinte(f));
+    expect(empreinte({ ...f, statut: 'brouillon' })).toBe(empreinte(f));
   });
 });
 
@@ -64,7 +66,8 @@ describe('modifierFiche', () => {
   it('repasse en brouillon une fiche validée dont le contenu évalué change', () => {
     const validee = changerStatut(prete(), 'valide', T0);
     expect(modifierFiche(validee, { caption: 'autre' }, T0).statut).toBe('brouillon');
-    expect(modifierFiche(validee, { geotag: 'Paris' }, T0).statut).toBe('valide');
+    expect(modifierFiche(validee, { geotag: 'Paris' }, T0).statut).toBe('brouillon');
+    expect(modifierFiche(validee, { porte: true }, T0).statut).toBe('brouillon');
     const publiee = changerStatut(validee, 'publie', T0);
     expect(modifierFiche(publiee, { caption: 'autre' }, T0).statut).toBe('publie');
   });
@@ -122,5 +125,40 @@ describe('hashtags et texte à publier', () => {
     expect(formaterHashtags(['nuit', 'socio'])).toBe('#nuit #socio');
     expect(texteAPublier({ caption: ' Bonsoir. ', hashtags: ['nuit'] })).toBe('Bonsoir.\n\n#nuit');
     expect(texteAPublier({ caption: '', hashtags: [] })).toBe('');
+  });
+});
+
+describe('appliquerEvaluation', () => {
+  it('pose le score et les suggestions sans toucher au contenu ni au statut', () => {
+    const f = { ...base(), statut: 'brouillon', visuel: 'a1', caption: 'Une caption.' };
+    const score = { total: 70, criteres: [], conformite: { etat: 'vert', causes: [] }, empreinte: empreinte(f) };
+    const g = appliquerEvaluation(f, {
+      score,
+      variantes: [{ role: 'engagement', texte: 'V1' }, { role: 'deadpan', texte: 'V2' }],
+      suggestions: { accroches: ['A1', 'A2'], hashtags: ['nuit'] },
+      recommandations: ['R1', 'R2', 'R3'],
+    }, '2026-09-28T09:00:00.000Z');
+    expect(g).toMatchObject({ score, statut: 'brouillon', caption: 'Une caption.', maj_le: '2026-09-28T09:00:00.000Z', recommandations: ['R1', 'R2', 'R3'] });
+    expect(g.suggestions).toEqual({ accroches: ['A1', 'A2'], hashtags: ['nuit'] });
+    expect(aReevaluer(g)).toBe(false);
+    expect(peutPasserA(g, 'valide')).toEqual({ ok: true });
+  });
+
+  it('repasse en brouillon une fiche validée dont la conformité redevient rouge', () => {
+    const validee = changerStatut(prete(), 'valide', T0);
+    const score = { total: 40, criteres: [], conformite: { etat: 'rouge', causes: ['x'] }, empreinte: empreinte(validee) };
+    const g = appliquerEvaluation(validee, {
+      score, variantes: [], suggestions: { accroches: [], hashtags: [] }, recommandations: ['R1', 'R2', 'R3'],
+    }, '2026-09-28T09:00:00.000Z');
+    expect(g.statut).toBe('brouillon');
+  });
+
+  it('garde le statut publié même si la conformité redevient rouge', () => {
+    const publiee = changerStatut(changerStatut(prete(), 'valide', T0), 'publie', T0);
+    const score = { total: 40, criteres: [], conformite: { etat: 'rouge', causes: ['x'] }, empreinte: empreinte(publiee) };
+    const g = appliquerEvaluation(publiee, {
+      score, variantes: [], suggestions: { accroches: [], hashtags: [] }, recommandations: ['R1', 'R2', 'R3'],
+    }, '2026-09-28T09:00:00.000Z');
+    expect(g.statut).toBe('publie');
   });
 });

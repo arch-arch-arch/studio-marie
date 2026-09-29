@@ -24,6 +24,13 @@ describe('fiches', () => {
     await depot.supprimerFiche('a');
     expect(db._docs.has('fiches/a')).toBe(false);
   });
+  it('lit une fiche par id, ou renvoie null si elle n’existe pas', async () => {
+    const db = creerFausseBase();
+    const depot = creerDepot(db);
+    await depot.enregistrerFiche({ id: 'a', date_heure: T, format: 'reel' });
+    expect(await depot.lireFiche('a')).toEqual({ id: 'a', date_heure: T, format: 'reel' });
+    expect(await depot.lireFiche('inconnue')).toBeNull();
+  });
 });
 
 describe('profil', () => {
@@ -52,5 +59,29 @@ describe('profil', () => {
     await depot.importerProfil(fictif, T);
     await depot.importerProfil({ regles_studio: { fuseau: 'Mars/Olympus' } }, T);
     expect(db._docs.get('profil/courant')).toMatchObject({ version: 1 });
+  });
+});
+
+describe('jeu de référence', () => {
+  it('remplace le jeu en supprimant les contenus retirés, et garde le dernier bilan', async () => {
+    const db = creerFausseBase();
+    const depot = creerDepot(db);
+    const vus = [];
+    depot.ecouterReference(liste => vus.push(liste));
+    await depot.remplacerReference([{ id: 'r1', accroche: 'a' }, { id: 'r2', accroche: 'b' }], []);
+    await depot.remplacerReference([{ id: 'r1', accroche: 'c' }], vus.at(-1));
+    expect(vus.at(-1)).toEqual([{ id: 'r1', accroche: 'c' }]);
+    const bilans = [];
+    depot.ecouterResultatReference(b => bilans.push(b));
+    expect(bilans[0]).toBeNull();
+    await depot.enregistrerResultatReference({ taux: 1, ok: true });
+    expect(bilans.at(-1)).toEqual({ taux: 1, ok: true });
+  });
+  it('efface le bilan', async () => {
+    const db = creerFausseBase();
+    const depot = creerDepot(db);
+    await depot.enregistrerResultatReference({ taux: 1, ok: true });
+    await depot.effacerResultatReference();
+    expect(db._docs.has('reference_resultats/dernier')).toBe(false);
   });
 });

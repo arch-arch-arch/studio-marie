@@ -38,8 +38,8 @@ function barre(e, actions) {
   return elements;
 }
 
-function contenuVue(e, actions) {
-  if (!e.profil || e.vue === 'profil') return vueProfil(e, actions);
+function contenuVue(e, actions, capacites) {
+  if (!e.profil || e.vue === 'profil') return vueProfil(e, actions, capacites);
   if (e.vue === 'mois') return vueMois(e, actions);
   if (e.vue === 'jour') return vueJour(e, actions);
   return vueSemaine(e, actions);
@@ -52,6 +52,7 @@ export function creerRendu(racine, actions, capacites, horloge) {
   const panneau = h('div', { class: 'zone-panneau' });
   racine.replaceChildren(tete, zoneErreur, h('div', { class: 'corps' }, vue, panneau));
   let memo = {};
+  let elementVue = null;
 
   return function rendre(e) {
     zoneErreur.replaceChildren(e.erreur
@@ -63,13 +64,23 @@ export function creerRendu(racine, actions, capacites, horloge) {
     }
     tete.replaceChildren(...barre(e, actions));
     const e2 = { ...e, maintenant: horloge() };
-    if (memo.profil !== e.profil || memo.fiches !== e.fiches || memo.vue !== e.vue || memo.ancre !== e.ancre) {
-      vue.replaceChildren(contenuVue(e2, actions));
+    const estVueProfil = !e.profil || e.vue === 'profil';
+    const reconstructionRequise = estVueProfil
+      ? (memo.profil !== e.profil || memo.vue !== e.vue || memo.ancre !== e.ancre)
+      : (memo.profil !== e.profil || memo.fiches !== e.fiches || memo.vue !== e.vue || memo.ancre !== e.ancre);
+    if (reconstructionRequise) {
+      elementVue = contenuVue(e2, actions, capacites);
+      vue.replaceChildren(elementVue);
+    } else if (estVueProfil && (memo.reference !== e.reference || memo.resultatReference !== e.resultatReference || memo.verificationReference !== e.verificationReference)) {
+      elementVue?.mettreAJour?.(e2);
     }
     const ouverte = e.profil && e.ficheOuverte ? e.fiches.find(f => f.id === e.ficheOuverte) : null;
     const panneauChange = memo.ficheOuverte !== e.ficheOuverte || memo.profil !== e.profil || (!!ouverte !== memo.panneauAffiche);
     if (panneauChange) panneau.replaceChildren(ouverte ? panneauFiche(ouverte, e.profil, actions, capacites) : '');
     racine.classList.toggle('avec-panneau', !!ouverte);
-    memo = { profil: e.profil, fiches: e.fiches, vue: e.vue, ancre: e.ancre, ficheOuverte: e.ficheOuverte, panneauAffiche: !!ouverte };
+    memo = {
+      profil: e.profil, fiches: e.fiches, vue: e.vue, ancre: e.ancre, ficheOuverte: e.ficheOuverte, panneauAffiche: !!ouverte,
+      reference: e.reference, resultatReference: e.resultatReference, verificationReference: e.verificationReference,
+    };
   };
 }

@@ -50,7 +50,7 @@ Commandes : `npm test` (tests) et `npm run build` (page à publier).
 - [x] Conception détaillée (données, score, veille, interface)
 - [x] Spec écrite et validée
 - [x] Plan 1 : fondations et calendrier (studio de test publié)
-- [ ] Plan 2 : évaluation par Claude et studio réel
+- [x] Plan 2 : évaluation par Claude et studio réel
 - [ ] Plan 3 : veille hebdo
 - [ ] Plan 4 : relevés de stats et tableau de bord
 

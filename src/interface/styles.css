@@ -141,3 +141,23 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .puce-pilier { border-left: 4px solid var(--pilier); padding: 1px 8px; background: var(--surface-2); border-radius: 4px; }
 .import { display: grid; gap: 10px; }
 .erreurs { color: var(--rouge); margin: 0; padding-left: 18px; }
+
+/* Évaluation */
+.score h4 { margin: 10px 0 4px; font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--texte-2); }
+.conformite { margin: 4px 0; padding: 4px 8px; border-radius: 6px; border-left: 4px solid var(--etat, var(--trait)); background: var(--surface-2); font-size: 14px; }
+.conformite-vert { --etat: var(--vert); } .conformite-orange { --etat: var(--orange); } .conformite-rouge { --etat: var(--rouge); font-weight: 600; }
+.criteres, .alertes, .recommandations, .suggestions { margin: 0; padding-left: 18px; font-size: 14px; display: grid; gap: 4px; }
+.alertes { color: var(--orange); }
+.suggestions { list-style: none; padding-left: 0; }
+.suggestion { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 8px; align-items: start; padding: 6px 8px; background: var(--surface-2); border-radius: 6px; }
+.suggestion-role { grid-column: 1 / -1; font-size: 12px; font-weight: 600; color: var(--texte-2); }
+.suggestion-texte { white-space: pre-wrap; overflow-wrap: anywhere; }
+.suggestion-hashtags { font-family: var(--mono); font-size: 13px; margin: 4px 0; overflow-wrap: anywhere; }
+.evaluation-actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+
+/* Jeu de référence */
+.reference { display: grid; gap: 10px; }
+.bilan { border-left: 4px solid var(--etat); padding: 6px 10px; background: var(--surface-2); border-radius: 6px; }
+.bilan p { margin: 0; }
+.bilan ul { margin: 6px 0 0; padding-left: 18px; font-size: 14px; }
+.bilan-ok { --etat: var(--vert); } .bilan-ko { --etat: var(--rouge); }

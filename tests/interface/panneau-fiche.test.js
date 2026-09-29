@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import fictif from '../../exemples/profil-fictif.json';
-import { nouvelleFiche } from '../../src/logique/fiche.js';
+import { nouvelleFiche, empreinte } from '../../src/logique/fiche.js';
 import { panneauFiche } from '../../src/interface/panneau-fiche.js';
 
 const fiche = (extra = {}) => ({ ...nouvelleFiche({ id: 'f1', format: 'reel', date_heure: '2026-09-28T10:00:00.000Z', pilier: 'socio', maintenant: 'x' }), ...extra });
@@ -9,6 +9,7 @@ const actionsFactices = () => ({
   modifierFiche: vi.fn(), fermerPanneau: vi.fn(), supprimerFiche: vi.fn(),
   changerStatut: vi.fn(async () => ({ ok: false, raison: 'Ajoute un visuel avant de valider.' })),
   televerserVisuel: vi.fn(async () => ({ ok: true, id: 'as1', type: 'image' })),
+  evaluationDisponible: vi.fn(() => true),
 });
 const saisir = (el, valeur, evenement = 'input') => { el.value = valeur; el.dispatchEvent(new Event(evenement, { bubbles: true })); };
 const bouton = (racine, texte) => [...racine.querySelectorAll('button')].find(b => b.textContent === texte);
@@ -25,6 +26,11 @@ describe('panneauFiche', () => {
     expect(actions.modifierFiche).toHaveBeenCalledWith('f1', { accroche: 'Nouvelle accroche' });
     saisir(p.querySelector('input[name="hashtags"]'), '#nuit socio', 'change');
     expect(actions.modifierFiche).toHaveBeenCalledWith('f1', { hashtags: ['nuit', 'socio'] });
+  });
+
+  it('borne la longueur du géotag', () => {
+    const p = panneauFiche(fiche(), fictif, actionsFactices(), { assets: true });
+    expect(p.querySelector('input[name="geotag"]').maxLength).toBe(200);
   });
 
   it('convertit la date et l’heure locales en UTC', () => {
@@ -108,5 +114,157 @@ describe('panneauFiche', () => {
     expect(brouillonBouton.getAttribute('aria-pressed')).toBe('true');
     expect(p.querySelector('.panneau-message').textContent).toBe('La fiche est repassée en Brouillon : réévalue-la.');
     expect(p.querySelector('textarea[name="caption"]')).toBe(caption);
+  });
+});
+
+describe('évaluation dans le panneau', () => {
+  const evaluee = () => {
+    const f = fiche({ caption: 'Base.', visuel: 'a1' });
+    return {
+      ...f,
+      score: {
+        total: 72,
+        criteres: [
+          { cle: 'accroche', nom: 'Accroche et diffusion', points: 30, max: 40, phrase: 'Nette.' },
+          { cle: 'voix', nom: 'Voix et esthétique', points: 22, max: 30, phrase: 'Juste.' },
+          { cle: 'mecanique', nom: 'Mécanique de la caption', points: 20, max: 30, phrase: 'Correcte.' },
+        ],
+        conformite: { etat: 'vert', causes: [] }, alertes: ['Hors des créneaux recommandés du profil.'], empreinte: empreinte(f),
+      },
+      variantes: [{ role: 'engagement', texte: 'Variante A' }, { role: 'deadpan', texte: 'Variante B' }],
+      suggestions: { accroches: ['Acc 1', 'Acc 2'], hashtags: ['nuit', 'socio'] },
+      recommandations: ['R1', 'R2', 'R3'],
+    };
+  };
+
+  it('masque « Évaluer » sans la capacité sample', () => {
+    const p = panneauFiche(fiche(), fictif, actionsFactices(), { assets: true, sample: false });
+    expect(bouton(p, 'Évaluer')).toBeUndefined();
+  });
+
+  it('masque « Évaluer » si l’évaluation a été mémorisée comme indisponible', () => {
+    const actions = { ...actionsFactices(), evaluationDisponible: vi.fn(() => false) };
+    const p = panneauFiche(fiche(), fictif, actions, { assets: true, sample: true });
+    expect(bouton(p, 'Évaluer')).toBeUndefined();
+  });
+
+  it('lance l’évaluation, permet de l’arrêter, puis affiche le score', async () => {
+    let signalRecu;
+    let resoudre;
+    const actions = { ...actionsFactices(), evaluerFiche: vi.fn((id, { signal }) => { signalRecu = signal; return new Promise(r => { resoudre = r; }); }) };
+    const p = panneauFiche(fiche(), fictif, actions, { assets: true, sample: true });
+    bouton(p, 'Évaluer').click();
+    expect(actions.evaluerFiche).toHaveBeenCalledWith('f1', expect.objectContaining({ signal: expect.any(AbortSignal) }));
+    expect(bouton(p, 'Évaluation…').disabled).toBe(true);
+    bouton(p, 'Arrêter').click();
+    expect(signalRecu.aborted).toBe(true);
+    resoudre({ ok: true, fiche: evaluee() });
+    await vi.waitFor(() => expect(p.textContent).toContain('Score : 72/100'));
+    expect(p.textContent).toContain('Accroche et diffusion : 30/40. Nette.');
+    expect(p.textContent).toContain('Hors des créneaux recommandés du profil.');
+    expect(p.textContent).toContain('R3');
+    expect(bouton(p, 'Réévaluer')).toBeDefined();
+  });
+
+  it('affiche la raison d’un échec et garde le bouton', async () => {
+    const actions = { ...actionsFactices(), evaluerFiche: vi.fn(async () => ({ ok: false, raison: 'Trop de demandes à Claude pour le moment : réessaie un peu plus tard.' })) };
+    const p = panneauFiche(fiche(), fictif, actions, { assets: true, sample: true });
+    bouton(p, 'Évaluer').click();
+    await vi.waitFor(() => expect(p.querySelector('.panneau-message').textContent).toBe('Trop de demandes à Claude pour le moment : réessaie un peu plus tard.'));
+    expect(bouton(p, 'Évaluer')).toBeDefined();
+  });
+
+  it('retire le bouton quand l’évaluation est indisponible', async () => {
+    const actions = { ...actionsFactices(), evaluerFiche: vi.fn(async () => ({ ok: false, raison: 'Indisponible.', indisponible: true })) };
+    const p = panneauFiche(fiche(), fictif, actions, { assets: true, sample: true });
+    bouton(p, 'Évaluer').click();
+    await vi.waitFor(() => expect(p.querySelector('.panneau-message').textContent).toBe('Indisponible.'));
+    expect(bouton(p, 'Évaluer')).toBeUndefined();
+  });
+
+  it('un arrêt affiche « Évaluation arrêtée. »', async () => {
+    const actions = { ...actionsFactices(), evaluerFiche: vi.fn(async () => ({ ok: false, annule: true })) };
+    const p = panneauFiche(fiche(), fictif, actions, { assets: true, sample: true });
+    bouton(p, 'Évaluer').click();
+    await vi.waitFor(() => expect(p.querySelector('.panneau-message').textContent).toBe('Évaluation arrêtée.'));
+  });
+
+  it('montre une conformité bloquante avec ses causes', () => {
+    const f = evaluee();
+    const rouge = { ...f, score: { ...f.score, total: 40, conformite: { etat: 'rouge', causes: ['mot à éviter « mindset »'] } } };
+    const p = panneauFiche(rouge, fictif, actionsFactices(), { assets: true, sample: true });
+    expect(p.textContent).toContain('Conformité : bloquante. mot à éviter « mindset »');
+  });
+
+  it('« Utiliser » applique une caption, une accroche ou les hashtags proposés', () => {
+    const actions = actionsFactices();
+    const p = panneauFiche(evaluee(), fictif, actions, { assets: true, sample: true });
+    const utiliser = [...p.querySelectorAll('.suggestion button')];
+    utiliser[0].click();
+    expect(actions.modifierFiche).toHaveBeenCalledWith('f1', { caption: 'Variante A' });
+    expect(p.querySelector('textarea[name="caption"]').value).toBe('Variante A');
+    bouton(p, 'Utiliser ces hashtags').click();
+    expect(actions.modifierFiche).toHaveBeenCalledWith('f1', { hashtags: ['nuit', 'socio'] });
+    const accroche = [...p.querySelectorAll('.suggestion')].find(li => li.textContent.includes('Acc 2')).querySelector('button');
+    accroche.click();
+    expect(actions.modifierFiche).toHaveBeenCalledWith('f1', { accroche: 'Acc 2' });
+  });
+
+  it('affiche « repassée en Brouillon » quand l’évaluation fait perdre la validation', async () => {
+    const f = fiche({ statut: 'valide' });
+    const actions = { ...actionsFactices(), evaluerFiche: vi.fn(async () => ({ ok: true, fiche: { ...evaluee(), statut: 'brouillon' } })) };
+    const p = panneauFiche(f, fictif, actions, { assets: true, sample: true });
+    bouton(p, 'Évaluer').click();
+    await vi.waitFor(() => {
+      const brouillonBouton = bouton(p, 'Brouillon');
+      expect(brouillonBouton.getAttribute('aria-pressed')).toBe('true');
+    });
+    expect(p.querySelector('.panneau-message').textContent).toBe('La fiche est repassée en Brouillon : réévalue-la.');
+  });
+
+  it('« Utiliser » affiche « repassée en Brouillon » quand modifierFiche renvoie un nouveau statut', () => {
+    const f = { ...evaluee(), statut: 'valide' };
+    const actions = { ...actionsFactices(), modifierFiche: vi.fn(() => ({ ...f, statut: 'brouillon' })) };
+    const p = panneauFiche(f, fictif, actions, { assets: true, sample: true });
+    const utiliserCaption = [...p.querySelectorAll('.suggestion button')][0];
+    utiliserCaption.click();
+    const brouillonBouton = bouton(p, 'Brouillon');
+    expect(brouillonBouton.getAttribute('aria-pressed')).toBe('true');
+    expect(p.querySelector('.panneau-message').textContent).toBe('La fiche est repassée en Brouillon : réévalue-la.');
+  });
+
+  it('« Utiliser » garde le même nœud de caption, mis à jour et focus', () => {
+    const actions = actionsFactices();
+    const p = panneauFiche(evaluee(), fictif, actions, { assets: true, sample: true });
+    document.body.appendChild(p);
+    const caption = p.querySelector('textarea[name="caption"]');
+    const utiliserCaption = [...p.querySelectorAll('.suggestion button')][0];
+    utiliserCaption.click();
+    expect(p.querySelector('textarea[name="caption"]')).toBe(caption);
+    expect(caption.value).toBe('Variante A');
+    expect(document.activeElement).toBe(caption);
+    document.body.removeChild(p);
+  });
+
+  it('affiche un message d’échec et remet « Évaluer » quand evaluerFiche rejette', async () => {
+    const actions = { ...actionsFactices(), evaluerFiche: vi.fn(async () => { throw new Error('réseau coupé'); }) };
+    const p = panneauFiche(fiche(), fictif, actions, { assets: true, sample: true });
+    bouton(p, 'Évaluer').click();
+    await vi.waitFor(() => expect(p.querySelector('.panneau-message').textContent).toBe('L’évaluation a échoué : réessaie. Rien n’a été modifié.'));
+    expect(bouton(p, 'Évaluer')).toBeDefined();
+  });
+
+  it('ignore un second clic sur « Évaluer » pendant une évaluation en cours', () => {
+    const actions = { ...actionsFactices(), evaluerFiche: vi.fn(() => new Promise(() => {})) };
+    const p = panneauFiche(fiche(), fictif, actions, { assets: true, sample: true });
+    bouton(p, 'Évaluer').click();
+    bouton(p, 'Évaluation…').click();
+    expect(actions.evaluerFiche).toHaveBeenCalledTimes(1);
+  });
+
+  it('affiche un titre « Alertes » avant la liste des alertes', () => {
+    const p = panneauFiche(evaluee(), fictif, actionsFactices(), { assets: true, sample: true });
+    const titres = [...p.querySelectorAll('h4')].map(el => el.textContent);
+    expect(titres).toContain('Alertes');
   });
 });

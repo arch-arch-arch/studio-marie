@@ -112,6 +112,7 @@ Ce qui est vérifié :
 - **Règles calculées** (`src/logique/`, sans appel à Claude) : mots à éviter, longueur de l'accroche, nombre de hashtags, présence d'un appel à l'action, lien interdit, géotag trop précis, créneau hors des plages recommandées. **Le verrou de conformité repose en priorité sur ces règles.**
 - **Jugement de Claude** : force de l'accroche, voix, esthétique, cohérence avec le pilier, potentiel de partage.
 - Le score final additionne les points de chaque critère. Claude reçoit le résultat des règles calculées et ne peut pas lever un blocage qu'elles ont posé.
+- Chaque alerte liée à un critère (accroche absente ou trop longue, hashtags hors plage, contenu hors créneau) retire 20 % des points maximum du critère concerné. La photo seule donne une alerte sans pénalité. La conformité finale est la plus sévère entre la conformité calculée et celle jugée par Claude, et leurs causes sont cumulées.
 
 ### 3.5 Contrôle de la semaine
 
@@ -153,13 +154,15 @@ Tout est dans la base partagée du studio. Les dates sont stockées en UTC et af
 | `bulletins` | Un document par semaine ISO : rétrospective, tendances, alertes, identifiants des idées créées, sources, erreurs, date de génération. |
 | `stats_contenu` | Deux relevés par fiche publiée (**48 h** et **7 jours**) : vues, nouveaux abonnés, partages et envois, sauvegardes, visites du profil, clics sur la porte. Le taux d'abonnés par vue est calculé, pas saisi. |
 | `releves_compte` | Un relevé par semaine, le dimanche : abonnés, vues moyennes des stories, clics sur la porte. La croissance nette est calculée. |
+| `reference` | Jeu de référence : un document par contenu `{ format, pilier, accroche, caption, hashtags, resultat: gagnant\|perdant }`. |
+| `reference_resultats` | Document `dernier` : bilan de la dernière vérification du classement. |
 
 **Champs d'une fiche :**
 - **type de contenu** : `format`, `pilier`, `format_valide`, `role_caption`, `cta` (booléen), `ragebait` (booléen), `porte` (booléen, story qui mène à la porte) ;
 - **planification** : `date_heure` (UTC) et `statut` : Idée → Brouillon → Validé → Programmé → Publié ;
-- **contenu** : `visuel` (identifiant du fichier stocké), `visuel_type` (`image` ou `video`), `accroche`, `caption`, `variantes`, `hashtags`, `geotag` (niveau ville) ;
+- **contenu** : `visuel` (identifiant du fichier stocké), `visuel_type` (`image` ou `video`), `accroche`, `caption`, `hashtags`, `geotag` (niveau ville) ;
 - **score** : `total`, `criteres`, `conformite` (état et causes), `version_profil`, `evalue_le`, `empreinte` ;
-- **recommandations** ;
+- **recommandations**, **variantes** (2 captions `{ role, texte }`) et **suggestions** (`{ accroches, hashtags }`) ;
 - **origine** : `manuelle`, `veille` ou `banque`, avec l'identifiant du bulletin quand l'idée vient de la veille ;
 - `modifiee_depuis_creation` (booléen), qui sert à la règle de relance de la veille.
 

@@ -1,7 +1,14 @@
 export function creerFausseBase() {
   const docs = new Map();
-  const ecouteurs = new Set();
-  const notifier = () => { for (const e of [...ecouteurs]) e(); };
+  const ecouteurs = new Map(); // racine (premier segment du chemin) -> Set de callbacks
+  const racineDe = chemin => chemin.split('/')[0];
+  const notifier = racine => { for (const e of [...(ecouteurs.get(racine) ?? [])]) e(); };
+  const ecouter = (racine, e) => {
+    if (!ecouteurs.has(racine)) ecouteurs.set(racine, new Set());
+    ecouteurs.get(racine).add(e);
+    e();
+    return () => ecouteurs.get(racine)?.delete(e);
+  };
   const instantane = chemin => ({
     id: chemin.split('/').pop(),
     exists: docs.has(chemin),
@@ -16,9 +23,9 @@ export function creerFausseBase() {
       id: chemin.split('/').pop(),
       path: chemin,
       async get() { return instantane(chemin); },
-      async set(corps) { base.ecritures.push(chemin); docs.set(chemin, structuredClone(corps)); notifier(); },
-      async delete() { base.ecritures.push(`suppression:${chemin}`); docs.delete(chemin); notifier(); },
-      onSnapshot(suivant) { const e = () => suivant(instantane(chemin)); ecouteurs.add(e); e(); return () => ecouteurs.delete(e); },
+      async set(corps) { base.ecritures.push(chemin); docs.set(chemin, structuredClone(corps)); notifier(racineDe(chemin)); },
+      async delete() { base.ecritures.push(`suppression:${chemin}`); docs.delete(chemin); notifier(racineDe(chemin)); },
+      onSnapshot(suivant) { return ecouter(racineDe(chemin), () => suivant(instantane(chemin))); },
     }),
     collection: chemin => requete(chemin, []),
   };
@@ -37,7 +44,7 @@ export function creerFausseBase() {
     return {
       where: (champ, op, v) => requete(collection, [...filtres, [champ, op, v]]),
       async get() { return resultat(); },
-      onSnapshot(suivant) { const e = () => suivant(resultat()); ecouteurs.add(e); e(); return () => ecouteurs.delete(e); },
+      onSnapshot(suivant) { return ecouter(racineDe(collection), () => suivant(resultat())); },
       doc: id => base.doc(`${collection}/${id}`),
     };
   }

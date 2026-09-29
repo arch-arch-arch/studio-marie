@@ -5,6 +5,8 @@ import {
 import { cleJour, heureLocale, depuisSaisieLocale } from '../logique/dates.js';
 
 const ROLES = [['', '—'], ['engagement', 'Engagement'], ['cta', "Appel à l'action"], ['deadpan', 'Deadpan']];
+const LIBELLES_ROLE = { engagement: 'Engagement', cta: "Appel à l'action", deadpan: 'Deadpan' };
+const LIBELLES_CONFORMITE = { vert: 'conforme', orange: 'à surveiller', rouge: 'bloquante' };
 
 export function panneauFiche(fiche, profil, actions, capacites) {
   const r = profil.regles_studio;
@@ -15,6 +17,55 @@ export function panneauFiche(fiche, profil, actions, capacites) {
   const message = h('p', { class: 'panneau-message', role: 'status' });
   const afficher = texte => { message.replaceChildren(texte ?? ''); };
   let elementStatut = null;
+  let elementScore = null;
+  let evaluationDisponible = capacites.sample === true && (actions.evaluationDisponible?.() ?? true);
+  let controleurEvaluation = null;
+  const remplacerScore = () => {
+    const nouveau = sectionScore();
+    elementScore.replaceWith(nouveau);
+    elementScore = nouveau;
+  };
+
+  async function evaluer() {
+    if (controleurEvaluation) return;
+    controleurEvaluation = new AbortController();
+    remplacerScore();
+    afficher('Évaluation en cours : cela peut prendre jusqu’à une minute.');
+    let resultat;
+    try {
+      resultat = await actions.evaluerFiche(id, { signal: controleurEvaluation.signal });
+    } catch {
+      controleurEvaluation = null;
+      remplacerScore();
+      afficher('L’évaluation a échoué : réessaie. Rien n’a été modifié.');
+      return;
+    }
+    controleurEvaluation = null;
+    if (resultat.ok) {
+      const { score, variantes, suggestions, recommandations } = resultat.fiche;
+      brouillon = { ...brouillon, score, variantes, suggestions, recommandations };
+      remplacerScore();
+      afficher('Évaluation terminée.');
+      appliquerStatutRenvoye(resultat.fiche.statut);
+      return;
+    }
+    if (resultat.indisponible) evaluationDisponible = false;
+    remplacerScore();
+    afficher(resultat.annule ? 'Évaluation arrêtée.' : resultat.raison);
+  }
+
+  const SELECTEURS_CHAMP = { caption: 'textarea[name="caption"]', accroche: 'textarea[name="accroche"]', hashtags: 'input[name="hashtags"]' };
+  const valeurChamp = champ => (champ === 'hashtags' ? formaterHashtags(brouillon.hashtags) : brouillon[champ]);
+
+  const utiliser = (changements, messageFait, champ) => {
+    afficher(messageFait);
+    changer(changements);
+    const controle = racine.querySelector(SELECTEURS_CHAMP[champ]);
+    if (controle) controle.value = valeurChamp(champ);
+    remplacerScore();
+    controle?.focus();
+  };
+
   const appliquerStatutRenvoye = statut => {
     if (statut == null || statut === brouillon.statut) return;
     brouillon = { ...brouillon, statut };
@@ -115,16 +166,48 @@ export function panneauFiche(fiche, profil, actions, capacites) {
     champ('Accroche', h('textarea', { name: 'accroche', rows: 2, value: brouillon.accroche, oninput: e => changer({ accroche: e.target.value }) })),
     champ('Caption', h('textarea', { name: 'caption', rows: 6, value: brouillon.caption, oninput: e => changer({ caption: e.target.value }) })),
     champ('Hashtags', h('input', { type: 'text', name: 'hashtags', placeholder: '#mot #autre', value: formaterHashtags(brouillon.hashtags), onchange: e => changer({ hashtags: analyserHashtags(e.target.value) }) })),
-    champ('Géotag (ville)', h('input', { type: 'text', name: 'geotag', value: brouillon.geotag, oninput: e => changer({ geotag: e.target.value }) })),
+    champ('Géotag (ville)', h('input', { type: 'text', name: 'geotag', maxlength: 200, value: brouillon.geotag, oninput: e => changer({ geotag: e.target.value }) })),
     h('button', { type: 'button', class: 'bouton-principal', onclick: copier }, 'Copier la caption et les hashtags'));
 
   const sectionScore = () => {
     const s = brouillon.score;
-    if (!s) return h('section', { class: 'score' }, h('h3', {}, 'Score'), h('p', { class: 'aide' }, 'Pas encore évaluée.'));
-    return h('section', { class: 'score' },
-      h('h3', {}, `Score : ${s.total}/100`),
-      aReevaluer(brouillon) ? h('p', { class: 'aide' }, 'La fiche a changé depuis son évaluation.') : null,
-      h('ul', {}, (s.criteres ?? []).map(c => h('li', {}, `${c.nom} : ${c.points}/${c.max}. ${c.phrase ?? ''}`))));
+    const enfants = [h('h3', {}, s ? `Score : ${s.total}/100` : 'Score')];
+    if (!s) enfants.push(h('p', { class: 'aide' }, 'Pas encore évaluée.'));
+    if (s) {
+      if (aReevaluer(brouillon)) enfants.push(h('p', { class: 'aide' }, 'La fiche a changé depuis son évaluation : réévalue-la.'));
+      const etat = s.conformite?.etat;
+      const causes = s.conformite?.causes ?? [];
+      enfants.push(h('p', { class: `conformite conformite-${etat}` },
+        `Conformité : ${LIBELLES_CONFORMITE[etat] ?? 'non évaluée'}.`, causes.length ? ` ${causes.join(' ; ')}` : ''));
+      enfants.push(h('ul', { class: 'criteres' }, (s.criteres ?? []).map(c => h('li', {}, `${c.nom} : ${c.points}/${c.max}. ${c.phrase ?? ''}`))));
+      if (s.alertes?.length) enfants.push(h('h4', {}, 'Alertes'), h('ul', { class: 'alertes' }, s.alertes.map(a => h('li', {}, a))));
+    }
+    if (brouillon.recommandations?.length) {
+      enfants.push(h('h4', {}, 'Recommandations'), h('ol', { class: 'recommandations' }, brouillon.recommandations.map(r => h('li', {}, r))));
+    }
+    if (brouillon.variantes?.length) {
+      enfants.push(h('h4', {}, 'Captions proposées'), h('ul', { class: 'suggestions' }, brouillon.variantes.map(v => h('li', { class: 'suggestion' },
+        h('span', { class: 'suggestion-role' }, LIBELLES_ROLE[v.role] ?? v.role), h('span', { class: 'suggestion-texte' }, v.texte),
+        h('button', { type: 'button', class: 'bouton-lien', onclick: () => utiliser({ caption: v.texte }, 'Caption remplacée.', 'caption') }, 'Utiliser')))));
+    }
+    if (brouillon.suggestions?.accroches?.length) {
+      enfants.push(h('h4', {}, 'Accroches proposées'), h('ul', { class: 'suggestions' }, brouillon.suggestions.accroches.map(a => h('li', { class: 'suggestion' },
+        h('span', { class: 'suggestion-texte' }, a),
+        h('button', { type: 'button', class: 'bouton-lien', onclick: () => utiliser({ accroche: a }, 'Accroche remplacée.', 'accroche') }, 'Utiliser')))));
+    }
+    if (brouillon.suggestions?.hashtags?.length) {
+      enfants.push(h('p', { class: 'suggestion-hashtags' }, formaterHashtags(brouillon.suggestions.hashtags), ' ',
+        h('button', { type: 'button', class: 'bouton-lien', onclick: () => utiliser({ hashtags: brouillon.suggestions.hashtags }, 'Hashtags remplacés.', 'hashtags') }, 'Utiliser ces hashtags')));
+    }
+    if (evaluationDisponible) {
+      enfants.push(controleurEvaluation
+        ? h('div', { class: 'evaluation-actions' },
+          h('button', { type: 'button', class: 'bouton-principal', disabled: true }, 'Évaluation…'),
+          h('button', { type: 'button', class: 'bouton-secondaire', onclick: () => controleurEvaluation?.abort() }, 'Arrêter'))
+        : h('div', { class: 'evaluation-actions' },
+          h('button', { type: 'button', class: 'bouton-principal', onclick: evaluer }, s ? 'Réévaluer' : 'Évaluer')));
+    }
+    return h('section', { class: 'score' }, enfants);
   };
 
   const sectionSuppression = () => {
@@ -142,11 +225,12 @@ export function panneauFiche(fiche, profil, actions, capacites) {
 
   function construire() {
     elementStatut = sectionStatut();
+    elementScore = sectionScore();
     racine.replaceChildren(
       h('header', { class: 'panneau-tete' },
         h('h2', {}, LIBELLES_FORMAT[brouillon.format]),
         h('button', { type: 'button', class: 'fermer', 'aria-label': 'Fermer la fiche', onclick: () => actions.fermerPanneau() }, '×')),
-      elementStatut, sectionType(), sectionDate(), sectionVisuel(), sectionTexte(), sectionScore(), message, sectionSuppression());
+      elementStatut, sectionType(), sectionDate(), sectionVisuel(), sectionTexte(), elementScore, message, sectionSuppression());
   }
 
   construire();

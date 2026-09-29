@@ -21,8 +21,9 @@ export async function demarrer(racine, claude, { horloge = () => new Date().toIS
     return null;
   }
   const assets = (await claude.use('assets')) ?? null;
+  const sample = (await claude.use('sample')) ?? null;
   const depot = creerDepot(db);
-  const etat = creerEtat({ profil: undefined, fiches: [], vue: 'semaine', ancre: horloge(), ficheOuverte: null, erreur: null, sauvegarde: 'ok' });
+  const etat = creerEtat({ profil: undefined, fiches: [], vue: 'semaine', ancre: horloge(), ficheOuverte: null, erreur: null, sauvegarde: 'ok', reference: [], resultatReference: null, verificationReference: null });
   const enregistreur = creerEnregistreur(
     async fiche => {
       etat.modifier({ sauvegarde: 'en_cours' });
@@ -36,19 +37,27 @@ export async function demarrer(racine, claude, { horloge = () => new Date().toIS
       if (e?.code === 'quota_exceeded' || e?.code === 'revoked') etat.modifier({ erreur: messageErreurBase(e) });
     },
   );
-  const actions = creerControleur({ etat, depot, enregistreur, assets, horloge });
-  const rendre = creerRendu(racine, actions, { assets: !!assets }, horloge);
+  const actions = creerControleur({ etat, depot, enregistreur, assets, horloge, sample });
+  const rendre = creerRendu(racine, actions, { assets: !!assets, sample: !!sample }, horloge);
 
   let arreterFiches = null;
   let plageCourante = '';
+  let derniereVersionVerifiee = null;
   etat.abonner(e => {
+    if (e.profil && e.profil.version !== derniereVersionVerifiee) {
+      derniereVersionVerifiee = e.profil.version;
+      actions.reverifierFiches();
+    }
     if (e.profil) {
       const [debut, fin] = plageDeVue(e.vue, e.ancre, e.profil.regles_studio.fuseau);
       if (`${debut}|${fin}` !== plageCourante) {
         plageCourante = `${debut}|${fin}`;
         arreterFiches?.();
         arreterFiches = depot.ecouterFiches(debut, fin,
-          recues => etat.modifier({ fiches: fusionnerInstantane(recues, etat.lire().fiches, enregistreur.estEnAttente) }),
+          recues => {
+            etat.modifier({ fiches: fusionnerInstantane(recues, etat.lire().fiches, enregistreur.estEnAttente) });
+            actions.reverifierFiches();
+          },
           err => etat.modifier({ erreur: messageErreurBase(err) }));
       }
     }
@@ -59,6 +68,8 @@ export async function demarrer(racine, claude, { horloge = () => new Date().toIS
     profil => etat.modifier({ profil, vue: profil ? etat.lire().vue : 'profil' }),
     err => etat.modifier({ erreur: messageErreurBase(err) }),
   );
+  depot.ecouterReference(reference => etat.modifier({ reference }), err => etat.modifier({ erreur: messageErreurBase(err) }));
+  depot.ecouterResultatReference(resultatReference => etat.modifier({ resultatReference }), err => etat.modifier({ erreur: messageErreurBase(err) }));
   if (typeof window !== 'undefined') window.addEventListener('pagehide', () => { enregistreur.viderTout(); });
   if (typeof document !== 'undefined') {
     const bloquerDepotFichier = e => { if (e.dataTransfer?.types?.includes?.('Files')) e.preventDefault(); };
