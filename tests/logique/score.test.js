@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { nouvelleFiche, empreinte } from '../../src/logique/fiche.js';
-import { composerScore, fusionnerConformite, POIDS, PLAFOND_ROUGE } from '../../src/logique/score.js';
+import { composerScore, construireExamen, lignesExamen, fusionnerConformite, POIDS, PLAFOND_ROUGE } from '../../src/logique/score.js';
 
 const VERT = { etat: 'vert', causes: [] };
 const f = (format = 'reel') => ({ ...nouvelleFiche({ id: 'f1', format, date_heure: '2026-09-28T10:00:00.000Z', maintenant: 'x' }), caption: 'c', visuel: 'a1' });
@@ -10,6 +10,15 @@ const composer = (fiche, v, j) => composerScore({ fiche, verification: v, jugeme
 const dix = { accroche: 10, voix: 10, mecanique: 10 };
 
 describe('composerScore', () => {
+  it('ajoute l’examen seulement s’il est fourni', () => {
+    const fiche = f('reel');
+    const args = { fiche, verification: verif(), jugement: jugement(dix), versionProfil: 3, maintenant: 'T' };
+    const sans = composerScore(args);
+    const avec = composerScore({ ...args, examen: { visuel: 'aucun' } });
+    expect(sans).not.toHaveProperty('examen');
+    expect(avec.examen).toEqual({ visuel: 'aucun' });
+  });
+
   it('reel parfait : 100, poids 40/30/30', () => {
     const fiche = f('reel');
     expect(composer(fiche, verif(), jugement(dix))).toEqual({
@@ -73,5 +82,40 @@ describe('fusionnerConformite', () => {
 
   it('traite un état calculé inconnu comme rouge : le verrou reste fermé par défaut', () => {
     expect(fusionnerConformite({ etat: 'bizarre', causes: [] }, { etat: 'vert', causes: [] }).etat).toBe('rouge');
+  });
+});
+
+describe('examen', () => {
+  const verification = { conformite: { etat: 'orange', causes: ['c1'] }, alertes: [{ critere: 'accroche', texte: 'a1' }, { critere: null, texte: 'a2' }] };
+  const base = { version_profil: 3, sections_profil: ['regles_studio', 'ton_et_voix'], contenus_semaine: 2, verification };
+
+  it('construit le bloc examen', () => {
+    expect(construireExamen({ ...base, visuel: 'non_joint', raison_visuel: 'taille' })).toEqual({
+      visuel: 'non_joint', raison_visuel: 'taille', version_profil: 3, sections_profil: ['regles_studio', 'ton_et_voix'],
+      contenus_semaine: 2, alertes_calculees: 2, blocages_calcules: 1,
+    });
+    expect(construireExamen({ ...base, visuel: 'joint' }).raison_visuel).toBeNull();
+  });
+
+  it('traduit l’examen en phrases', () => {
+    expect(lignesExamen(construireExamen({ ...base, visuel: 'joint' }))).toEqual([
+      'Visuel examiné.',
+      'Profil version 3 : sections regles_studio, ton_et_voix.',
+      '2 autres contenus de la semaine comparés.',
+      '2 alertes et 1 blocage calculés par le studio.',
+    ]);
+    const un = construireExamen({ ...base, visuel: 'aucun', contenus_semaine: 1, verification: { conformite: { etat: 'vert', causes: [] }, alertes: [] } });
+    expect(lignesExamen(un)).toEqual([
+      'Pas de visuel.', 'Profil version 3 : sections regles_studio, ton_et_voix.', '1 autre contenu de la semaine comparé.', '0 alerte et 0 blocage calculés par le studio.',
+    ]);
+    expect(lignesExamen({ ...un, contenus_semaine: 0 })[2]).toBe('Aucun autre contenu de la semaine comparé.');
+    for (const [raison, texte] of [['video', 'Visuel non examiné : vidéo (seules les images sont envoyées).'], ['type', 'Visuel non examiné : format refusé.'], ['taille', 'Visuel non examiné : fichier trop lourd.'], ['indisponible', 'Visuel non examiné : envoi d’images indisponible.']]) {
+      expect(lignesExamen(construireExamen({ ...base, visuel: 'non_joint', raison_visuel: raison }))[0]).toBe(texte);
+    }
+  });
+
+  it('signale une évaluation antérieure sans examen', () => {
+    expect(lignesExamen(null)).toEqual(['Détail non disponible pour cette évaluation (antérieure).']);
+    expect(lignesExamen(undefined)).toEqual(['Détail non disponible pour cette évaluation (antérieure).']);
   });
 });

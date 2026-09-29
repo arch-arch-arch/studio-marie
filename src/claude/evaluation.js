@@ -9,7 +9,7 @@ const ORDRE_RETRAIT = ['audience', 'principe_directeur_final', 'vocabulaire', 'f
 const ROLES = ['engagement', 'cta', 'deadpan'];
 const CRITERES = ['accroche', 'voix', 'mecanique'];
 
-export function extraireProfil(profil) {
+export function extraireProfilDetaille(profil) {
   const extrait = {};
   if (profil.regles_studio !== undefined) extrait.regles_studio = profil.regles_studio;
   for (const cle of AUTRES_SECTIONS_PROFIL) if (profil[cle] !== undefined) extrait[cle] = profil[cle];
@@ -19,8 +19,10 @@ export function extraireProfil(profil) {
     delete extrait[cle];
     texte = JSON.stringify(extrait);
   }
-  return texte;
+  return { texte, sections: Object.keys(extrait) };
 }
+
+export const extraireProfil = profil => extraireProfilDetaille(profil).texte;
 
 function assemblerPrompt({ fiche, profil, verification, fichesSemaine, avecImage }) {
   const fz = profil.regles_studio.fuseau;
@@ -36,12 +38,13 @@ function assemblerPrompt({ fiche, profil, verification, fichesSemaine, avecImage
     .filter(f => f.id !== fiche.id)
     .slice(0, 30)
     .map(f => ({ format: f.format, pilier: f.pilier, role_caption: f.role_caption, cta: !!f.cta, accroche: (f.accroche ?? '').slice(0, 120) }));
-  return [
+  const profilEnvoye = extraireProfilDetaille(profil);
+  const texte = [
     'Tu es l’éditrice exigeante d’un compte Instagram. Évalue UN contenu au regard du profil de marque ci-dessous.',
     'Tu notes le contenu sans le modifier ; tes propositions de captions et d’accroches sont des variantes à part. Tes suggestions suivent la voix du profil. N’invente aucune donnée.',
     '',
     '## Profil de marque (JSON)',
-    extraireProfil(profil),
+    profilEnvoye.texte,
     '',
     '## Contenu à évaluer (JSON)',
     JSON.stringify(contenu),
@@ -60,16 +63,19 @@ function assemblerPrompt({ fiche, profil, verification, fichesSemaine, avecImage
     '',
     '## Format de réponse',
     'Réponds uniquement avec un objet JSON de cette forme :',
-    '{"notes":{"accroche":7,"voix":8,"mecanique":6},"phrases":{"accroche":"…","voix":"…","mecanique":"…"},"conformite":{"etat":"vert","causes":[]},"captions":[{"role":"engagement","texte":"…"},{"role":"deadpan","texte":"…"}],"accroches":["…","…"],"hashtags":["mot","autre"],"recommandations":["…","…","…"]}',
-    'Contraintes : une phrase par critère ; exactement 2 captions de rôles différents parmi engagement, cta et deadpan ; 2 ou 3 accroches ; hashtags sans # ; exactement 3 recommandations concrètes ; tout en français.',
+    '{"notes":{"accroche":7,"voix":8,"mecanique":6},"phrases":{"accroche":"…","voix":"…","mecanique":"…"},"conformite":{"etat":"vert","causes":[]},"captions":[{"role":"engagement","texte":"…"},{"role":"deadpan","texte":"…"}],"accroches":["…","…"],"hashtags":["mot","autre"],"recommandations":[{"texte":"…","pourquoi":"…"},{"texte":"…","pourquoi":"…"},{"texte":"…","pourquoi":"…"}]}',
+    'Contraintes : une phrase par critère ; exactement 2 captions de rôles différents parmi engagement, cta et deadpan ; 2 ou 3 accroches ; hashtags sans # ; exactement 3 recommandations concrètes, chacune avec un pourquoi court qui cite ce que tu as observé ; tout en français.',
   ].join('\n');
+  return { texte, sections_profil: profilEnvoye.sections, contenus_semaine: semaine.length };
 }
 
-export function construirePrompt({ fiche, profil, verification, fichesSemaine = [], avecImage = false }) {
-  const texte = assemblerPrompt({ fiche, profil, verification, fichesSemaine, avecImage });
-  if (octets(texte) <= TAILLE_PROMPT_MAX) return texte;
+export function construireDemande({ fiche, profil, verification, fichesSemaine = [], avecImage = false }) {
+  const demande = assemblerPrompt({ fiche, profil, verification, fichesSemaine, avecImage });
+  if (octets(demande.texte) <= TAILLE_PROMPT_MAX) return demande;
   return assemblerPrompt({ fiche, profil, verification, fichesSemaine: [], avecImage });
 }
+
+export const construirePrompt = args => construireDemande(args).texte;
 
 const texte = v => typeof v === 'string' && v.trim().length > 0;
 
@@ -90,7 +96,9 @@ export function validerReponse(r) {
   if (!captionsOk) erreurs.push('captions : exactement 2 captions de rôles différents.');
   if (!Array.isArray(r.accroches) || r.accroches.length < 2 || r.accroches.length > 3 || !r.accroches.every(texte)) erreurs.push('accroches : 2 ou 3 textes.');
   if (!Array.isArray(r.hashtags) || !r.hashtags.every(texte)) erreurs.push('hashtags : liste de textes.');
-  if (!Array.isArray(r.recommandations) || r.recommandations.length !== 3 || !r.recommandations.every(texte)) erreurs.push('recommandations : exactement 3 textes.');
+  const recoOk = Array.isArray(r.recommandations) && r.recommandations.length === 3
+    && r.recommandations.every(x => texte(x) || (x && typeof x === 'object' && texte(x.texte) && (x.pourquoi == null || typeof x.pourquoi === 'string')));
+  if (!recoOk) erreurs.push('recommandations : exactement 3 recommandations (texte, et pourquoi facultatif).');
   if (erreurs.length) return { ok: false, erreurs };
   return {
     ok: true,
@@ -101,7 +109,7 @@ export function validerReponse(r) {
       captions: r.captions.map(c => ({ role: c.role, texte: c.texte.trim() })),
       accroches: r.accroches.map(s => s.trim()),
       hashtags: analyserHashtags(r.hashtags.map(t => t.replace(/\s+/g, '')).join(' ')),
-      recommandations: r.recommandations.map(s => s.trim()),
+      recommandations: r.recommandations.map(x => (typeof x === 'string' ? { texte: x.trim(), pourquoi: '' } : { texte: x.texte.trim(), pourquoi: (x.pourquoi ?? '').trim() })),
     },
   };
 }

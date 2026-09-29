@@ -49,7 +49,7 @@ describe('evaluerFiche', () => {
     expect(enBase.score.total).toBe(71);
     expect(enBase.variantes).toEqual(REPONSE.captions);
     expect(enBase.suggestions).toEqual({ accroches: ['Acc 1', 'Acc 2'], hashtags: ['nuit', 'socio'] });
-    expect(enBase.recommandations).toEqual(['R1', 'R2', 'R3']);
+    expect(enBase.recommandations).toEqual([{ texte: 'R1', pourquoi: '' }, { texte: 'R2', pourquoi: '' }, { texte: 'R3', pourquoi: '' }]);
     expect(etat.lire().fiches[0].score.total).toBe(71);
     expect(await actions.changerStatut('f1', 'valide')).toEqual({ ok: true });
   });
