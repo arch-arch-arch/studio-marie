@@ -6,7 +6,7 @@ import { ajouterJours, debutSemaine, cleSemaineIso, partiesLocales } from '../sr
 import { nouvelId } from '../src/logique/fiche.js';
 import { fuseauValide } from '../src/logique/profil.js';
 
-const USAGE = 'Usage : veille.mjs plage|doit-tourner|construire --profil <fichier> [--fiches <dossier> --entree <fichier> --sortie <fichier> --bulletin <fichier> --versions <fichier>] [--maintenant <iso>] [--forcer]';
+const USAGE = 'Usage : veille.mjs plage|doit-tourner|construire --profil <fichier> [--fiches <dossier> --entree <fichier> --sortie <fichier> --bulletin <fichier> --versions <fichier> --stats <dossier> --releves <dossier>] [--maintenant <iso>] [--forcer]';
 const FENETRE_DEBUT = 18 * 60 + 30;
 const FENETRE_FIN = 21 * 60 + 29;
 
@@ -73,7 +73,10 @@ export function executer(argv, { lireJson, listerJson, ecrireJson, maintenant })
         if (e.code !== 'ENOENT') throw e;
       }
     }
-    const r = construireVeille({ profil, fiches, entree: lireJson(o.entree), maintenant: quand, idAleatoire: nouvelId });
+    const lireDossier = dossier => (dossier ? listerJson(dossier).map(({ nom, contenu }) => ({ id: contenu?.id ?? nom.replace(/\.json$/, ''), ...document(contenu) })) : []);
+    const stats = lireDossier(o.stats);
+    const relevesCompte = lireDossier(o.releves);
+    const r = construireVeille({ profil, fiches, entree: lireJson(o.entree), maintenant: quand, idAleatoire: nouvelId, stats, relevesCompte });
     if (!r.ok) return { code: 1, sortie: r.erreurs.join('\n') };
     const ecritures = r.ecritures.map(e => {
       if (e.op === 'delete' && e.collection === 'fiches') {

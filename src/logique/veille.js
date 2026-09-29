@@ -5,6 +5,7 @@ import { validerReponse } from '../claude/evaluation.js';
 import { verifierRegles } from './regles-score.js';
 import { composerScore } from './score.js';
 import { controlerSemaine } from './controle.js';
+import { retrospective } from './tableau-bord.js';
 
 export const ROLES_CAPTION = ['engagement', 'cta', 'deadpan'];
 const texte = v => typeof v === 'string' && v.trim().length > 0;
@@ -99,11 +100,10 @@ export function validerEntreeVeille(entree, regles) {
   };
 }
 
-const RAPPEL_RETROSPECTIVE = 'Aucun relevé de statistiques pour la semaine écoulée : saisis-les pour obtenir la rétrospective.';
 const MAX_IDEES = 5;
 const cleAccroche = a => (a ?? '').toLowerCase().replace(/\s+/g, ' ').trim();
 
-export function construireVeille({ profil, fiches, entree, maintenant, idAleatoire }) {
+export function construireVeille({ profil, fiches, entree, maintenant, idAleatoire, stats = [], relevesCompte = [] }) {
   const r = profil.regles_studio;
   const fz = r.fuseau;
   const verification = validerEntreeVeille(entree, r);
@@ -147,7 +147,7 @@ export function construireVeille({ profil, fiches, entree, maintenant, idAleatoi
     genere_le: maintenant,
     statut: e.sources_indisponibles ? 'partiel' : 'complet',
     sources_indisponibles: e.sources_indisponibles,
-    retrospective: { type: 'rappel', texte: RAPPEL_RETROSPECTIVE },
+    retrospective: retrospective({ stats, relevesCompte, fiches, cibles: r.cibles, fuseau: fz, debutSemaineVisee: debut, maintenant }),
     tendances: e.tendances,
     ecartees: e.ecartees,
     alertes: e.alertes,

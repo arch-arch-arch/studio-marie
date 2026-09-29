@@ -2,12 +2,31 @@ import { h } from './h.js';
 import { LIBELLES_FORMAT } from '../logique/fiche.js';
 import { heureLocale, libelleJour } from '../logique/dates.js';
 import { bandeau } from './carte.js';
+import { formaterValeur } from '../logique/indicateurs.js';
 
 const lienRelance = config => (config?.url_routine?.startsWith('https://')
   ? h('a', { href: config.url_routine, target: '_blank', rel: 'noopener', class: 'bouton-secondaire' }, 'Relancer la veille')
   : h('p', { class: 'aide' }, 'La veille n’est pas encore configurée.'));
 
 const source = s => (/^https?:\/\//.test(s) ? h('a', { href: s, target: '_blank', rel: 'noopener' }, s) : s);
+
+const pct = v => formaterValeur('taux_abonnes_par_vue', v);
+const contenu = (libelle, c) => (c
+  ? h('p', {}, `${libelle} : « ${c.accroche || 'Sans accroche'} » (${pct(c.taux)} d’abonnés par vue, ${formaterValeur('partages_par_post', c.partages_envois)} partages et envois).`)
+  : null);
+
+function sectionRetrospective(retro) {
+  const manquants = retro?.manquants ?? [];
+  return h('section', {}, h('h3', {}, 'Rétrospective'),
+    h('p', {}, retro?.texte ?? ''),
+    retro?.type === 'bilan' ? [
+      contenu('Meilleur contenu', retro.meilleur),
+      contenu('Pire contenu', retro.pire),
+      retro.ecarts?.length ? h('ul', { class: 'ecarts' }, retro.ecarts.map(e => h('li', { class: e.atteinte ? 'ecart-atteint' : 'ecart-sous' },
+        `${e.libelle} : ${formaterValeur(e.indicateur, e.valeur)} pour une cible de ${formaterValeur(e.indicateur, e.cible)} (${e.atteinte ? 'atteinte' : 'en dessous'}).`))) : null,
+    ] : null,
+    manquants.length ? h('p', { class: 'aide' }, `Relevés manquants : ${manquants.map(m => `${m.accroche || 'Sans accroche'} (${m.releve === '48h' ? '48 h' : '7 jours'})`).join(', ')}.`) : null);
+}
 
 export function vueBulletin({ profil, fiches, bulletin, configVeille }, actions) {
   const fz = profil.regles_studio.fuseau;
@@ -23,7 +42,7 @@ export function vueBulletin({ profil, fiches, bulletin, configVeille }, actions)
       h('p', { class: 'aide' }, `Préparé le ${genere}.`),
       lienRelance(configVeille)),
     bulletin.sources_indisponibles ? h('p', { class: 'bulletin-partiel', role: 'status' }, 'Sources indisponibles : bulletin partiel.') : null,
-    h('section', {}, h('h3', {}, 'Rétrospective'), h('p', {}, bulletin.retrospective?.texte ?? '')),
+    sectionRetrospective(bulletin.retrospective),
     h('section', {}, h('h3', {}, 'Tendances'),
       (bulletin.tendances ?? []).length
         ? h('ul', { class: 'tendances' }, (bulletin.tendances ?? []).map(t => h('li', { class: 'tendance' },

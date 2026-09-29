@@ -134,6 +134,18 @@ describe('construire', () => {
     expect(r.sortie).toBe('Il manque --fiches, --entree ou --sortie.');
     expect(d.ecrits).toEqual({});
   });
+  it('lit les relevés passés en --stats et --releves', () => {
+    const fichiers = {
+      'p.json': fictif, 'e.json': entree,
+      'st/x_7j.json': { fiche: 'x', releve: '7j', vues: 1000, nouveaux_abonnes: 4, partages_envois: 12, date_publication: '2026-09-22T10:00:00.000Z', format: 'reel', accroche: 'Accroche x', score_total: 70 },
+    };
+    const d = deps(fichiers, '2026-09-27T18:00:00.000Z');
+    const r = executer(['construire', '--profil', 'p.json', '--fiches', 'fi', '--entree', 'e.json', '--sortie', 's.json', '--stats', 'st', '--releves', 'rc'], d);
+    expect(r.code).toBe(0);
+    const bulletin = d.ecrits['s.json'].ecritures.find(e => e.collection === 'bulletins').data;
+    expect(bulletin.retrospective.type).toBe('bilan');
+    expect(bulletin.retrospective.meilleur.fiche).toBe('x');
+  });
   it('échoue sans rien écrire si une fiche est corrompue (listerJson lève une erreur)', () => {
     const ecrits = {};
     const d = {

@@ -9,6 +9,7 @@ describe('consignes de la veille', () => {
       'node scripts/veille.mjs doit-tourner', 'node scripts/veille.mjs plage', 'node scripts/veille.mjs construire',
       'ArtifactData', 'WebSearch', 'sources_indisponibles', 'son_a_verifier', 'proposition_profil',
       '"jugement"', 'batch', 'profil/courant', 'bulletins', '--forcer', '--bulletin',
+      'stats_contenu', 'releves_compte', '--stats', '--releves',
     ]) expect(texte).toContain(attendu);
   });
   it('rappelle les interdits', () => {

@@ -19,6 +19,10 @@ Interdits :
 - `ArtifactData` `query` sur `STUDIO`, avec `collection: "fiches"` et `query: { where: [["date_heure", ">=", lecture_debut], ["date_heure", "<", lecture_fin]] }`, avec `out_dir` = `veille-tmp/`. Les fichiers arrivent dans `veille-tmp/fiches/`. Cette plage élargie (14 jours avant, 28 jours après la semaine visée) permet de retrouver les idées de ce bulletin déplacées vers une autre semaine.
 - `ArtifactData` `get` sur `STUDIO`, avec `collection: "bulletins"` et `doc_id` = `semaine`, avec `out_dir` = `veille-tmp/`. S'il n'existe pas, c'est le premier passage.
 - Après chaque lecture avec `out_dir` (fiches puis bulletin), recopie les versions affichées dans le résultat de l'outil (ligne `- "<doc_id>"  N bytes  version V  "<chemin>"`) dans `veille-tmp/versions.json`, au format `{ "fiches/<id>": V, "bulletins/<semaine>": V }`. Crée toujours ce fichier : `{}` si aucune lecture n'a renvoyé de document. Un seul objet pour toutes les lectures (fiches et bulletin). Chaque version est un nombre entier, sans guillemets.
+- Lis aussi les relevés de statistiques :
+  - `ArtifactData` `query` sur `STUDIO`, avec `collection: "stats_contenu"` et `query: { where: [["date_publication", ">=", lecture_debut], ["date_publication", "<", debut]] }`, avec `out_dir` = `veille-tmp/`. Les fichiers arrivent dans `veille-tmp/stats_contenu/` ;
+  - `ArtifactData` `list` sur `STUDIO`, avec `collection: "releves_compte"`, avec `out_dir` = `veille-tmp/`. Les fichiers arrivent dans `veille-tmp/releves_compte/`.
+  - Ces lectures ne sont pas écrites ensuite : elles n'entrent pas dans `versions.json`. Si une collection est vide, continue.
 
 ## 3. Chercher les tendances
 - Avec `WebSearch` (et `WebFetch` pour lire une page), cherche sur les 14 derniers jours :
@@ -52,6 +56,8 @@ Règles du jugement :
 - 3 recommandations ;
 - tout en français.
 
+Appuie-toi sur les performances passées : les relevés de `veille-tmp/stats_contenu/` montrent ce qui a le mieux marché (taux d'abonnés par vue, puis partages et envois). Reprends les mécaniques des meilleurs contenus et évite celles des pires.
+
 ## 5. Écrire l'entrée et construire
 Écris `veille-tmp/entree.json` :
 
@@ -63,7 +69,7 @@ Règles du jugement :
   "idees": [{ "format": "reel", "pilier": "…", "role_caption": "engagement", "cta": false, "format_valide": "", "accroche": "…", "caption": "…", "hashtags": ["…"], "tendance": "titre de la tendance ou null", "jugement": { … } }] }
 ```
 
-Lance ensuite `node scripts/veille.mjs construire --profil veille-tmp/profil/courant.json --fiches veille-tmp/fiches --entree veille-tmp/entree.json --sortie veille-tmp/ecritures.json --bulletin veille-tmp/bulletins/<semaine>.json --versions veille-tmp/versions.json`.
+Lance ensuite `node scripts/veille.mjs construire --profil veille-tmp/profil/courant.json --fiches veille-tmp/fiches --entree veille-tmp/entree.json --sortie veille-tmp/ecritures.json --bulletin veille-tmp/bulletins/<semaine>.json --versions veille-tmp/versions.json --stats veille-tmp/stats_contenu --releves veille-tmp/releves_compte`.
 
 Si la commande échoue, elle affiche les erreurs. Corrige `entree.json` et relance. Au plus 3 exécutions de `construire` au total. Tant que le code de sortie n'est pas 0, n'applique rien. Si elle échoue encore après ces 3 exécutions, arrête-toi sans rien écrire et rends compte des erreurs.
 
