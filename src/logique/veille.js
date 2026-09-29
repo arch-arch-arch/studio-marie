@@ -1,5 +1,5 @@
 import { FORMATS, analyserHashtags, nouvelleFiche, appliquerEvaluation } from './fiche.js';
-import { depuisSaisieLocale, cleJour, ajouterJours, debutSemaine, cleSemaineIso } from './dates.js';
+import { depuisSaisieLocale, cleJour, ajouterJours, debutSemaine, debutJour, cleSemaineIso } from './dates.js';
 import { creneauxDisponibles } from './creneaux.js';
 import { validerReponse } from '../claude/evaluation.js';
 import { verifierRegles } from './regles-score.js';
@@ -15,18 +15,29 @@ export function fichesRemplacables(fiches, cle) {
     && f.statut === 'brouillon' && f.modifiee_depuis_creation === false && f.maj_le === f.cree_le);
 }
 
-export function placerIdees(idees, fiches, regles, debutIso) {
+export function placerIdees(idees, fiches, regles, debutIso, maintenantIso = null) {
   const fz = regles.fuseau;
-  const libres = creneauxDisponibles(fiches, regles, debutIso, null, { tousFormats: true });
-  const heureSecours = regles.creneaux[0]?.debut ?? '12:00';
+  const libres = creneauxDisponibles(fiches, regles, debutIso, maintenantIso, { tousFormats: true });
+  const heureSecours = regles.creneaux[0]?.fin ?? '15:00';
+  const debutJourMaintenant = maintenantIso ? debutJour(maintenantIso, fz) : null;
+  const departSecours = debutJourMaintenant && debutJourMaintenant > debutIso ? debutJourMaintenant : debutIso;
+  const prises = new Set(fiches.map(f => f.date_heure));
   let rang = 0;
-  return idees.map(idee => {
+  const placer = idee => {
     const date_heure = libres.shift();
     if (date_heure) return { idee, date_heure, horsCreneau: false };
-    const jourSecours = cleJour(ajouterJours(debutIso, rang % 7, fz), fz);
+    const jourSecours = cleJour(ajouterJours(departSecours, rang % 7, fz), fz);
     rang += 1;
-    return { idee, date_heure: depuisSaisieLocale(jourSecours, heureSecours, fz), horsCreneau: true };
-  });
+    let candidat = depuisSaisieLocale(jourSecours, heureSecours, fz);
+    for (let tentative = 0; tentative < 10 && prises.has(candidat); tentative += 1) {
+      candidat = new Date(new Date(candidat).getTime() + 30 * 60000).toISOString();
+    }
+    prises.add(candidat);
+    return { idee, date_heure: candidat, horsCreneau: true };
+  };
+  const feed = idees.filter(idee => idee.format !== 'story').map(placer);
+  const story = idees.filter(idee => idee.format === 'story').map(placer);
+  return [...feed, ...story];
 }
 
 export function validerEntreeVeille(entree, regles) {
@@ -90,17 +101,23 @@ export function construireVeille({ profil, fiches, entree, maintenant, idAleatoi
   const fz = r.fuseau;
   const verification = validerEntreeVeille(entree, r);
   if (!verification.ok) return { ok: false, erreurs: verification.erreurs };
-  const debut = debutSemaine(ajouterJours(maintenant, 7, fz), fz);
+  const debut = debutSemaine(ajouterJours(maintenant, 1, fz), fz);
   const cle = cleSemaineIso(debut, fz);
   const remplacables = fichesRemplacables(fiches, cle);
   const aRemplacer = new Set(remplacables.map(f => f.id));
   const gardees = fiches.filter(f => !aRemplacer.has(f.id));
   const ideesGardees = gardees.filter(f => f.origine?.type === 'veille' && f.origine?.bulletin === cle);
   const clesGardees = new Set(ideesGardees.map(f => cleAccroche(f.accroche)));
+  const clesVues = new Set();
   const ideesRetenues = verification.entree.idees
-    .filter(idee => !clesGardees.has(cleAccroche(idee.accroche)))
+    .filter(idee => {
+      const cle2 = cleAccroche(idee.accroche);
+      if (clesGardees.has(cle2) || clesVues.has(cle2)) return false;
+      clesVues.add(cle2);
+      return true;
+    })
     .slice(0, Math.max(0, MAX_IDEES - ideesGardees.length));
-  const places = placerIdees(ideesRetenues, gardees, r, debut);
+  const places = placerIdees(ideesRetenues, gardees, r, debut, maintenant);
 
   const fichesCreees = places.map(({ idee, date_heure }) => {
     const base = {

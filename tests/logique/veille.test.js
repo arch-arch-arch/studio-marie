@@ -51,18 +51,38 @@ describe('placerIdees', () => {
   it('place sur les créneaux libres dans l’ordre, jamais sur un créneau pris', () => {
     const prise = fiche('reel', '2026-09-29', '12:30');
     const r = placerIdees([idee(), idee(), idee()], [prise], R, LUNDI);
-    expect(r.map(p => p.date_heure)).toEqual(['2026-09-28T10:00:00.000Z', '2026-10-01T10:00:00.000Z', '2026-09-28T10:00:00.000Z']);
+    expect(r.map(p => p.date_heure)).toEqual(['2026-09-28T10:00:00.000Z', '2026-10-01T10:00:00.000Z', '2026-09-28T13:00:00.000Z']);
     expect(r.map(p => p.horsCreneau)).toEqual([false, false, true]);
   });
-  it('répartit les idées hors créneau sur des jours successifs de la semaine', () => {
+  it('répartit les idées hors créneau sur des jours successifs de la semaine, à l’heure de fin du premier créneau', () => {
     const pleines = ['2026-09-28', '2026-09-29', '2026-10-01'].map(j => fiche('reel', j, '12:00'));
     const r = placerIdees([idee(), idee(), idee()], pleines, R, LUNDI);
     expect(r.map(p => p.horsCreneau)).toEqual([true, true, true]);
     expect(r.map(p => p.date_heure)).toEqual([
-      '2026-09-28T10:00:00.000Z',
-      '2026-09-29T10:00:00.000Z',
-      '2026-09-30T10:00:00.000Z',
+      '2026-09-28T13:00:00.000Z',
+      '2026-09-29T13:00:00.000Z',
+      '2026-09-30T13:00:00.000Z',
     ]);
+  });
+  it('ne place jamais deux idées ou une idée gardée à la même date_heure, avec des fiches gardées sur les créneaux du profil', () => {
+    const gardees = ['2026-09-28', '2026-09-29', '2026-10-01'].map(j => fiche('reel', j, '12:00'));
+    const r = placerIdees([idee(), idee()], gardees, R, LUNDI);
+    expect(r.every(p => p.horsCreneau)).toBe(true);
+    const toutesDates = [...gardees.map(f => f.date_heure), ...r.map(p => p.date_heure)];
+    expect(new Set(toutesDates).size).toBe(toutesDates.length);
+  });
+  it('avance de 30 minutes quand le secours tombe exactement sur une fiche gardée', () => {
+    const collision = fiche('reel', '2026-09-28', '15:00');
+    const pleines = ['2026-09-28', '2026-09-29', '2026-10-01'].map(j => fiche('reel', j, '12:00'));
+    const r = placerIdees([idee()], [...pleines, collision], R, LUNDI);
+    expect(r[0].date_heure).toBe(depuisSaisieLocale('2026-09-28', '15:30', R.fuseau));
+  });
+  it('place les idées du feed avant les idées story, qui ne prennent que les créneaux restants', () => {
+    const jeudiPris = fiche('reel', '2026-10-01', '12:00');
+    const r = placerIdees([idee({ format: 'story' }), idee(), idee()], [jeudiPris], R, LUNDI);
+    expect(r.map(p => p.idee.format)).toEqual(['reel', 'reel', 'story']);
+    expect(r.map(p => p.horsCreneau)).toEqual([false, false, true]);
+    expect(r.map(p => p.date_heure)).toEqual(['2026-09-28T10:00:00.000Z', '2026-09-29T10:00:00.000Z', '2026-09-28T13:00:00.000Z']);
   });
 });
 
@@ -174,5 +194,33 @@ describe('construireVeille', () => {
     const occupees = ['2026-10-05', '2026-10-06', '2026-10-08'].map(j => fiche('reel', j, '12:00'));
     const r = construireVeille({ profil, fiches: occupees, entree: entreeFictive, maintenant: MAINTENANT, idAleatoire: id });
     expect(r.bulletin.hors_creneau).toEqual(r.fichesCreees.map(f => f.id));
+  });
+
+  it('un déclenchement en semaine vise la semaine en cours et ne place aucune idée avant ce moment', () => {
+    const MERCREDI = '2026-09-30T08:00:00.000Z'; // mercredi 10h Paris
+    const r = construireVeille({ profil, fiches: [], entree: entreeFictive, maintenant: MERCREDI, idAleatoire: id });
+    expect(r.ok).toBe(true);
+    expect(r.cle).toBe('2026-W40');
+    expect(r.fichesCreees.every(f => f.date_heure >= MERCREDI)).toBe(true);
+  });
+
+  it('une idée gardée de ce bulletin déplacée vers une autre semaine compte dans le plafond et dans bulletin.idees', () => {
+    const cle = '2026-W41';
+    const deplacee = fiche('reel', '2026-10-19', '12:00', {
+      statut: 'brouillon', modifiee_depuis_creation: true, origine: { type: 'veille', bulletin: cle }, accroche: 'Déplacée ailleurs.',
+    });
+    const r = construireVeille({ profil, fiches: [deplacee], entree: entreeFictive, maintenant: MAINTENANT, idAleatoire: id });
+    expect(r.ok).toBe(true);
+    expect(r.fichesCreees.length + 1).toBeLessThanOrEqual(5);
+    expect(r.bulletin.idees).toContain(deplacee.id);
+  });
+
+  it('dédoublonne deux idées identiques dans la même entrée', () => {
+    const doublon = idee({ accroche: '  Une accroche.  ' });
+    const distincte = idee({ pilier: 'socio', accroche: 'Une idée bien différente.' });
+    const r = construireVeille({ profil, fiches: [], entree: entree({ idees: [idee(), doublon, distincte] }), maintenant: MAINTENANT, idAleatoire: id });
+    expect(r.ok).toBe(true);
+    expect(r.fichesCreees).toHaveLength(2);
+    expect(r.fichesCreees.map(f => f.accroche.trim().toLowerCase())).toEqual(['une accroche.', 'une idée bien différente.']);
   });
 });
