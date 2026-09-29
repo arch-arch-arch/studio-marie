@@ -105,13 +105,13 @@
       }
     },
     {
-      "format": "reel",
+      "format": "story",
       "pilier": "humour_sec",
       "role_caption": "deadpan",
       "cta": false,
       "format_valide": "",
       "accroche": "Deux bars imaginaires, un seul vote.",
-      "caption": "Petit reel qui reprend le vote fictif entre deux bars imaginaires, avant de révéler le choix final à la chute.",
+      "caption": "Sticker de vote fictif entre deux bars imaginaires avant de révéler le choix final en story suivante.",
       "hashtags": ["humour", "vote", "soiree"],
       "tendance": "Story \"vote entre deux options\" avant la sortie",
       "jugement": {
@@ -119,7 +119,7 @@
         "phrases": {
           "accroche": "L'accroche annonce simplement le principe du vote à venir.",
           "voix": "Le ton reste pince-sans-rire, sans verser dans l'humour appuyé.",
-          "mecanique": "La chute suffit à porter l'interaction attendue."
+          "mecanique": "Le sticker de vote suffit à porter l'interaction attendue."
         },
         "conformite": { "etat": "vert", "causes": [] },
         "captions": [
@@ -129,7 +129,7 @@
         "accroches": ["Deux bars imaginaires, un seul vote.", "Un vote sans conséquence réelle."],
         "hashtags": ["humour", "vote", "soiree"],
         "recommandations": [
-          "Garder le montage court pour ne pas diluer la chute.",
+          "Révéler le résultat dans la story suivante pour garder l'engagement.",
           "Utiliser un visuel neutre pour ne pas influencer le vote.",
           "Ajouter une chute pince-sans-rire au moment de la révélation."
         ]

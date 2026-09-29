@@ -16,11 +16,16 @@ export function fichesRemplacables(fiches, cle) {
 }
 
 export function placerIdees(idees, fiches, regles, debutIso) {
-  const libres = creneauxDisponibles(fiches, regles, debutIso);
-  const secours = depuisSaisieLocale(cleJour(debutIso, regles.fuseau), regles.creneaux[0]?.debut ?? '12:00', regles.fuseau);
+  const fz = regles.fuseau;
+  const libres = creneauxDisponibles(fiches, regles, debutIso, null, { tousFormats: true });
+  const heureSecours = regles.creneaux[0]?.debut ?? '12:00';
+  let rang = 0;
   return idees.map(idee => {
     const date_heure = libres.shift();
-    return date_heure ? { idee, date_heure, horsCreneau: false } : { idee, date_heure: secours, horsCreneau: true };
+    if (date_heure) return { idee, date_heure, horsCreneau: false };
+    const jourSecours = cleJour(ajouterJours(debutIso, rang % 7, fz), fz);
+    rang += 1;
+    return { idee, date_heure: depuisSaisieLocale(jourSecours, heureSecours, fz), horsCreneau: true };
   });
 }
 
@@ -77,6 +82,8 @@ export function validerEntreeVeille(entree, regles) {
 }
 
 const RAPPEL_RETROSPECTIVE = 'Aucun relevé de statistiques pour la semaine écoulée : saisis-les pour obtenir la rétrospective.';
+const MAX_IDEES = 5;
+const cleAccroche = a => (a ?? '').toLowerCase().replace(/\s+/g, ' ').trim();
 
 export function construireVeille({ profil, fiches, entree, maintenant, idAleatoire }) {
   const r = profil.regles_studio;
@@ -88,7 +95,12 @@ export function construireVeille({ profil, fiches, entree, maintenant, idAleatoi
   const remplacables = fichesRemplacables(fiches, cle);
   const aRemplacer = new Set(remplacables.map(f => f.id));
   const gardees = fiches.filter(f => !aRemplacer.has(f.id));
-  const places = placerIdees(verification.entree.idees, gardees, r, debut);
+  const ideesGardees = gardees.filter(f => f.origine?.type === 'veille' && f.origine?.bulletin === cle);
+  const clesGardees = new Set(ideesGardees.map(f => cleAccroche(f.accroche)));
+  const ideesRetenues = verification.entree.idees
+    .filter(idee => !clesGardees.has(cleAccroche(idee.accroche)))
+    .slice(0, Math.max(0, MAX_IDEES - ideesGardees.length));
+  const places = placerIdees(ideesRetenues, gardees, r, debut);
 
   const fichesCreees = places.map(({ idee, date_heure }) => {
     const base = {
@@ -115,7 +127,7 @@ export function construireVeille({ profil, fiches, entree, maintenant, idAleatoi
     tendances: e.tendances,
     ecartees: e.ecartees,
     alertes: e.alertes,
-    idees: fichesCreees.map(f => f.id),
+    idees: [...ideesGardees.map(f => f.id), ...fichesCreees.map(f => f.id)],
     hors_creneau: places.map((p, i) => (p.horsCreneau ? fichesCreees[i].id : null)).filter(Boolean),
     controle: controlerSemaine([...gardees, ...fichesCreees], r, debut),
   };

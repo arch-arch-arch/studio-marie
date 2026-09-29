@@ -53,4 +53,9 @@ describe('creneauxDisponibles', () => {
     expect(creneauxDisponibles([...pleins, fiche('carrousel', '2026-09-29', '13:00')], R, LUNDI))
       .toEqual(['2026-09-28T10:00:00.000Z', '2026-10-01T10:00:00.000Z']);
   });
+  it('avec tousFormats, une story posée occupe aussi son créneau', () => {
+    const story = fiche('story', '2026-09-28', '12:30');
+    expect(creneauxDisponibles([story], R, LUNDI, null, { tousFormats: true })).not.toContain('2026-09-28T10:00:00.000Z');
+    expect(creneauxDisponibles([story], R, LUNDI)).toContain('2026-09-28T10:00:00.000Z');
+  });
 });

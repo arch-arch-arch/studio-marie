@@ -54,6 +54,16 @@ describe('placerIdees', () => {
     expect(r.map(p => p.date_heure)).toEqual(['2026-09-28T10:00:00.000Z', '2026-10-01T10:00:00.000Z', '2026-09-28T10:00:00.000Z']);
     expect(r.map(p => p.horsCreneau)).toEqual([false, false, true]);
   });
+  it('répartit les idées hors créneau sur des jours successifs de la semaine', () => {
+    const pleines = ['2026-09-28', '2026-09-29', '2026-10-01'].map(j => fiche('reel', j, '12:00'));
+    const r = placerIdees([idee(), idee(), idee()], pleines, R, LUNDI);
+    expect(r.map(p => p.horsCreneau)).toEqual([true, true, true]);
+    expect(r.map(p => p.date_heure)).toEqual([
+      '2026-09-28T10:00:00.000Z',
+      '2026-09-29T10:00:00.000Z',
+      '2026-09-30T10:00:00.000Z',
+    ]);
+  });
 });
 
 describe('validerEntreeVeille', () => {
@@ -119,7 +129,7 @@ describe('construireVeille', () => {
     expect(r.ecritures.filter(e => e.op === 'set' && e.collection === 'fiches').every(e => !('id' in e.data))).toBe(true);
   });
 
-  it('relance : remplace ses propres idées intactes, garde celles modifiées ou validées', () => {
+  it('relance : remplace ses propres idées intactes, garde celles modifiées ou validées, sans doublon', () => {
     const premiere = construireVeille({ profil, fiches: [], entree: entreeFictive, maintenant: MAINTENANT, idAleatoire: id });
     const [a, b, c] = premiere.fichesCreees;
     const modifiee = { ...b, modifiee_depuis_creation: true, accroche: 'Réécrite' };
@@ -130,6 +140,22 @@ describe('construireVeille', () => {
     const placees = seconde.fichesCreees.map(f => f.date_heure);
     expect(placees).not.toContain(modifiee.date_heure);
     expect(placees).not.toContain(validee.date_heure);
+    expect(seconde.fichesCreees.some(f => f.accroche.trim().toLowerCase() === c.accroche.trim().toLowerCase())).toBe(false);
+    expect(seconde.fichesCreees.length + 2).toBeLessThanOrEqual(5);
+    expect(seconde.bulletin.idees).toContain(b.id);
+    expect(seconde.bulletin.idees).toContain(c.id);
+  });
+
+  it('5 idées gardées : aucune nouvelle idée n’est créée, le bulletin est bien écrit', () => {
+    const cle = '2026-W41';
+    const gardees = Array.from({ length: 5 }, (_, i) => fiche('reel', '2026-10-05', '12:00', {
+      statut: 'brouillon', modifiee_depuis_creation: true, origine: { type: 'veille', bulletin: cle }, accroche: `Gardée ${i}.`,
+    }));
+    const r = construireVeille({ profil, fiches: gardees, entree: entreeFictive, maintenant: MAINTENANT, idAleatoire: id });
+    expect(r.ok).toBe(true);
+    expect(r.fichesCreees).toEqual([]);
+    expect(r.bulletin.idees).toEqual(gardees.map(f => f.id));
+    expect(r.ecritures.at(-1)).toMatchObject({ op: 'set', collection: 'bulletins', doc_id: cle });
   });
 
   it('sources indisponibles : bulletin partiel, idées quand même', () => {

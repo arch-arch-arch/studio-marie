@@ -3,9 +3,10 @@ import { fichesDeLaSemaine } from './controle.js';
 
 const FEED = new Set(['reel', 'carrousel', 'post']);
 
-export function creneauxDisponibles(fiches, regles, debutIso, maintenantIso = null) {
+export function creneauxDisponibles(fiches, regles, debutIso, maintenantIso = null, { tousFormats = false } = {}) {
   const fz = regles.fuseau;
-  const feed = fichesDeLaSemaine(fiches, debutIso, fz).filter(f => FEED.has(f.format));
+  const semaine = fichesDeLaSemaine(fiches, debutIso, fz);
+  const feed = tousFormats ? semaine : semaine.filter(f => FEED.has(f.format));
   const libres = [];
   for (let i = 0; i < 7; i++) {
     const cle = cleJour(ajouterJours(debutIso, i, fz), fz);
