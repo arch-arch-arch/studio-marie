@@ -61,5 +61,6 @@ enregistrée dans `config/veille`, dans la base, et n'est jamais versionnée.
 - [x] Plan 3 : veille hebdo (routine hebdomadaire programmée)
 - [x] Plan 4 : relevés de stats et tableau de bord
 - [x] Plan 5 : parcours d'une fiche (prochaine action, confirmations datées)
+- [x] Plan 6 : confiance dans les données (avis de Claude détaillé, tableau de bord à faible volume, export et restauration)
 
 > ⚠️ Dépôt **privé** : ne jamais y commiter de tokens, de mots de passe ni de médias.

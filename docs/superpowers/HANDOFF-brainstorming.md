@@ -121,6 +121,7 @@ Révisée à partir du profil de marque réel (fourni par Jean, conservé hors d
 | 3. Veille hebdo | Script `scripts/veille.mjs`, logique `src/logique/veille.js`, consignes `src/claude/veille.md`, onglet Bulletin | Fusionné dans `main` | **302 tests verts**, build OK (72 Ko) |
 | 4. Stats et tableau de bord | Relevés à 48 h et à 7 jours, relevé hebdo du compte, onglet Tableau de bord (6 graphiques SVG), rétrospective du bulletin | Fusionné dans `main` | **362 tests verts**, build OK (90 Ko) |
 | 5. Parcours d'une fiche | Prochaine action (cartes, bandeau de fiche, « À faire cette semaine »), confirmations datées de programmation et de publication, relevés depuis la date réelle | Fusionné dans `main` | **417 tests verts**, build OK (98 Ko) |
+| 6. Confiance dans les données | Bloc « ce que Claude a examiné », recommandations avec pourquoi, « Avis de Claude » ; tableau de bord par contenu et par format, comparaisons à partir de 5 contenus ; export JSON (capacité `downloads`) et restauration sans suppression | Branche `plan-6-confiance` poussée, **pas encore fusionnée** | **474 tests verts**, build OK (109 Ko) |
 
 ### Studios publiés (URL dans `.studio.local.json`, non versionné)
 - **Studio de test** : profil fictif, jeu de référence fictif, version de la page avec l'onglet Bulletin (republiée le 2026-09-29). Capacités : `db`, `assets`, `sample`.
@@ -182,12 +183,19 @@ Elles sont toutes détaillées dans le registre de chaque plan (`.superpowers/sd
 - **Affichage :** ligne d'action sur les cartes de la vue Semaine seulement, bandeau en tête de fiche, liste « À faire cette semaine ».
 - **Limites connues :** panneau ouvert non rafraîchi après un glisser-déposer de la même fiche ; retour Publié → Programmé en passant par Validé ; une fiche programmée pour plus tard puis déplacée dans le passé propose « Confirmer la publication » sans avertissement.
 
+### Plan 6 : décisions prises à l'exécution
+- **Examen :** calculé par le studio (jamais demandé à Claude) : visuel joint ou raison (vidéo, format, taille, indisponible), sections du profil envoyées, contenus de la semaine comparés, alertes et blocages calculés. Les évaluations antérieures affichent « Détail non disponible ».
+- **Recommandations :** `{ texte, pourquoi }` ; l'ancien format texte reste accepté (veille et anciennes fiches).
+- **Tableau de bord :** seuil de 5 contenus au taux calculable pour le classement et le nuage.
+- **Sauvegarde :** export complet (sauf fichiers des visuels), fichier `studio-contenu-AAAA-MM-JJ.json`, ignoré par git. Restauration : validation complète avant écriture, y compris le profil (`validerProfil` + version) ; verrou pendant export et restauration ; écritures locales vidées avant ; aucun document supprimé ; section Sauvegarde unique pour la session (survit à la reconstruction de l'onglet Profil).
+- **Pages publiées :** capacités `db`, `assets`, `sample`, `downloads`.
+- **Limites connues :** l'examen des idées de la veille indique 0 contenu comparé ; un visuel de type inconnu s'affiche « envoi d'images indisponible » ; si une écriture locale échoue pendant la préparation d'une restauration, sa relance différée peut réécrire une fiche restaurée.
+
 ### Prochaine étape
-1. **Jean** : checklist à l'écran sur le studio de test (plan 5, tâche 6, étape 3) et checklist du plan 4.
-2. (fait) Fusion du plan 5 dans `main`.
+1. **Jean** : checklist du plan 6 sur le studio de test (avis de Claude avec image puis vidéo, pourquoi des recommandations, tableau de bord, export puis restauration avec sauvegarde) ; checklists des plans 4 et 5 si pas encore faites.
+2. **Fusion** de `plan-6-confiance` dans `main`.
 3. **Après le dimanche 4 octobre :** lire le compte rendu de la première veille réelle.
-4. **Plan 6 (proposé) : confiance dans les données** — transparence de l'évaluation, tableau de bord à faible volume, export et restauration.
-5. **Phase 2 :** publication automatique (`publisher/`) et import automatique des statistiques.
+4. **Phase 2 :** publication automatique (`publisher/`) et import automatique des statistiques.
 
 ## Contraintes
 
