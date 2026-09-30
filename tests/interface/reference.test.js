@@ -262,7 +262,7 @@ describe('section Sauvegarde', () => {
   });
   const fichierJson = texte => ({ text: async () => texte, name: 'export.json' });
   const choisir = async (v, texte) => {
-    const input = v.querySelector('.sauvegarde input[type="file"]');
+    const input = v.querySelector('.section-sauvegarde input[type="file"]');
     Object.defineProperty(input, 'files', { configurable: true, value: [fichierJson(texte)] });
     input.dispatchEvent(new Event('change'));
   };
@@ -270,55 +270,55 @@ describe('section Sauvegarde', () => {
   it('exporte et affiche le message', async () => {
     const a = actionsSauvegarde();
     const v = vueProfil({ profil: fictif }, a, { downloads: true });
-    [...v.querySelectorAll('.sauvegarde button')].find(b => b.textContent === 'Exporter les données').click();
-    await vi.waitFor(() => expect(v.querySelector('.sauvegarde').textContent).toContain('Export enregistré.'));
+    [...v.querySelectorAll('.section-sauvegarde button')].find(b => b.textContent === 'Exporter les données').click();
+    await vi.waitFor(() => expect(v.querySelector('.section-sauvegarde').textContent).toContain('Export enregistré.'));
   });
 
   it('masque l’export sans downloads mais garde la restauration', () => {
     const v = vueProfil({ profil: fictif }, actionsSauvegarde(), { downloads: false });
-    expect([...v.querySelectorAll('.sauvegarde button')].some(b => b.textContent === 'Exporter les données')).toBe(false);
-    expect(v.querySelector('.sauvegarde').textContent).toContain('L’export n’est pas disponible dans cette vue.');
-    expect(v.querySelector('.sauvegarde input[type="file"]')).not.toBeNull();
+    expect([...v.querySelectorAll('.section-sauvegarde button')].some(b => b.textContent === 'Exporter les données')).toBe(false);
+    expect(v.querySelector('.section-sauvegarde').textContent).toContain('L’export n’est pas disponible dans cette vue.');
+    expect(v.querySelector('.section-sauvegarde input[type="file"]')).not.toBeNull();
   });
 
   it('montre l’aperçu puis restaure après sauvegarde', async () => {
     const a = actionsSauvegarde();
     const v = vueProfil({ profil: fictif }, a, { downloads: true });
     await choisir(v, '{}');
-    await vi.waitFor(() => expect(v.querySelector('.sauvegarde').textContent).toContain('À restaurer : fiches : 1'));
-    [...v.querySelectorAll('.sauvegarde button')].find(b => b.textContent === 'Sauvegarder l’état actuel puis restaurer').click();
+    await vi.waitFor(() => expect(v.querySelector('.section-sauvegarde').textContent).toContain('À restaurer : fiches : 1'));
+    [...v.querySelectorAll('.section-sauvegarde button')].find(b => b.textContent === 'Sauvegarder l’état actuel puis restaurer').click();
     await vi.waitFor(() => expect(a.restaurerDonnees).toHaveBeenCalledWith({ total: 1 }, { sauvegarder: true }));
-    await vi.waitFor(() => expect(v.querySelector('.sauvegarde').textContent).toContain('Restauration terminée : 1 document(s) restauré(s).'));
+    await vi.waitFor(() => expect(v.querySelector('.section-sauvegarde').textContent).toContain('Restauration terminée : 1 document(s) restauré(s).'));
   });
 
   it('sans downloads, seule la restauration sans sauvegarde est proposée', async () => {
     const a = actionsSauvegarde();
     const v = vueProfil({ profil: fictif }, a, { downloads: false });
     await choisir(v, '{}');
-    await vi.waitFor(() => expect([...v.querySelectorAll('.sauvegarde button')].map(b => b.textContent)).toContain('Restaurer sans sauvegarde'));
-    expect([...v.querySelectorAll('.sauvegarde button')].map(b => b.textContent)).not.toContain('Sauvegarder l’état actuel puis restaurer');
+    await vi.waitFor(() => expect([...v.querySelectorAll('.section-sauvegarde button')].map(b => b.textContent)).toContain('Restaurer sans sauvegarde'));
+    expect([...v.querySelectorAll('.section-sauvegarde button')].map(b => b.textContent)).not.toContain('Sauvegarder l’état actuel puis restaurer');
   });
 
   it('affiche les erreurs d’un fichier invalide', async () => {
     const a = actionsSauvegarde({ analyserRestauration: vi.fn(async () => ({ ok: false, erreurs: ['Ce fichier n’est pas un export du studio.'] })) });
     const v = vueProfil({ profil: fictif }, a, { downloads: true });
     await choisir(v, '{}');
-    await vi.waitFor(() => expect(v.querySelector('.sauvegarde').textContent).toContain('Ce fichier n’est pas un export du studio.'));
+    await vi.waitFor(() => expect(v.querySelector('.section-sauvegarde').textContent).toContain('Ce fichier n’est pas un export du studio.'));
     expect(a.restaurerDonnees).not.toHaveBeenCalled();
   });
 
   it('reste disponible tant qu’aucun profil n’est importé', () => {
     const v = vueProfil({ profil: null }, actionsSauvegarde(), { downloads: true });
-    expect(v.querySelector('.sauvegarde')).not.toBeNull();
+    expect(v.querySelector('.section-sauvegarde')).not.toBeNull();
   });
 
   it('signale un fichier illisible', async () => {
     const a = actionsSauvegarde();
     const v = vueProfil({ profil: fictif }, a, { downloads: true });
-    const input = v.querySelector('.sauvegarde input[type="file"]');
+    const input = v.querySelector('.section-sauvegarde input[type="file"]');
     Object.defineProperty(input, 'files', { configurable: true, value: [{ text: async () => { throw new Error('x'); } }] });
     input.dispatchEvent(new Event('change'));
-    await vi.waitFor(() => expect(v.querySelector('.sauvegarde').textContent).toContain('Ce fichier ne peut pas être lu.'));
+    await vi.waitFor(() => expect(v.querySelector('.section-sauvegarde').textContent).toContain('Ce fichier ne peut pas être lu.'));
     expect(a.analyserRestauration).not.toHaveBeenCalled();
   });
 });

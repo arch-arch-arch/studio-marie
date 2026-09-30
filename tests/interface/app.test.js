@@ -322,7 +322,7 @@ describe('demarrer', () => {
     const racine = document.createElement('div');
     const app = await demarrer(racine, { use: async nom => (nom === 'db' ? db : nom === 'downloads' ? { save } : null) }, { horloge });
     expect(await app.actions.exporterDonnees()).toEqual({ ok: true, message: 'Export enregistré.' });
-    await vi.waitFor(() => expect(racine.querySelector('.sauvegarde button')?.textContent).toBe('Exporter les données'));
+    await vi.waitFor(() => expect(racine.querySelector('.section-sauvegarde button')?.textContent).toBe('Exporter les données'));
   });
 
   it('garde le message de restauration malgré la reconstruction de la vue Profil', async () => {
@@ -336,11 +336,11 @@ describe('demarrer', () => {
       profil: [{ id: 'courant', data: { ...fictif, version: 7 } }],
       fiches: [{ id: fiche.id, data: fiche }],
     }, T);
-    const input = racine.querySelector('.sauvegarde input[type="file"]');
+    const input = racine.querySelector('.section-sauvegarde input[type="file"]');
     Object.defineProperty(input, 'files', { configurable: true, value: [{ text: async () => JSON.stringify(exp) }] });
     input.dispatchEvent(new Event('change'));
-    await vi.waitFor(() => expect([...racine.querySelectorAll('.sauvegarde button')].map(b => b.textContent)).toContain('Restaurer sans sauvegarde'));
-    [...racine.querySelectorAll('.sauvegarde button')].find(b => b.textContent === 'Restaurer sans sauvegarde').click();
-    await vi.waitFor(() => expect(racine.querySelector('section.sauvegarde').textContent).toContain('Restauration terminée : 2 document(s) restauré(s).'));
+    await vi.waitFor(() => expect([...racine.querySelectorAll('.section-sauvegarde button')].map(b => b.textContent)).toContain('Restaurer sans sauvegarde'));
+    [...racine.querySelectorAll('.section-sauvegarde button')].find(b => b.textContent === 'Restaurer sans sauvegarde').click();
+    await vi.waitFor(() => expect(racine.querySelector('.section-sauvegarde').textContent).toContain('Restauration terminée : 2 document(s) restauré(s).'));
   });
 });

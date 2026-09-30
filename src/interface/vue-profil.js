@@ -148,7 +148,7 @@ export function sectionSauvegarde(actions, capacites) {
         h('button', { type: 'button', class: 'bouton-lien', onclick: () => apercu.replaceChildren() }, 'Annuler')));
   }
 
-  return h('section', { class: 'sauvegarde' },
+  return h('section', { class: 'section-sauvegarde' },
     h('h2', {}, 'Sauvegarde'),
     h('p', { class: 'aide' }, 'L’export contient le profil, les fiches, les bulletins, les statistiques et le jeu de référence. Les visuels ne sont pas inclus : seuls leurs identifiants le sont.'),
     capacites.downloads
