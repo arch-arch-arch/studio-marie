@@ -274,7 +274,16 @@ export function creerControleur({ etat, depot, enregistreur, assets, horloge, id
 
   const INDISPONIBLE_EXPORT = 'L’export n’est pas disponible dans cette vue.';
 
+  const EN_COURS = 'Une opération de sauvegarde est déjà en cours : attends la fin.';
+  let sauvegardeEnCours = false;
+
   async function exporterDonnees() {
+    if (sauvegardeEnCours) return { ok: false, raison: EN_COURS };
+    sauvegardeEnCours = true;
+    try { return await exporterSansGarde(); } finally { sauvegardeEnCours = false; }
+  }
+
+  async function exporterSansGarde() {
     if (!downloads) return { ok: false, raison: INDISPONIBLE_EXPORT };
     let collections;
     try {
@@ -302,9 +311,17 @@ export function creerControleur({ etat, depot, enregistreur, assets, horloge, id
     return { ok: true, resume: resumeRestauration(validation), validation };
   }
 
-  async function restaurerDonnees(validation, { sauvegarder }) {
+  async function restaurerDonnees(validation, options) {
+    if (sauvegardeEnCours) return { ok: false, erreurs: [EN_COURS], restaures: 0 };
+    sauvegardeEnCours = true;
+    try { return await restaurerSansGarde(validation, options); } finally { sauvegardeEnCours = false; }
+  }
+
+  async function restaurerSansGarde(validation, { sauvegarder }) {
+    await fermerPanneau();
+    await enregistreur.viderTout();
     if (sauvegarder) {
-      const s = await exporterDonnees();
+      const s = await exporterSansGarde();
       if (!s.ok) return { ok: false, erreurs: [`Sauvegarde préalable impossible : ${s.raison} Rien n’a été restauré.`], restaures: 0 };
     }
     let restaures = 0;

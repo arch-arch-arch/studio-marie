@@ -301,7 +301,7 @@ describe('sauvegarde', () => {
     const etat = creerEtat({ profil: { ...fictif, version: 1 }, fiches: [], vue: 'profil', ancre: T, ficheOuverte: null, erreur: null, sauvegarde: 'ok' });
     const downloads = { save };
     const actions = creerControleur({ etat, depot, enregistreur, assets: null, horloge: () => T, downloads });
-    return { db, depot, etat, actions, downloads };
+    return { db, depot, etat, actions, downloads, enregistreur };
   };
   const exportAvec = docs => JSON.stringify(construireExport({ ...Object.fromEntries(COLLECTIONS_EXPORT.map(c => [c, []])), ...docs }, T));
 
@@ -359,5 +359,37 @@ describe('sauvegarde', () => {
       ok: false, restaures: 1,
       erreurs: ['Restauration interrompue après 1 document(s) sur 3 : réessaie, les documents déjà restaurés seront simplement réécrits.'],
     });
+  });
+
+  it('refuse une seconde opération pendant une restauration', async () => {
+    let debloquer;
+    const bloque = new Promise(r => { debloquer = r; });
+    const { actions, downloads } = avecDownloads(undefined, d => ({ ...d, ecrireDocument: async (...args) => { await bloque; return d.ecrireDocument(...args); } }));
+    const a = await actions.analyserRestauration(exportAvec({ fiches: [{ id: 'f1', data: {} }] }));
+    const premiere = actions.restaurerDonnees(a.validation, { sauvegarder: false });
+    const msg = 'Une opération de sauvegarde est déjà en cours : attends la fin.';
+    expect(await actions.exporterDonnees()).toEqual({ ok: false, raison: msg });
+    expect(await actions.restaurerDonnees(a.validation, { sauvegarder: false })).toEqual({ ok: false, erreurs: [msg], restaures: 0 });
+    expect(downloads.save).not.toHaveBeenCalled();
+    debloquer();
+    expect((await premiere).ok).toBe(true);
+    expect((await actions.exporterDonnees()).ok).toBe(true);
+  });
+
+  it('la sauvegarde préalable n’est pas bloquée par le verrou', async () => {
+    const { actions, downloads } = avecDownloads();
+    const a = await actions.analyserRestauration(exportAvec({ fiches: [{ id: 'f1', data: {} }] }));
+    expect((await actions.restaurerDonnees(a.validation, { sauvegarder: true })).ok).toBe(true);
+    expect(downloads.save).toHaveBeenCalledTimes(1);
+  });
+
+  it('écrit les modifications locales en attente avant de restaurer', async () => {
+    const { db, actions, enregistreur } = avecDownloads();
+    enregistreur.planifier({ id: 'f1', accroche: 'locale' });
+    expect(db._docs.get('fiches/f1')).toBeUndefined();
+    const a = await actions.analyserRestauration(exportAvec({ fiches: [{ id: 'f1', data: { accroche: 'exportée' } }] }));
+    await actions.restaurerDonnees(a.validation, { sauvegarder: false });
+    expect(db.ecritures).toEqual(['fiches/f1', 'fiches/f1']);
+    expect(db._docs.get('fiches/f1')).toEqual({ accroche: 'exportée' });
   });
 });

@@ -307,6 +307,24 @@ describe('section Sauvegarde', () => {
     expect(a.restaurerDonnees).not.toHaveBeenCalled();
   });
 
+  it('désactive l’input et les boutons pendant une restauration, puis les réactive', async () => {
+    let fin;
+    const a = actionsSauvegarde({ restaurerDonnees: vi.fn(() => new Promise(r => { fin = () => r({ ok: true, message: 'Restauration terminée : 1 document(s) restauré(s).', restaures: 1 }); })) });
+    const v = vueProfil({ profil: fictif }, a, { downloads: true });
+    await choisir(v, '{}');
+    await vi.waitFor(() => expect(v.querySelector('.section-sauvegarde').textContent).toContain('À restaurer'));
+    const boutons = () => [...v.querySelectorAll('.section-sauvegarde button')];
+    boutons().find(b => b.textContent === 'Restaurer sans sauvegarde').click();
+    await vi.waitFor(() => expect(a.restaurerDonnees).toHaveBeenCalled());
+    expect(v.querySelector('.section-sauvegarde input[type="file"]').disabled).toBe(true);
+    expect(boutons().length).toBeGreaterThan(0);
+    expect(boutons().every(b => b.disabled)).toBe(true);
+    fin();
+    await vi.waitFor(() => expect(v.querySelector('.section-sauvegarde').textContent).toContain('Restauration terminée'));
+    expect(v.querySelector('.section-sauvegarde input[type="file"]').disabled).toBe(false);
+    expect(boutons().every(b => !b.disabled)).toBe(true);
+  });
+
   it('reste disponible tant qu’aucun profil n’est importé', () => {
     const v = vueProfil({ profil: null }, actionsSauvegarde(), { downloads: true });
     expect(v.querySelector('.section-sauvegarde')).not.toBeNull();

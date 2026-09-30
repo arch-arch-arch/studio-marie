@@ -116,20 +116,27 @@ export function sectionSauvegarde(actions, capacites) {
   const apercu = h('div', { class: 'apercu-restauration' });
   const afficherErreurs = liste => erreurs.replaceChildren(...liste.map(m => h('li', {}, m)));
 
-  async function exporter() {
+  const section = h('section', { class: 'section-sauvegarde' });
+  const verrouiller = occupe => section.querySelectorAll('button, input').forEach(el => { el.disabled = occupe; });
+  async function enCours(travail) {
+    verrouiller(true);
+    try { await travail(); } finally { verrouiller(false); }
+  }
+
+  const exporter = () => enCours(async () => {
     message.textContent = 'Préparation de l’export…';
     const r = await actions.exporterDonnees();
     message.textContent = r.ok ? r.message : r.raison;
-  }
+  });
 
-  async function restaurer(validation, sauvegarder) {
+  const restaurer = (validation, sauvegarder) => enCours(async () => {
     apercu.replaceChildren();
     message.textContent = 'Restauration en cours…';
     const r = await actions.restaurerDonnees(validation, { sauvegarder });
     if (r.ok) { message.textContent = r.message; erreurs.replaceChildren(); return; }
     message.textContent = '';
     afficherErreurs(r.erreurs);
-  }
+  });
 
   async function choisir(fichier) {
     if (!fichier) return;
@@ -148,7 +155,7 @@ export function sectionSauvegarde(actions, capacites) {
         h('button', { type: 'button', class: 'bouton-lien', onclick: () => apercu.replaceChildren() }, 'Annuler')));
   }
 
-  return h('section', { class: 'section-sauvegarde' },
+  section.replaceChildren(
     h('h2', {}, 'Sauvegarde'),
     h('p', { class: 'aide' }, 'L’export contient le profil, les fiches, les bulletins, les statistiques et le jeu de référence. Les visuels ne sont pas inclus : seuls leurs identifiants le sont.'),
     capacites.downloads
@@ -157,4 +164,5 @@ export function sectionSauvegarde(actions, capacites) {
     h('label', { class: 'champ' }, h('span', { class: 'champ-libelle' }, 'Restaurer depuis un export…'),
       h('input', { type: 'file', accept: '.json,application/json', onchange: e => { const f = e.target.files?.[0]; e.target.value = ''; return choisir(f); } })),
     apercu, message, erreurs);
+  return section;
 }
