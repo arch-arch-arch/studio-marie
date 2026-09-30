@@ -311,4 +311,14 @@ describe('section Sauvegarde', () => {
     const v = vueProfil({ profil: null }, actionsSauvegarde(), { downloads: true });
     expect(v.querySelector('.sauvegarde')).not.toBeNull();
   });
+
+  it('signale un fichier illisible', async () => {
+    const a = actionsSauvegarde();
+    const v = vueProfil({ profil: fictif }, a, { downloads: true });
+    const input = v.querySelector('.sauvegarde input[type="file"]');
+    Object.defineProperty(input, 'files', { configurable: true, value: [{ text: async () => { throw new Error('x'); } }] });
+    input.dispatchEvent(new Event('change'));
+    await vi.waitFor(() => expect(v.querySelector('.sauvegarde').textContent).toContain('Ce fichier ne peut pas être lu.'));
+    expect(a.analyserRestauration).not.toHaveBeenCalled();
+  });
 });
