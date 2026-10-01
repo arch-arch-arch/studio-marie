@@ -3,7 +3,7 @@ import { debutSemaine, ajouterJours } from '../logique/dates.js';
 import { vueSemaine } from './vue-semaine.js';
 import { vueMois } from './vue-mois.js';
 import { vueJour } from './vue-jour.js';
-import { vueProfil } from './vue-profil.js';
+import { vueProfil, sectionSauvegarde } from './vue-profil.js';
 import { vueBulletin } from './vue-bulletin.js';
 import { vueTableau } from './vue-tableau.js';
 import { panneauFiche } from './panneau-fiche.js';
@@ -40,8 +40,8 @@ function barre(e, actions) {
   return elements;
 }
 
-function contenuVue(e, actions, capacites) {
-  if (!e.profil || e.vue === 'profil') return vueProfil(e, actions, capacites);
+function contenuVue(e, actions, capacites, extras) {
+  if (!e.profil || e.vue === 'profil') return vueProfil(e, actions, capacites, extras);
   if (e.vue === 'mois') return vueMois(e, actions);
   if (e.vue === 'jour') return vueJour(e, actions);
   if (e.vue === 'bulletin') return vueBulletin(e, actions);
@@ -55,6 +55,8 @@ export function creerRendu(racine, actions, capacites, horloge) {
   const vue = h('main', { class: 'vue' });
   const panneau = h('div', { class: 'zone-panneau' });
   racine.replaceChildren(tete, zoneErreur, h('div', { class: 'corps' }, vue, panneau));
+  let elementSauvegarde = null;
+  const sauvegarde = () => (elementSauvegarde ??= sectionSauvegarde(actions, capacites));
   let memo = {};
   let elementVue = null;
 
@@ -86,7 +88,7 @@ export function creerRendu(racine, actions, capacites, horloge) {
         || (e.vue === 'semaine' && memo.stats !== e.stats);
     }
     if (reconstructionRequise) {
-      elementVue = contenuVue(e2, actions, capacites);
+      elementVue = contenuVue(e2, actions, capacites, { sauvegarde: sauvegarde() });
       vue.replaceChildren(elementVue);
     } else if (estVueProfil && (memo.reference !== e.reference || memo.resultatReference !== e.resultatReference || memo.verificationReference !== e.verificationReference)) {
       elementVue?.mettreAJour?.(e2);

@@ -10,6 +10,7 @@ describe('consignes de la veille', () => {
       'ArtifactData', 'WebSearch', 'sources_indisponibles', 'son_a_verifier', 'proposition_profil',
       '"jugement"', 'batch', 'profil/courant', 'bulletins', '--forcer', '--bulletin',
       'stats_contenu', 'releves_compte', '--stats', '--releves',
+      '"recommandations":[{"texte":"…","pourquoi":"…"}', '3 recommandations, chacune avec un pourquoi court',
     ]) expect(texte).toContain(attendu);
   });
   it('rappelle les interdits', () => {

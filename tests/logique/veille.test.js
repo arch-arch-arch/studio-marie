@@ -144,6 +144,13 @@ describe('construireVeille', () => {
   let k = 0;
   const id = () => `idee-${++k}`;
 
+  it('chaque idée porte un examen sans visuel', () => {
+    const r = construireVeille({ profil: { ...fictif, version: 4 }, fiches: [], entree: entree(), maintenant: '2026-09-27T18:00:00.000Z', idAleatoire: () => `ex${n++}` });
+    const examen = r.fichesCreees[0].score.examen;
+    expect(examen).toMatchObject({ visuel: 'aucun', raison_visuel: null, version_profil: 4, contenus_semaine: 0 });
+    expect(examen.sections_profil).toContain('regles_studio');
+  });
+
   it('vise la semaine suivante, dépose des idées évaluées en brouillon et un bulletin', () => {
     const r = construireVeille({ profil, fiches: [], entree: entreeFictive, maintenant: MAINTENANT, idAleatoire: id });
     expect(r.ok).toBe(true);

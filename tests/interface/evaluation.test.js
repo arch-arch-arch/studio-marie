@@ -49,7 +49,7 @@ describe('evaluerFiche', () => {
     expect(enBase.score.total).toBe(71);
     expect(enBase.variantes).toEqual(REPONSE.captions);
     expect(enBase.suggestions).toEqual({ accroches: ['Acc 1', 'Acc 2'], hashtags: ['nuit', 'socio'] });
-    expect(enBase.recommandations).toEqual(['R1', 'R2', 'R3']);
+    expect(enBase.recommandations).toEqual([{ texte: 'R1', pourquoi: '' }, { texte: 'R2', pourquoi: '' }, { texte: 'R3', pourquoi: '' }]);
     expect(etat.lire().fiches[0].score.total).toBe(71);
     expect(await actions.changerStatut('f1', 'valide')).toEqual({ ok: true });
   });
@@ -328,5 +328,34 @@ describe('reverifierFiches', () => {
     expect(await actions.reverifierFiches()).toBe(0);
     expect(etat.lire().fiches[0].statut).toBe('valide');
     expect(etat.lire().erreur).toBeNull();
+  });
+});
+
+describe('examen de l’évaluation', () => {
+  const images = extra => fauxSample(undefined, async () => ({ maxPromptBytes: 65536, images: { maxCount: 1, maxInputBytes: 20e6, mediaTypes: ['image/png'], ...extra } }));
+  it('vidéo : visuel non joint pour cause de vidéo', async () => {
+    const { actions } = await monter();
+    const r = await actions.evaluerFiche('f1');
+    expect(r.fiche.score.examen).toMatchObject({ visuel: 'non_joint', raison_visuel: 'video', version_profil: 1, contenus_semaine: 0 });
+    expect(r.fiche.score.examen.sections_profil).toContain('regles_studio');
+  });
+  it('sans visuel : aucun', async () => {
+    const { actions } = await monter({ contenu: { visuel: null, visuel_type: null } });
+    expect((await actions.evaluerFiche('f1')).fiche.score.examen.visuel).toBe('aucun');
+  });
+  it('image jointe, refusée par type ou par taille, ou envoi indisponible', async () => {
+    const joint = await monter({ sample: images(), contenu: { visuel_type: 'image' } });
+    expect((await joint.actions.evaluerFiche('f1')).fiche.score.examen).toMatchObject({ visuel: 'joint', raison_visuel: null });
+    const type = await monter({ sample: images({ mediaTypes: ['image/jpeg'] }), contenu: { visuel_type: 'image' } });
+    expect((await type.actions.evaluerFiche('f1')).fiche.score.examen).toMatchObject({ visuel: 'non_joint', raison_visuel: 'type' });
+    const taille = await monter({ sample: images({ maxInputBytes: 0 }), contenu: { visuel_type: 'image' } });
+    expect((await taille.actions.evaluerFiche('f1')).fiche.score.examen).toMatchObject({ visuel: 'non_joint', raison_visuel: 'taille' });
+    const indispo = await monter({ sample: fauxSample(), contenu: { visuel_type: 'image' } });
+    expect((await indispo.actions.evaluerFiche('f1')).fiche.score.examen).toMatchObject({ visuel: 'non_joint', raison_visuel: 'indisponible' });
+  });
+  it('les recommandations sont enregistrées avec leur pourquoi', async () => {
+    const { db, actions } = await monter({ sample: fauxSample(async () => ({ ...REPONSE, recommandations: [{ texte: 'R1', pourquoi: 'P1' }, 'R2', 'R3'] })) });
+    await actions.evaluerFiche('f1');
+    expect(db._docs.get('fiches/f1').recommandations[0]).toEqual({ texte: 'R1', pourquoi: 'P1' });
   });
 });

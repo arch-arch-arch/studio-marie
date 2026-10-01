@@ -93,5 +93,14 @@ export function creerDepot(db) {
     ecouterRelevesCompte(rappel, erreur) {
       return db.collection('releves_compte').onSnapshot(snap => rappel(snap.docs.map(d => ({ id: d.id, ...d.data() }))), erreur);
     },
+
+    async lireCollection(nom) {
+      const snap = await db.collection(nom).get();
+      return snap.docs.map(d => ({ id: d.id, data: d.data() }));
+    },
+
+    async ecrireDocument(collection, id, data) {
+      await db.doc(`${collection}/${id}`).set(data);
+    },
   };
 }

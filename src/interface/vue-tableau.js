@@ -1,6 +1,6 @@
 import { h } from './h.js';
 import { svgBarres, svgCourbe, svgNuage, figure } from './graphiques.js';
-import { seriesTableau, croissancesNettes } from '../logique/tableau-bord.js';
+import { seriesTableau, croissancesNettes, SEUIL_COMPARAISON, resultatsParContenu, resultatsParFormat, nombreComparable, resumeVolume } from '../logique/tableau-bord.js';
 import { CHAMPS_COMPTE, etatReleves, formaterValeur } from '../logique/indicateurs.js';
 import { debutSemaine, ajouterJours, cleSemaineIso, libelleJour } from '../logique/dates.js';
 import { LIBELLES_FORMAT } from '../logique/fiche.js';
@@ -77,17 +77,43 @@ function classement({ meilleurs, pires }) {
   return f;
 }
 
+function tableaux(stats, fz) {
+  const jour = iso => new Date(iso).toLocaleDateString('fr-FR', { timeZone: fz, day: 'numeric', month: 'short' });
+  const lignes = resultatsParContenu(stats);
+  const formats = resultatsParFormat(stats);
+  const cellules = valeurs => valeurs.map(v => h('td', {}, v));
+  return [
+    h('section', { class: 'resultats-contenus' }, h('h3', {}, 'Résultats par contenu'),
+      lignes.length
+        ? h('table', {},
+          h('thead', {}, h('tr', {}, ['Date', 'Format', 'Accroche', 'Vues', 'Nouveaux abonnés', 'Abonnés par vue', 'Partages et envois', 'Relevé'].map(t => h('th', {}, t)))),
+          h('tbody', {}, lignes.map(l => h('tr', {}, cellules([
+            jour(l.date), LIBELLES_FORMAT[l.format] ?? l.format, l.accroche || 'Sans accroche', entier(l.vues), entier(l.nouveaux_abonnes),
+            pct(l.taux), entier(l.partages_envois), l.releve === '48h' ? '48 h' : '7 jours',
+          ])))))
+        : h('p', { class: 'aide' }, VIDE)),
+    h('section', { class: 'resultats-formats' }, h('h3', {}, 'Par format'),
+      formats.length
+        ? h('table', {},
+          h('thead', {}, h('tr', {}, ['Format', 'Contenus', 'Abonnés par vue (moyenne)', 'Partages et envois (moyenne)'].map(t => h('th', {}, t)))),
+          h('tbody', {}, formats.map(f => h('tr', {}, cellules([LIBELLES_FORMAT[f.format] ?? f.format, String(f.nombre), pct(f.taux_moyen), entier(f.partages_moyens)])))))
+        : h('p', { class: 'aide' }, VIDE)),
+  ];
+}
+
 function graphiquesTableau(stats, relevesCompte, cibles, fz) {
   const c = cibles ?? {};
   const s = seriesTableau({ stats, relevesCompte, fuseau: fz });
   const jour = iso => new Date(iso).toLocaleDateString('fr-FR', { timeZone: fz, day: 'numeric', month: 'short' });
+  const comparable = nombreComparable(stats);
+  const attente = `Il faut au moins ${SEUIL_COMPARAISON} contenus relevés pour comparer (actuellement ${comparable}).`;
   return [
     figure('Taux d’abonnés par vue des Reels', svgCourbe({ points: s.reels.map(p => ({ etiquette: jour(p.date), valeur: p.valeur, titre: p.libelle })), cible: c.taux_abonnes_par_vue ?? null, format: pct }), VIDE),
     figure('Partages et envois par post', svgBarres({ valeurs: s.partages.slice(-12).map(p => ({ etiquette: jour(p.date), valeur: p.valeur, titre: p.libelle })), cible: c.partages_par_post ?? null, format: entier }), VIDE),
     figure('Croissance nette hebdomadaire', svgBarres({ valeurs: s.croissance.map(p => ({ etiquette: p.semaine.slice(5), valeur: p.valeur, titre: p.semaine })), cible: c.croissance_nette_semaine ?? null, format: entier }), 'Il faut deux relevés du compte consécutifs.'),
     figure('Clics sur la porte', svgBarres({ valeurs: s.porte.map(p => ({ etiquette: p.semaine.slice(5), valeur: p.valeur, titre: p.semaine })), cible: c.clics_porte_semaine ?? null, format: entier }), VIDE),
-    classement(s.classement),
-    figure('Score prévu / performance réelle', svgNuage({ points: s.scoreReel.map(p => ({ x: p.score, y: p.valeur, titre: p.libelle })), formatY: pct }), 'Aucun contenu évalué et relevé.'),
+    comparable >= SEUIL_COMPARAISON ? classement(s.classement) : figure('Meilleurs et pires contenus', '', attente),
+    figure('Score prévu / performance réelle', comparable >= SEUIL_COMPARAISON ? svgNuage({ points: s.scoreReel.map(p => ({ x: p.score, y: p.valeur, titre: p.libelle })), formatY: pct }) : '', comparable >= SEUIL_COMPARAISON ? 'Aucun contenu évalué et relevé.' : attente),
   ];
 }
 
@@ -98,10 +124,14 @@ export function vueTableau({ profil, stats, relevesCompte, fichesRecentes = [], 
 
   let elementASaisir = aSaisir(fichesRecentes, stats, maintenant, fz, actions);
   const releve = releveCompte(relevesCompte, maintenant, fz, actions);
+  const volume = h('p', { class: 'volume' }, resumeVolume(stats));
+  const zoneTableaux = h('div', { class: 'tableaux-resultats' }, ...tableaux(stats, fz));
   const graphiques = h('div', { class: 'graphiques' }, ...graphiquesTableau(stats, relevesCompte, r.cibles, fz));
 
   const racine = h('div', { class: 'tableau' },
+    volume,
     h('div', { class: 'tableau-saisie' }, elementASaisir, releve.element),
+    zoneTableaux,
     graphiques);
 
   racine.mettreAJour = e2 => {
@@ -109,6 +139,8 @@ export function vueTableau({ profil, stats, relevesCompte, fichesRecentes = [], 
     elementASaisir.replaceWith(nouveau);
     elementASaisir = nouveau;
     releve.mettreAJour(e2.relevesCompte);
+    volume.textContent = resumeVolume(e2.stats);
+    zoneTableaux.replaceChildren(...tableaux(e2.stats, fz));
     graphiques.replaceChildren(...graphiquesTableau(e2.stats, e2.relevesCompte, r.cibles, fz));
   };
 

@@ -6,6 +6,7 @@ import { creerEnregistreur } from '../../src/donnees/enregistreur.js';
 import { creerEtat } from '../../src/interface/etat.js';
 import { creerControleur, plageDeVue, fusionnerInstantane } from '../../src/interface/controleur.js';
 import { nouvelleFiche, empreinte } from '../../src/logique/fiche.js';
+import { construireExport, COLLECTIONS_EXPORT } from '../../src/logique/sauvegarde.js';
 
 const T = '2026-09-28T08:00:00.000Z';
 const FZ = 'Europe/Paris';
@@ -289,5 +290,106 @@ describe('confirmations', () => {
     etat.modifier({ profil: { ...profil, regles_studio: { ...profil.regles_studio, mots_a_eviter: [...profil.regles_studio.mots_a_eviter, 'caption'] } } });
     await actions.reverifierFiches();
     expect(etat.lire().fiches[0]).toMatchObject({ statut: 'brouillon', programme_pour: null });
+  });
+});
+
+describe('sauvegarde', () => {
+  const avecDownloads = (save = vi.fn(async () => ({ status: 'saved' })), envelopper = d => d) => {
+    const db = creerFausseBase();
+    const depot = envelopper(creerDepot(db));
+    const enregistreur = creerEnregistreur(f => depot.enregistrerFiche(f), 600);
+    const etat = creerEtat({ profil: { ...fictif, version: 1 }, fiches: [], vue: 'profil', ancre: T, ficheOuverte: null, erreur: null, sauvegarde: 'ok' });
+    const downloads = { save };
+    const actions = creerControleur({ etat, depot, enregistreur, assets: null, horloge: () => T, downloads });
+    return { db, depot, etat, actions, downloads, enregistreur };
+  };
+  const exportAvec = docs => JSON.stringify(construireExport({ ...Object.fromEntries(COLLECTIONS_EXPORT.map(c => [c, []])), ...docs }, T));
+
+  it('exporte toutes les collections via downloads', async () => {
+    const { db, actions, downloads } = avecDownloads();
+    await db.doc('fiches/f1').set({ accroche: 'x' });
+    expect(await actions.exporterDonnees()).toEqual({ ok: true, message: 'Export enregistré.' });
+    const { filename, data } = downloads.save.mock.calls[0][0];
+    expect(filename).toBe('studio-contenu-2026-09-28.json');
+    expect(JSON.parse(data).collections.fiches).toEqual([{ id: 'f1', data: { accroche: 'x' } }]);
+  });
+
+  it('traduit les refus de téléchargement', async () => {
+    const refuse = avecDownloads(vi.fn(async () => { throw { code: 'declined' }; }));
+    expect(await refuse.actions.exporterDonnees()).toEqual({ ok: false, raison: 'Export annulé.' });
+    const indispo = avecDownloads(vi.fn(async () => { throw { code: 'unavailable' }; }));
+    expect(await indispo.actions.exporterDonnees()).toEqual({ ok: false, raison: 'L’export n’est pas disponible dans cette vue.' });
+    const m = monter();
+    expect(await m.actions.exporterDonnees()).toEqual({ ok: false, raison: 'L’export n’est pas disponible dans cette vue.' });
+  });
+
+  it('analyse puis restaure sans rien supprimer', async () => {
+    const { db, actions } = avecDownloads();
+    await db.doc('fiches/garde').set({ accroche: 'reste' });
+    const a = await actions.analyserRestauration(exportAvec({ fiches: [{ id: 'f1', data: { accroche: 'restaurée' } }] }));
+    expect(a.ok).toBe(true);
+    expect(a.resume).toContain('fiches : 1');
+    const r = await actions.restaurerDonnees(a.validation, { sauvegarder: false });
+    expect(r).toEqual({ ok: true, message: 'Restauration terminée : 1 document(s) restauré(s).', restaures: 1 });
+    expect(db._docs.get('fiches/f1')).toEqual({ accroche: 'restaurée' });
+    expect(db._docs.get('fiches/garde')).toEqual({ accroche: 'reste' });
+  });
+
+  it('refuse un texte illisible ou un autre format sans rien écrire', async () => {
+    const { db, actions } = avecDownloads();
+    expect(await actions.analyserRestauration('pas du json')).toEqual({ ok: false, erreurs: ['Ce fichier n’est pas du JSON valide.'] });
+    expect((await actions.analyserRestauration('{"format":"autre"}')).erreurs).toEqual(['Ce fichier n’est pas un export du studio.']);
+    expect(db.ecritures).toEqual([]);
+  });
+
+  it('sauvegarde d’abord, et n’écrit rien si la sauvegarde est refusée', async () => {
+    const { db, actions, downloads } = avecDownloads(vi.fn(async () => { throw { code: 'declined' }; }));
+    const a = await actions.analyserRestauration(exportAvec({ fiches: [{ id: 'f1', data: {} }] }));
+    const r = await actions.restaurerDonnees(a.validation, { sauvegarder: true });
+    expect(r).toEqual({ ok: false, erreurs: ['Sauvegarde préalable impossible : Export annulé. Rien n’a été restauré.'], restaures: 0 });
+    expect(downloads.save).toHaveBeenCalledTimes(1);
+    expect(db.ecritures).toEqual([]);
+  });
+
+  it('s’arrête sur une écriture en échec et donne le compteur', async () => {
+    let n = 0;
+    const { actions } = avecDownloads(undefined, d => ({ ...d, ecrireDocument: async (...args) => { n += 1; if (n === 2) throw new Error('x'); return d.ecrireDocument(...args); } }));
+    const a = await actions.analyserRestauration(exportAvec({ fiches: [{ id: 'f1', data: {} }, { id: 'f2', data: {} }, { id: 'f3', data: {} }] }));
+    expect(await actions.restaurerDonnees(a.validation, { sauvegarder: false })).toEqual({
+      ok: false, restaures: 1,
+      erreurs: ['Restauration interrompue après 1 document(s) sur 3 : réessaie, les documents déjà restaurés seront simplement réécrits.'],
+    });
+  });
+
+  it('refuse une seconde opération pendant une restauration', async () => {
+    let debloquer;
+    const bloque = new Promise(r => { debloquer = r; });
+    const { actions, downloads } = avecDownloads(undefined, d => ({ ...d, ecrireDocument: async (...args) => { await bloque; return d.ecrireDocument(...args); } }));
+    const a = await actions.analyserRestauration(exportAvec({ fiches: [{ id: 'f1', data: {} }] }));
+    const premiere = actions.restaurerDonnees(a.validation, { sauvegarder: false });
+    const msg = 'Une opération de sauvegarde est déjà en cours : attends la fin.';
+    expect(await actions.exporterDonnees()).toEqual({ ok: false, raison: msg });
+    expect(await actions.restaurerDonnees(a.validation, { sauvegarder: false })).toEqual({ ok: false, erreurs: [msg], restaures: 0 });
+    expect(downloads.save).not.toHaveBeenCalled();
+    debloquer();
+    expect((await premiere).ok).toBe(true);
+    expect((await actions.exporterDonnees()).ok).toBe(true);
+  });
+
+  it('la sauvegarde préalable n’est pas bloquée par le verrou', async () => {
+    const { actions, downloads } = avecDownloads();
+    const a = await actions.analyserRestauration(exportAvec({ fiches: [{ id: 'f1', data: {} }] }));
+    expect((await actions.restaurerDonnees(a.validation, { sauvegarder: true })).ok).toBe(true);
+    expect(downloads.save).toHaveBeenCalledTimes(1);
+  });
+
+  it('écrit les modifications locales en attente avant de restaurer', async () => {
+    const { db, actions, enregistreur } = avecDownloads();
+    enregistreur.planifier({ id: 'f1', accroche: 'locale' });
+    expect(db._docs.get('fiches/f1')).toBeUndefined();
+    const a = await actions.analyserRestauration(exportAvec({ fiches: [{ id: 'f1', data: { accroche: 'exportée' } }] }));
+    await actions.restaurerDonnees(a.validation, { sauvegarder: false });
+    expect(db.ecritures).toEqual(['fiches/f1', 'fiches/f1']);
+    expect(db._docs.get('fiches/f1')).toEqual({ accroche: 'exportée' });
   });
 });

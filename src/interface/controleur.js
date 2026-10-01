@@ -4,11 +4,12 @@ import {
 } from '../logique/fiche.js';
 import { ajouterJours, ajouterMois, debutJour, debutSemaine, semainesDuMois } from '../logique/dates.js';
 import { verifierRegles } from '../logique/regles-score.js';
-import { composerScore } from '../logique/score.js';
+import { composerScore, construireExamen } from '../logique/score.js';
 import { fichesDeLaSemaine } from '../logique/controle.js';
-import { construirePrompt, validerReponse, messageErreurSample, CODES_INDISPONIBLES } from '../claude/evaluation.js';
+import { construireDemande, validerReponse, messageErreurSample, CODES_INDISPONIBLES } from '../claude/evaluation.js';
 import { validerReference, ficheDeReference, verifierClassement } from '../logique/reference.js';
 import { RELEVES, validerReleveContenu, validerReleveCompte, documentReleveContenu, documentReleveCompte } from '../logique/indicateurs.js';
+import { COLLECTIONS_EXPORT, construireExport, validerExport, resumeRestauration, nomFichierExport } from '../logique/sauvegarde.js';
 
 const MESSAGES_TELEVERSEMENT = {
   too_large: 'Fichier trop lourd (20 Mo au maximum).',
@@ -45,7 +46,7 @@ async function chargerImageParDefaut(id) {
 
 const INDISPONIBLE = { ok: false, raison: 'L’évaluation par Claude n’est pas disponible dans cette vue.', indisponible: true };
 
-export function creerControleur({ etat, depot, enregistreur, assets, horloge, idAleatoire = nouvelId, sample = null, chargerImage = chargerImageParDefaut }) {
+export function creerControleur({ etat, depot, enregistreur, assets, horloge, idAleatoire = nouvelId, sample = null, chargerImage = chargerImageParDefaut, downloads = null }) {
   const trouver = id => etat.lire().fiches.find(f => f.id === id);
   const fuseau = () => etat.lire().profil.regles_studio.fuseau;
   const remplacer = f => etat.modifier({ fiches: etat.lire().fiches.map(x => (x.id === f.id ? f : x)) });
@@ -86,24 +87,32 @@ export function creerControleur({ etat, depot, enregistreur, assets, horloge, id
     const { profil } = etat.lire();
     const verification = verifierRegles(fiche, profil.regles_studio);
     let images;
-    if (fiche.visuel && fiche.visuel_type === 'image') {
-      try {
-        const limites = await sample.limits();
-        if (limites?.images) {
-          const blob = await chargerImage(fiche.visuel);
-          const { mediaTypes, maxInputBytes } = limites.images;
-          const typeOk = !mediaTypes || mediaTypes.includes(blob.type);
-          const tailleOk = maxInputBytes == null || blob.size <= maxInputBytes;
-          if (typeOk && tailleOk) images = blob;
+    let visuel = fiche.visuel ? 'non_joint' : 'aucun';
+    let raisonVisuel = null;
+    if (fiche.visuel && fiche.visuel_type === 'video') raisonVisuel = 'video';
+    else if (fiche.visuel) {
+      raisonVisuel = 'indisponible';
+      if (fiche.visuel_type === 'image') {
+        try {
+          const limites = await sample.limits();
+          if (limites?.images) {
+            const blob = await chargerImage(fiche.visuel);
+            const { mediaTypes, maxInputBytes } = limites.images;
+            const typeOk = !mediaTypes || mediaTypes.includes(blob.type);
+            const tailleOk = maxInputBytes == null || blob.size <= maxInputBytes;
+            if (typeOk && tailleOk) images = blob;
+            else raisonVisuel = !typeOk ? 'type' : 'taille';
+          }
+        } catch {
+          images = undefined;
         }
-      } catch {
-        images = undefined;
       }
     }
-    const prompt = construirePrompt({ fiche, profil, verification, fichesSemaine, avecImage: !!images });
+    if (images) { visuel = 'joint'; raisonVisuel = null; }
+    const demande = construireDemande({ fiche, profil, verification, fichesSemaine, avecImage: !!images });
     let brute;
     try {
-      brute = await sample.json(prompt, images ? { signal, images } : { signal });
+      brute = await sample.json(demande.texte, images ? { signal, images } : { signal });
     } catch (e) {
       if (e?.code === 'cancelled') return { ok: false, annule: true };
       const indisponible = CODES_INDISPONIBLES.has(e?.code);
@@ -112,7 +121,8 @@ export function creerControleur({ etat, depot, enregistreur, assets, horloge, id
     }
     const reponse = validerReponse(brute);
     if (!reponse.ok) return { ok: false, raison: 'La réponse de Claude était incomplète : réessaie. Rien n’a été modifié.' };
-    const score = composerScore({ fiche, verification, jugement: reponse.jugement, versionProfil: profil.version, maintenant: horloge() });
+    const examen = construireExamen({ visuel, raison_visuel: raisonVisuel, version_profil: profil.version ?? null, sections_profil: demande.sections_profil, contenus_semaine: demande.contenus_semaine, verification });
+    const score = composerScore({ fiche, verification, jugement: reponse.jugement, versionProfil: profil.version, maintenant: horloge(), examen });
     return { ok: true, score, jugement: reponse.jugement };
   }
 
@@ -262,6 +272,72 @@ export function creerControleur({ etat, depot, enregistreur, assets, horloge, id
     }
   }
 
+  const INDISPONIBLE_EXPORT = 'L’export n’est pas disponible dans cette vue.';
+
+  const EN_COURS = 'Une opération de sauvegarde est déjà en cours : attends la fin.';
+  let sauvegardeEnCours = false;
+
+  async function exporterDonnees() {
+    if (sauvegardeEnCours) return { ok: false, raison: EN_COURS };
+    sauvegardeEnCours = true;
+    try { return await exporterSansGarde(); } finally { sauvegardeEnCours = false; }
+  }
+
+  async function exporterSansGarde() {
+    if (!downloads) return { ok: false, raison: INDISPONIBLE_EXPORT };
+    let collections;
+    try {
+      collections = Object.fromEntries(await Promise.all(COLLECTIONS_EXPORT.map(async c => [c, await depot.lireCollection(c)])));
+    } catch {
+      return { ok: false, raison: 'L’export a échoué : réessaie dans un instant.' };
+    }
+    const maintenant = horloge();
+    const exp = construireExport(collections, maintenant);
+    try {
+      await downloads.save({ filename: nomFichierExport(maintenant, etat.lire().profil?.regles_studio?.fuseau), data: JSON.stringify(exp, null, 2) });
+    } catch (e) {
+      if (e?.code === 'declined') return { ok: false, raison: 'Export annulé.' };
+      if (e?.code === 'rate_limited') return { ok: false, raison: 'Une demande d’enregistrement est déjà ouverte : réessaie dans un instant.' };
+      return { ok: false, raison: INDISPONIBLE_EXPORT };
+    }
+    return { ok: true, message: 'Export enregistré.' };
+  }
+
+  function analyserRestauration(texte) {
+    let brut;
+    try { brut = JSON.parse(texte); } catch { return { ok: false, erreurs: ['Ce fichier n’est pas du JSON valide.'] }; }
+    const validation = validerExport(brut);
+    if (!validation.ok) return { ok: false, erreurs: validation.erreurs };
+    return { ok: true, resume: resumeRestauration(validation), validation };
+  }
+
+  async function restaurerDonnees(validation, options) {
+    if (sauvegardeEnCours) return { ok: false, erreurs: [EN_COURS], restaures: 0 };
+    sauvegardeEnCours = true;
+    try { return await restaurerSansGarde(validation, options); } finally { sauvegardeEnCours = false; }
+  }
+
+  async function restaurerSansGarde(validation, { sauvegarder }) {
+    await fermerPanneau();
+    await enregistreur.viderTout();
+    if (sauvegarder) {
+      const s = await exporterSansGarde();
+      if (!s.ok) return { ok: false, erreurs: [`Sauvegarde préalable impossible : ${s.raison} Rien n’a été restauré.`], restaures: 0 };
+    }
+    let restaures = 0;
+    for (const c of COLLECTIONS_EXPORT) {
+      for (const d of validation.collections[c]) {
+        try {
+          await depot.ecrireDocument(c, d.id, d.data);
+        } catch {
+          return { ok: false, restaures, erreurs: [`Restauration interrompue après ${restaures} document(s) sur ${validation.total} : réessaie, les documents déjà restaurés seront simplement réécrits.`] };
+        }
+        restaures += 1;
+      }
+    }
+    return { ok: true, message: `Restauration terminée : ${restaures} document(s) restauré(s).`, restaures };
+  }
+
   return {
     ouvrirFiche: id => etat.modifier({ ficheOuverte: id, erreur: null }),
     fermerPanneau,
@@ -272,6 +348,9 @@ export function creerControleur({ etat, depot, enregistreur, assets, horloge, id
     importerReference,
     verifierReference,
     arreterReference: () => controleurReference?.abort(),
+    exporterDonnees,
+    analyserRestauration: async texte => analyserRestauration(texte),
+    restaurerDonnees,
     confirmerProgrammation: (id, dateIso, coche) => confirmer(id, dateIso, coche, confirmerProg),
     confirmerPublication: (id, dateIso, coche) => confirmer(id, dateIso, coche, confirmerPub),
 

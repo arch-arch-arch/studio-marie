@@ -19,6 +19,7 @@ media/
 
 # Données réelles de la créatrice (ne jamais versionner)
 *profil_marque*.json
+studio-contenu-2*.json
 data/
 veille-tmp/
 

@@ -1,6 +1,6 @@
 {
   "nom": "Studio Contenu",
-  "version_du_document": "2026-09-29 (plan 5)",
+  "version_du_document": "2026-09-29 (plan 6)",
   "resume": "Page web privée (Artifact claude.ai) pour planifier, rédiger, évaluer et piloter le contenu Instagram d'une créatrice : calendrier, fiches contenu notées par Claude, veille hebdomadaire automatique et tableau de bord des statistiques.",
   "objectifs": [
     "Savoir quoi poster : idées, accroches, captions, tendances.",
@@ -27,7 +27,7 @@
     "composants": {
       "studio": {
         "role": "Calendrier, fiches, bulletin, tableau de bord, profil.",
-        "techno": "Artifact HTML/JS claude.ai, une seule page construite par esbuild (dist/studio.html, ~90 Ko)."
+        "techno": "Artifact HTML/JS claude.ai (capacités db, assets, sample, downloads), une seule page construite par esbuild (dist/studio.html, ~109 Ko)."
       },
       "base_partagee": {
         "role": "Profil, fiches, bulletins, statistiques.",
@@ -57,7 +57,7 @@
     },
     "stack": {
       "langage": "JavaScript (modules ES), DOM vanilla via une fonction h()",
-      "tests": "Vitest + happy-dom (417 tests)",
+      "tests": "Vitest + happy-dom (474 tests)",
       "build": "esbuild (scripts/build.mjs)",
       "runtime_script": "Node 24",
       "dependances_runtime": "aucune"
@@ -302,7 +302,7 @@
     "enregistrement": "Automatique et différé (indicateur Enregistré / Enregistrement… / Échec) ; écriture immédiate lors des changements de statut."
   },
   "tests_et_verification": {
-    "automatiques": "417 tests Vitest : logique (règles, score, contrôle, empreinte, créneaux, veille, indicateurs, tableau de bord), dépôt, contrôleur, vues, script de veille, consignes.",
+    "automatiques": "474 tests Vitest : logique (règles, score, contrôle, empreinte, créneaux, veille, indicateurs, tableau de bord), dépôt, contrôleur, vues, script de veille, consignes.",
     "reponses_de_claude": "Réponses malformées ou incomplètes testées : message clair, aucune donnée partielle écrite.",
     "jeu_de_reference": "Vérification du classement gagnants/perdants, relancée à chaque changement des consignes de score.",
     "revue": "Chaque tâche relue (conformité + qualité), puis relecture de toute la branche avant fusion.",
@@ -325,7 +325,8 @@
       "publication automatique via l'API Instagram (publisher/)",
       "import automatique des statistiques"
     ],
-    "plan_5": "Parcours d'une fiche — fusionné"
+    "plan_5": "Parcours d'une fiche — fusionné",
+    "plan_6": "Confiance dans les données — terminé, en attente de fusion"
   },
   "parcours_d_une_fiche": {
     "prochaine_action": "Calculée pour chaque fiche (src/logique/parcours.js) : terminer (visuel, caption), évaluer, réévaluer, corriger la conformité, valider, confirmer la programmation, reconfirmer, confirmer la publication, saisir les stats à 48 h / 7 jours, sinon « Programmé pour le … », « Prochain relevé le … » ou « Terminé ». Marquée en retard quand la date prévue ou l'échéance est passée.",
@@ -339,5 +340,15 @@
       "publie": "date au plus tard maintenant + 5 min + case « Le contenu est en ligne » ; enregistre publie_le"
     },
     "date_des_releves": "publie_le ?? date_heure"
+  },
+  "confiance_dans_les_donnees": {
+    "examen_de_l_evaluation": "Bloc score.examen calculé par le studio : visuel (joint, non joint avec raison vidéo/format/taille/indisponible, aucun), version et sections du profil envoyées, contenus de la semaine comparés, alertes et blocages calculés. Affiché dans « Ce que Claude a examiné ».",
+    "recommandations": "3 recommandations { texte, pourquoi } ; ancien format texte accepté.",
+    "libelle": "« Avis de Claude : N/100 » — « Avis d’expert, pas une prédiction de performance. »",
+    "tableau_de_bord_faible_volume": "En-tête « N contenus relevés sur 12 semaines (…) », tableaux « Résultats par contenu » et « Par format » avant les graphiques ; classement et nuage masqués sous 5 contenus au taux calculable.",
+    "sauvegarde": {
+      "export": "JSON { format: studio-contenu-export, version 1, collections } via la capacité downloads ; visuels non inclus (identifiants seulement).",
+      "restauration": "Validation complète (format, version, identifiants, profil valide) avant toute écriture ; aperçu ; sauvegarde préalable proposée ; réécriture par identifiant, aucune suppression ; arrêt avec compteur en cas d'échec ; verrou pendant l'opération."
+    }
   }
 }

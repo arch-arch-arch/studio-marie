@@ -159,7 +159,7 @@ describe('évaluation dans le panneau', () => {
     bouton(p, 'Arrêter').click();
     expect(signalRecu.aborted).toBe(true);
     resoudre({ ok: true, fiche: evaluee() });
-    await vi.waitFor(() => expect(p.textContent).toContain('Score : 72/100'));
+    await vi.waitFor(() => expect(p.textContent).toContain('Avis de Claude : 72/100'));
     expect(p.textContent).toContain('Accroche et diffusion : 30/40. Nette.');
     expect(p.textContent).toContain('Hors des créneaux recommandés du profil.');
     expect(p.textContent).toContain('R3');
@@ -426,5 +426,42 @@ describe('parcours dans la fiche', () => {
     expect(p.querySelector('.prochaine-action').textContent).toContain('Programmé pour le');
     bouton(p, 'Réévaluer').click();
     await vi.waitFor(() => expect(p.querySelector('.prochaine-action').textContent).not.toContain('Programmé pour le'));
+  });
+});
+
+describe('avis de Claude', () => {
+  const evaluee = (extra = {}, score = {}) => {
+    const f = fiche({ caption: 'Une caption.', ...extra });
+    return { ...f, score: { total: 64, criteres: [], conformite: { etat: 'vert', causes: [] }, empreinte: empreinte(f), ...score } };
+  };
+  it('présente le score comme un avis', () => {
+    const p = panneauFiche(evaluee(), fictif, actionsFactices(), { assets: true });
+    expect(p.querySelector('.score h3').textContent).toBe('Avis de Claude : 64/100');
+    expect(p.querySelector('.score').textContent).toContain('Avis d’expert, pas une prédiction de performance.');
+    const vide = panneauFiche(fiche(), fictif, actionsFactices(), { assets: true });
+    expect(vide.querySelector('.score h3').textContent).toBe('Avis de Claude');
+  });
+  it('détaille ce que Claude a examiné', () => {
+    const examen = { visuel: 'non_joint', raison_visuel: 'video', version_profil: 2, sections_profil: ['regles_studio'], contenus_semaine: 3, alertes_calculees: 1, blocages_calcules: 0 };
+    const p = panneauFiche(evaluee({}, { examen }), fictif, actionsFactices(), { assets: true });
+    const d = p.querySelector('details.examen');
+    expect(d.querySelector('summary').textContent).toBe('Ce que Claude a examiné');
+    expect([...d.querySelectorAll('li')].map(li => li.textContent)).toEqual([
+      'Visuel non examiné : vidéo (seules les images sont envoyées).', 'Profil version 2 : sections regles_studio.',
+      '3 autres contenus de la semaine comparés.', '1 alerte et 0 blocage calculés par le studio.',
+    ]);
+  });
+  it('signale une évaluation antérieure', () => {
+    const p = panneauFiche(evaluee(), fictif, actionsFactices(), { assets: true });
+    expect(p.querySelector('details.examen').textContent).toContain('Détail non disponible pour cette évaluation (antérieure).');
+  });
+  it('affiche le pourquoi des recommandations, et les anciennes sous forme de texte', () => {
+    const p = panneauFiche(evaluee({ recommandations: [{ texte: 'Raccourcis.', pourquoi: '18 mots.' }, { texte: 'Visage.', pourquoi: '' }, 'Ancienne.'] }), fictif, actionsFactices(), { assets: true });
+    const items = [...p.querySelectorAll('.recommandations li')];
+    expect(items[0].textContent).toBe('Raccourcis. Pourquoi : 18 mots.');
+    expect(items[1].textContent).toBe('Visage.');
+    expect(items[2].textContent).toBe('Ancienne.');
+    expect(p.textContent).not.toContain('[object Object]');
+    expect(p.textContent).not.toContain('null');
   });
 });

@@ -1,6 +1,6 @@
 import { h } from './h.js';
 
-export function vueProfil({ profil, reference = [], resultatReference = null, verificationReference = null }, actions, capacites = {}) {
+export function vueProfil({ profil, reference = [], resultatReference = null, verificationReference = null }, actions, capacites = {}, extras = {}) {
   const erreurs = h('ul', { class: 'erreurs', 'aria-live': 'polite' });
   const zone = h('textarea', { id: 'profil-json', rows: 12, placeholder: 'Colle ici le JSON du profil de marque.' });
   const fichier = h('input', {
@@ -27,6 +27,8 @@ export function vueProfil({ profil, reference = [], resultatReference = null, ve
     ref = sectionReference({ reference, resultatReference, verificationReference }, actions, capacites, profil.regles_studio.fuseau);
     enfants.push(ref.element);
   }
+
+  enfants.push(extras.sauvegarde ?? sectionSauvegarde(actions, capacites));
 
   const racine = h('div', { class: 'profil' }, ...enfants);
   racine.mettreAJour = e => ref?.mettreAJour(e);
@@ -106,4 +108,61 @@ function resume(profil) {
       h('dt', {}, 'Créneaux'), h('dd', {}, r.creneaux.map(c => `${c.jours.map(j => jours[j]).join(' ')} ${c.debut}–${c.fin}`).join(' · ')),
       h('dt', {}, "Appels à l'action"), h('dd', {}, `au plus ${Math.round(r.cta_ratio_max * 100)} % du feed`),
       h('dt', {}, 'Stories vers la porte'), h('dd', {}, `${r.stories_porte.min} à ${r.stories_porte.max} par semaine`)));
+}
+
+export function sectionSauvegarde(actions, capacites) {
+  const message = h('p', { class: 'aide', role: 'status' });
+  const erreurs = h('ul', { class: 'erreurs', 'aria-live': 'polite' });
+  const apercu = h('div', { class: 'apercu-restauration' });
+  const afficherErreurs = liste => erreurs.replaceChildren(...liste.map(m => h('li', {}, m)));
+
+  const section = h('section', { class: 'section-sauvegarde' });
+  const verrouiller = occupe => section.querySelectorAll('button, input').forEach(el => { el.disabled = occupe; });
+  async function enCours(travail) {
+    verrouiller(true);
+    try { await travail(); } finally { verrouiller(false); }
+  }
+
+  const exporter = () => enCours(async () => {
+    message.textContent = 'Préparation de l’export…';
+    const r = await actions.exporterDonnees();
+    message.textContent = r.ok ? r.message : r.raison;
+  });
+
+  const restaurer = (validation, sauvegarder) => enCours(async () => {
+    apercu.replaceChildren();
+    message.textContent = 'Restauration en cours…';
+    const r = await actions.restaurerDonnees(validation, { sauvegarder });
+    if (r.ok) { message.textContent = r.message; erreurs.replaceChildren(); return; }
+    message.textContent = '';
+    afficherErreurs(r.erreurs);
+  });
+
+  async function choisir(fichier) {
+    if (!fichier) return;
+    erreurs.replaceChildren();
+    apercu.replaceChildren();
+    message.textContent = '';
+    let texte;
+    try { texte = await fichier.text(); } catch { afficherErreurs(['Ce fichier ne peut pas être lu.']); return; }
+    const r = await actions.analyserRestauration(texte);
+    if (!r.ok) { afficherErreurs(r.erreurs); return; }
+    apercu.replaceChildren(
+      h('p', {}, r.resume),
+      h('div', { class: 'evaluation-actions' },
+        capacites.downloads ? h('button', { type: 'button', class: 'bouton-principal', onclick: () => restaurer(r.validation, true) }, 'Sauvegarder l’état actuel puis restaurer') : null,
+        h('button', { type: 'button', class: 'bouton-secondaire', onclick: () => restaurer(r.validation, false) }, 'Restaurer sans sauvegarde'),
+        h('button', { type: 'button', class: 'bouton-lien', onclick: () => apercu.replaceChildren() }, 'Annuler')));
+  }
+
+  section.replaceChildren(
+    h('h2', {}, 'Sauvegarde'),
+    h('p', { class: 'aide' }, 'L’export contient le profil, les fiches, les bulletins, les statistiques et le jeu de référence. Les visuels ne sont pas inclus : seuls leurs identifiants le sont.'),
+    capacites.downloads
+      ? h('button', { type: 'button', class: 'bouton-secondaire', onclick: exporter }, 'Exporter les données')
+      : h('p', { class: 'aide' }, 'L’export n’est pas disponible dans cette vue.'),
+    h('label', { class: 'champ' }, h('span', { class: 'champ-libelle' }, 'Restaurer depuis un export…'),
+      h('input', { type: 'file', accept: '.json,application/json', onchange: e => { const f = e.target.files?.[0]; e.target.value = ''; return choisir(f); } })),
+    apercu, message, erreurs);
+  return section;
 }

@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   RAPPEL_RETROSPECTIVE, relevesParFiche, croissancesNettes, classerContenus, ecartsCibles, seriesTableau, retrospective,
+  SEUIL_COMPARAISON, resultatsParContenu, resultatsParFormat, nombreComparable, resumeVolume,
 } from '../../src/logique/tableau-bord.js';
 
 const FZ = 'Europe/Paris';
@@ -130,5 +131,35 @@ describe('retrospective', () => {
       cibles: undefined, fuseau: FZ, debutSemaineVisee: W40, maintenant: '2026-09-27T18:00:00.000Z',
     });
     expect(r.manquants).toEqual([{ fiche: 'p', releve: '48h', accroche: 'Réelle' }]);
+  });
+});
+
+describe('faible volume', () => {
+  const stats = [
+    stat('a', '48h', { date_publication: '2026-09-10T10:00:00.000Z', vues: 500 }), stat('a', '7j', { date_publication: '2026-09-10T10:00:00.000Z', vues: 1000, nouveaux_abonnes: 4 }),
+    stat('b', '7j', { date_publication: '2026-09-20T10:00:00.000Z', format: 'carrousel', partages_envois: 30, nouveaux_abonnes: 2 }),
+    stat('z', '48h', { date_publication: '2026-09-22T10:00:00.000Z', vues: 0, nouveaux_abonnes: 0, partages_envois: 1 }),
+  ];
+  it('liste un résultat par contenu, du plus récent au plus ancien', () => {
+    const r = resultatsParContenu(stats);
+    expect(r.map(x => [x.fiche, x.releve])).toEqual([['z', '48h'], ['b', '7j'], ['a', '7j']]);
+    expect(r[0].taux).toBeNull();
+    expect(r[2]).toMatchObject({ vues: 1000, nouveaux_abonnes: 4, partages_envois: 10, format: 'reel', accroche: 'Accroche a' });
+    expect(r[2].taux).toBeCloseTo(0.004);
+  });
+  it('résume par format sans NaN', () => {
+    expect(resultatsParFormat(stats)).toEqual([
+      { format: 'reel', nombre: 2, taux_moyen: 0.004, partages_moyens: 5.5 },
+      { format: 'carrousel', nombre: 1, taux_moyen: 0.002, partages_moyens: 30 },
+    ]);
+    expect(resultatsParFormat([stat('z', '48h', { vues: 0 })])).toEqual([{ format: 'reel', nombre: 1, taux_moyen: null, partages_moyens: 10 }]);
+    expect(resultatsParFormat([])).toEqual([]);
+  });
+  it('compte les contenus comparables et résume le volume', () => {
+    expect(SEUIL_COMPARAISON).toBe(5);
+    expect(nombreComparable(stats)).toBe(2);
+    expect(resumeVolume([])).toBe('Aucun contenu relevé sur 12 semaines.');
+    expect(resumeVolume([stat('a', '7j')])).toBe('1 contenu relevé sur 12 semaines (1 Reel).');
+    expect(resumeVolume(stats)).toBe('3 contenus relevés sur 12 semaines (2 Reels, 1 carrousel).');
   });
 });

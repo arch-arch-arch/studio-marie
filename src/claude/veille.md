@@ -45,7 +45,7 @@ Ne repropose pas une idée proche d'une fiche déjà présente dans `veille-tmp/
 Évalue ensuite chaque idée comme une éditrice exigeante, au format `"jugement"` :
 
 ```json
-{"notes":{"accroche":7,"voix":8,"mecanique":6},"phrases":{"accroche":"…","voix":"…","mecanique":"…"},"conformite":{"etat":"vert","causes":[]},"captions":[{"role":"engagement","texte":"…"},{"role":"deadpan","texte":"…"}],"accroches":["…","…"],"hashtags":["mot"],"recommandations":["…","…","…"]}
+{"notes":{"accroche":7,"voix":8,"mecanique":6},"phrases":{"accroche":"…","voix":"…","mecanique":"…"},"conformite":{"etat":"vert","causes":[]},"captions":[{"role":"engagement","texte":"…"},{"role":"deadpan","texte":"…"}],"accroches":["…","…"],"hashtags":["mot"],"recommandations":[{"texte":"…","pourquoi":"…"},{"texte":"…","pourquoi":"…"},{"texte":"…","pourquoi":"…"}]}
 ```
 
 Règles du jugement :
@@ -53,7 +53,7 @@ Règles du jugement :
 - exactement 2 captions, de rôles différents ;
 - 2 ou 3 accroches ;
 - des hashtags sans `#` ;
-- 3 recommandations ;
+- 3 recommandations, chacune avec un pourquoi court ;
 - tout en français.
 
 Appuie-toi sur les performances passées : les relevés de `veille-tmp/stats_contenu/` montrent ce qui a le mieux marché (taux d'abonnés par vue, puis partages et envois). Reprends les mécaniques des meilleurs contenus et évite celles des pires.

@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import fictif from '../../exemples/profil-fictif.json';
 import { nouvelleFiche } from '../../src/logique/fiche.js';
 import {
-  extraireProfil, construirePrompt, validerReponse, messageErreurSample, CODES_INDISPONIBLES, TAILLE_PROFIL_MAX, TAILLE_PROMPT_MAX,
+  extraireProfil, extraireProfilDetaille, construireDemande, construirePrompt, validerReponse, messageErreurSample, CODES_INDISPONIBLES, TAILLE_PROFIL_MAX, TAILLE_PROMPT_MAX,
 } from '../../src/claude/evaluation.js';
 
 const octets = t => new TextEncoder().encode(t).length;
@@ -109,7 +109,7 @@ describe('validerReponse', () => {
     expect(r.erreurs).toEqual(['phrases.accroche manquante.', 'notes.voix doit être un nombre de 0 à 10.']);
     expect(validerReponse({ ...valide(), captions: [{ role: 'cta', texte: 'a' }, { role: 'cta', texte: 'b' }] }).erreurs)
       .toEqual(['captions : exactement 2 captions de rôles différents.']);
-    expect(validerReponse({ ...valide(), recommandations: ['a', 'b'] }).erreurs).toEqual(['recommandations : exactement 3 textes.']);
+    expect(validerReponse({ ...valide(), recommandations: ['a', 'b'] }).erreurs).toEqual(['recommandations : exactement 3 recommandations (texte, et pourquoi facultatif).']);
     expect(validerReponse({ ...valide(), accroches: ['a'] }).erreurs).toEqual(['accroches : 2 ou 3 textes.']);
     expect(validerReponse({ ...valide(), conformite: { etat: 'bleu', causes: [] } }).erreurs).toEqual(['conformite.etat doit valoir vert, orange ou rouge.']);
   });
@@ -143,5 +143,46 @@ describe('messageErreurSample', () => {
   });
   it('précise quoi raccourcir quand le contenu envoyé à Claude est trop volumineux', () => {
     expect(messageErreurSample({ code: 'prompt_too_large' })).toBe('Le contenu envoyé à Claude est trop volumineux : raccourcis la caption, les hashtags ou le géotag.');
+  });
+});
+
+describe('construireDemande', () => {
+  it('renvoie le texte, les sections envoyées et le nombre de contenus comparés', () => {
+    const autre = { ...fiche({ accroche: 'Autre' }), id: 'f2' };
+    const d = construireDemande({ fiche: fiche(), profil, verification, fichesSemaine: [fiche(), autre] });
+    expect(d.texte).toBe(construirePrompt({ fiche: fiche(), profil, verification, fichesSemaine: [fiche(), autre] }));
+    expect(d.sections_profil).toEqual(extraireProfilDetaille(profil).sections);
+    expect(d.sections_profil).toContain('regles_studio');
+    expect(d.contenus_semaine).toBe(1);
+  });
+  it('compte 0 contenu quand le prompt a dû être réduit', () => {
+    const grosseVerification = { ...verification, alertes: [{ critere: null, texte: 'v'.repeat(60000) }] };
+    const d = construireDemande({ fiche: fiche(), profil, verification: grosseVerification, fichesSemaine: Array.from({ length: 3 }, (_, i) => ({ ...fiche(), id: `s${i}` })) });
+    expect(d.contenus_semaine).toBe(0);
+  });
+  it('les sections envoyées suivent les retraits dus à la taille', () => {
+    const { sections } = extraireProfilDetaille(gros);
+    expect(sections).toContain('regles_studio');
+    expect(sections).not.toContain('exemples_de_reference');
+    expect(sections).not.toContain('formats_de_contenu');
+    expect(sections).toContain('ton_et_voix');
+  });
+});
+
+describe('recommandations avec pourquoi', () => {
+  it('accepte les objets et les textes, et normalise en objets', () => {
+    const r = validerReponse({ ...valide(), recommandations: [{ texte: ' Raccourcis. ', pourquoi: ' 18 mots. ' }, 'Ajoute un visage.', { texte: 'Coupe la fin.' }] });
+    expect(r.ok).toBe(true);
+    expect(r.jugement.recommandations).toEqual([
+      { texte: 'Raccourcis.', pourquoi: '18 mots.' }, { texte: 'Ajoute un visage.', pourquoi: '' }, { texte: 'Coupe la fin.', pourquoi: '' },
+    ]);
+  });
+  it('refuse un objet sans texte ou un pourquoi qui n’est pas du texte', () => {
+    const msg = ['recommandations : exactement 3 recommandations (texte, et pourquoi facultatif).'];
+    expect(validerReponse({ ...valide(), recommandations: [{ pourquoi: 'x' }, 'b', 'c'] }).erreurs).toEqual(msg);
+    expect(validerReponse({ ...valide(), recommandations: [{ texte: 'a', pourquoi: 3 }, 'b', 'c'] }).erreurs).toEqual(msg);
+  });
+  it('le prompt demande un pourquoi pour chaque recommandation', () => {
+    expect(construirePrompt({ fiche: fiche(), profil, verification })).toContain('"recommandations":[{"texte":"…","pourquoi":"…"}');
   });
 });

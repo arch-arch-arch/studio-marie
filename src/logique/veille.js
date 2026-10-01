@@ -1,9 +1,9 @@
 import { FORMATS, analyserHashtags, nouvelleFiche, appliquerEvaluation } from './fiche.js';
 import { depuisSaisieLocale, cleJour, ajouterJours, debutSemaine, debutJour, cleSemaineIso } from './dates.js';
 import { creneauxDisponibles } from './creneaux.js';
-import { validerReponse } from '../claude/evaluation.js';
+import { validerReponse, extraireProfilDetaille } from '../claude/evaluation.js';
 import { verifierRegles } from './regles-score.js';
-import { composerScore } from './score.js';
+import { composerScore, construireExamen } from './score.js';
 import { controlerSemaine } from './controle.js';
 import { retrospective } from './tableau-bord.js';
 
@@ -126,13 +126,16 @@ export function construireVeille({ profil, fiches, entree, maintenant, idAleatoi
     .slice(0, Math.max(0, MAX_IDEES - ideesGardees.length));
   const places = placerIdees(ideesRetenues, gardees, r, debut, maintenant);
 
+  const sectionsProfil = extraireProfilDetaille(profil).sections;
   const fichesCreees = places.map(({ idee, date_heure }) => {
     const base = {
       ...nouvelleFiche({ id: idAleatoire(), format: idee.format, date_heure, pilier: idee.pilier, maintenant, origine: { type: 'veille', bulletin: cle } }),
       statut: 'brouillon', role_caption: idee.role_caption, cta: idee.cta, format_valide: idee.format_valide,
       accroche: idee.accroche, caption: idee.caption, hashtags: idee.hashtags,
     };
-    const score = composerScore({ fiche: base, verification: verifierRegles(base, r), jugement: idee.jugement, versionProfil: profil.version, maintenant });
+    const verification = verifierRegles(base, r);
+    const examen = construireExamen({ visuel: 'aucun', version_profil: profil.version ?? null, sections_profil: sectionsProfil, contenus_semaine: 0, verification });
+    const score = composerScore({ fiche: base, verification, jugement: idee.jugement, versionProfil: profil.version, maintenant, examen });
     return appliquerEvaluation(base, {
       score,
       variantes: idee.jugement.captions,

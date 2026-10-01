@@ -4,6 +4,7 @@ import fictif from '../../exemples/profil-fictif.json';
 import { creerFausseBase } from '../aides/fausseBase.js';
 import { demarrer } from '../../src/interface/app.js';
 import { creerRendu } from '../../src/interface/rendu.js';
+import { construireExport } from '../../src/logique/sauvegarde.js';
 import { nouvelleFiche, appliquerEvaluation, changerStatut, empreinte } from '../../src/logique/fiche.js';
 
 const horloge = () => '2026-09-28T08:00:00.000Z';
@@ -313,5 +314,33 @@ describe('demarrer', () => {
     expect(racine.textContent).not.toContain('Chargement du tableau de bord…');
     expect(racine.querySelectorAll('figcaption').length).toBe(6);
     expect(racine.querySelector('form.releve-compte')).not.toBeNull();
+  });
+
+  it('passe downloads au contrôleur quand la capacité est disponible', async () => {
+    const db = creerFausseBase();
+    const save = vi.fn(async () => ({ status: 'saved' }));
+    const racine = document.createElement('div');
+    const app = await demarrer(racine, { use: async nom => (nom === 'db' ? db : nom === 'downloads' ? { save } : null) }, { horloge });
+    expect(await app.actions.exporterDonnees()).toEqual({ ok: true, message: 'Export enregistré.' });
+    await vi.waitFor(() => expect(racine.querySelector('.section-sauvegarde button')?.textContent).toBe('Exporter les données'));
+  });
+
+  it('garde le message de restauration malgré la reconstruction de la vue Profil', async () => {
+    const db = creerFausseBase();
+    const racine = document.createElement('div');
+    const app = await demarrer(racine, { use: async nom => (nom === 'db' ? db : null) }, { horloge });
+    await app.actions.importerProfil(JSON.stringify(fictif));
+    await app.actions.changerVue('profil');
+    const fiche = nouvelleFiche({ id: 'f-restauree', format: 'reel', date_heure: '2026-09-28T10:00:00.000Z', pilier: 'socio', maintenant: T });
+    const exp = construireExport({
+      profil: [{ id: 'courant', data: { ...fictif, version: 7 } }],
+      fiches: [{ id: fiche.id, data: fiche }],
+    }, T);
+    const input = racine.querySelector('.section-sauvegarde input[type="file"]');
+    Object.defineProperty(input, 'files', { configurable: true, value: [{ text: async () => JSON.stringify(exp) }] });
+    input.dispatchEvent(new Event('change'));
+    await vi.waitFor(() => expect([...racine.querySelectorAll('.section-sauvegarde button')].map(b => b.textContent)).toContain('Restaurer sans sauvegarde'));
+    [...racine.querySelectorAll('.section-sauvegarde button')].find(b => b.textContent === 'Restaurer sans sauvegarde').click();
+    await vi.waitFor(() => expect(racine.querySelector('.section-sauvegarde').textContent).toContain('Restauration terminée : 2 document(s) restauré(s).'));
   });
 });
