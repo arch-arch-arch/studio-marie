@@ -1,6 +1,7 @@
 # Secrets (tokens Meta / Instagram)
 .env
 .env.*
+!.env.example
 *.key
 secrets/
 
