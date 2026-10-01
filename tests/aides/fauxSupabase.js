@@ -38,6 +38,7 @@ export function creerFauxSupabase({ utilisateur = { id: 'u1', email: 'a@exemple.
     let charge = null;
     let plage = null;
     let unique = false;
+    let colonnes = ['id', 'data'];
     async function executer() {
       if (panne) return reponsePanne();
       if (table !== 'documents') return { data: null, error: { message: `table inconnue : ${table}` } };
@@ -65,14 +66,15 @@ export function creerFauxSupabase({ utilisateur = { id: 'u1', email: 'a@exemple.
       compteurs.lectures += 1;
       compteurs.enCours += 1;
       compteurs.simultaneesMax = Math.max(compteurs.simultaneesMax, compteurs.enCours);
-      let res = cible.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)).map(l => ({ id: l.id, data: structuredClone(l.data) }));
+      let res = cible.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)).map(l => Object.fromEntries(colonnes.map(c => [c, c === 'data' ? structuredClone(l.data) : l[c]])));
       if (plage) res = res.slice(plage[0], plage[1] + 1);
       if (delaiLecture > 0) await new Promise(r => setTimeout(r, delaiLecture));
       compteurs.enCours -= 1;
       return { data: unique ? (res[0] ?? null) : res, error: null };
     }
     const q = {
-      select: () => q,
+      // Comme postgrest-js : seules les colonnes demandées sont renvoyées.
+      select: cols => { if (cols) colonnes = cols.split(',').map(c => c.trim()); return q; },
       order: () => q,
       eq: (c, v) => { filtres.push([c, 'eq', v]); return q; },
       gte: (c, v) => { filtres.push([c, 'gte', v]); return q; },

@@ -1,5 +1,5 @@
 const ESPACE = 'visuels';
-const TAILLE_MAX = 20 * 1024 * 1024;
+export const TAILLE_MAX = 20 * 1024 * 1024;
 const EXTENSIONS = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif', 'video/mp4': 'mp4', 'video/quicktime': 'mov', 'video/webm': 'webm' };
 export const TYPES_ACCEPTES = Object.keys(EXTENSIONS);
 const erreur = (code, message) => Object.assign(new Error(message ?? code), { code });
