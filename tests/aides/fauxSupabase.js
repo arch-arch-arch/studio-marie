@@ -9,6 +9,14 @@ export function creerFauxSupabase({ utilisateur = { id: 'u1', email: 'a@exemple.
   let delaiLecture = 0;
   const statutsCanaux = new Set();
   const reponsePanne = () => ({ data: null, error: { message: panne.message, code: panne.code }, status: panne.status });
+  // Forme réelle de StorageApiError (storage-js) : message, name, status numérique, statusCode en chaîne, code.
+  const erreurStockage = (message, status, statusCode, code) => Object.assign(new Error(message), { __isStorageError: true, name: 'StorageApiError', status, statusCode, code });
+  const echecStockage = () => {
+    const statusCode = panne.statusCode ?? (panne.status != null ? String(panne.status) : panne.code);
+    const status = panne.status ?? (Number.isFinite(Number(panne.statusCode)) ? Number(panne.statusCode) : 500);
+    return { data: null, error: erreurStockage(panne.message, status, statusCode, panne.code) };
+  };
+  const introuvable = () => ({ data: null, error: erreurStockage('Object not found', 400, '404') });
   const compteurs = { lectures: 0, enCours: 0, simultaneesMax: 0 };
   const emettre = (eventType, ancien, nouveau) => { for (const e of [...ecoutes]) e({ eventType, old: ancien ?? {}, new: nouveau ?? {} }); };
   const valeur = (l, col) => (col.startsWith('data->>') ? l.data?.[col.slice(7)] : l[col]);
@@ -89,16 +97,16 @@ export function creerFauxSupabase({ utilisateur = { id: 'u1', email: 'a@exemple.
     storage: {
       from: espace => ({
         upload: async (chemin, fichier) => {
-          if (panne) return reponsePanne();
+          if (panne) return echecStockage();
           fichiers.set(`${espace}/${chemin}`, fichier);
           return { data: { path: chemin }, error: null };
         },
-        createSignedUrl: async chemin => (fichiers.has(`${espace}/${chemin}`)
+        createSignedUrl: async chemin => (panne ? echecStockage() : fichiers.has(`${espace}/${chemin}`)
           ? { data: { signedUrl: `https://stockage.test/${espace}/${chemin}?jeton=1` }, error: null }
-          : { data: null, error: { message: 'Object not found', statusCode: '404' } }),
-        download: async chemin => (fichiers.has(`${espace}/${chemin}`)
+          : introuvable()),
+        download: async chemin => (panne ? echecStockage() : fichiers.has(`${espace}/${chemin}`)
           ? { data: fichiers.get(`${espace}/${chemin}`), error: null }
-          : { data: null, error: { message: 'Object not found', statusCode: '404' } }),
+          : introuvable()),
         list: async () => ({ data: [...fichiers.keys()].filter(k => k.startsWith(`${espace}/`)).map(k => ({ name: k.slice(espace.length + 1) })), error: null }),
       }),
     },

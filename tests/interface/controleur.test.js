@@ -393,3 +393,12 @@ describe('sauvegarde', () => {
     expect(db._docs.get('fiches/f1')).toEqual({ accroche: 'exportée' });
   });
 });
+
+describe('urlVisuel', () => {
+  it('utilise le lien signé du stockage, sinon le chemin d’Artifact', async () => {
+    const avec = monter({ assets: { upload: vi.fn(), url: vi.fn(async id => `https://stockage.test/${id}`) } });
+    expect(await avec.actions.urlVisuel('a.png')).toBe('https://stockage.test/a.png');
+    const sans = monter({ assets: { upload: vi.fn() } });
+    expect(await sans.actions.urlVisuel('a1')).toBe('/_blob/a1');
+  });
+});

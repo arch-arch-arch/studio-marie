@@ -39,7 +39,7 @@ export async function demarrer(racine, claude, { horloge = () => new Date().toIS
       if (e?.code === 'quota_exceeded' || e?.code === 'revoked') etat.modifier({ erreur: messageErreurBase(e) });
     },
   );
-  const actions = creerControleur({ etat, depot, enregistreur, assets, horloge, sample, downloads });
+  const actions = creerControleur({ etat, depot, enregistreur, assets, horloge, sample, downloads, ...(typeof assets?.telecharger === 'function' ? { chargerImage: id => assets.telecharger(id) } : {}) });
   const rendre = creerRendu(racine, actions, { assets: !!assets, sample: !!sample, downloads: !!downloads }, horloge);
 
   let arreterFiches = null;

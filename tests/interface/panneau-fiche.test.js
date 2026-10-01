@@ -465,3 +465,20 @@ describe('avis de Claude', () => {
     expect(p.textContent).not.toContain('null');
   });
 });
+
+describe('visuel signé', () => {
+  it('affiche le visuel avec le lien fourni par le contrôleur', async () => {
+    const actions = { ...actionsFactices(), urlVisuel: vi.fn(async id => `https://stockage.test/${id}?jeton=1`) };
+    const p = panneauFiche(fiche({ visuel: 'a.png', visuel_type: 'image' }), fictif, actions, { assets: true });
+    await vi.waitFor(() => expect(p.querySelector('img.apercu')?.getAttribute('src')).toBe('https://stockage.test/a.png?jeton=1'));
+  });
+  it('garde le chemin d’Artifact sans cette action', () => {
+    const p = panneauFiche(fiche({ visuel: 'a1', visuel_type: 'image' }), fictif, actionsFactices(), { assets: true });
+    expect(p.querySelector('img.apercu').getAttribute('src')).toBe('/_blob/a1');
+  });
+  it('signale un visuel introuvable', async () => {
+    const actions = { ...actionsFactices(), urlVisuel: vi.fn(async () => { throw new Error('x'); }) };
+    const p = panneauFiche(fiche({ visuel: 'a.png', visuel_type: 'image' }), fictif, actions, { assets: true });
+    await vi.waitFor(() => expect(p.querySelector('.zone-visuel').textContent).toContain('Visuel introuvable.'));
+  });
+});

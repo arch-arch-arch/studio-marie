@@ -339,6 +339,7 @@ export function creerControleur({ etat, depot, enregistreur, assets, horloge, id
   }
 
   return {
+    urlVisuel: async id => (typeof assets?.url === 'function' ? assets.url(id) : `/_blob/${id}`),
     ouvrirFiche: id => etat.modifier({ ficheOuverte: id, erreur: null }),
     fermerPanneau,
     modifierFiche,

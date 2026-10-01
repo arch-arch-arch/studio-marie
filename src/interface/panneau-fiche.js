@@ -233,16 +233,29 @@ export function panneauFiche(fiche, profil, actions, capacites, releves = []) {
 
   const sectionVisuel = () => {
     if (!capacites.assets) return h('p', { class: 'aide' }, 'Le téléversement de visuels n’est pas disponible dans cette vue.');
-    const source = brouillon.visuel ? `/_blob/${brouillon.visuel}` : null;
-    const apercu = !source ? null : brouillon.visuel_type === 'video'
-      ? h('video', { class: 'apercu', src: source, controls: true })
-      : h('img', { class: 'apercu', src: source, alt: 'Visuel de la fiche' });
+    let apercu = null;
+    let avis = null;
+    if (brouillon.visuel) {
+      apercu = brouillon.visuel_type === 'video'
+        ? h('video', { class: 'apercu', controls: true })
+        : h('img', { class: 'apercu', alt: 'Visuel de la fiche' });
+      if (typeof actions.urlVisuel === 'function') {
+        avis = h('p', { class: 'aide', role: 'status' });
+        actions.urlVisuel(brouillon.visuel).then(
+          url => { apercu.setAttribute('src', url); },
+          () => { avis.textContent = 'Visuel introuvable.'; },
+        );
+      } else {
+        apercu.setAttribute('src', `/_blob/${brouillon.visuel}`);
+      }
+    }
     return h('div', {
       class: 'zone-visuel',
       ondragover: e => e.preventDefault(),
       ondrop: e => { e.preventDefault(); e.stopPropagation(); envoyer(e.dataTransfer?.files?.[0]); },
     },
     apercu,
+    avis,
     h('label', { class: 'bouton-secondaire' },
       brouillon.visuel ? 'Remplacer le visuel' : 'Glisse un visuel ici ou choisis un fichier',
       h('input', { type: 'file', accept: 'image/*,video/*', onchange: e => envoyer(e.target.files?.[0]) })));
