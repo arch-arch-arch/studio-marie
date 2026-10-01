@@ -100,4 +100,13 @@ describe('relance depuis le site', () => {
     expect(bouton.disabled).toBe(false);
     expect(el.textContent).not.toContain('Veille en cours');
   });
+  it('reconstruit bouton et message à partir de l’état de la veille', () => {
+    const enCours = vueBulletin(etat({ bulletin: null, veille: { enCours: true, message: 'Veille en cours : cela peut prendre quelques minutes.' } }), actions(), { veille: true });
+    const bouton = [...enCours.querySelectorAll('button')].find(b => b.textContent === 'Relancer la veille');
+    expect(bouton.disabled).toBe(true);
+    expect(enCours.textContent).toContain('Veille en cours : cela peut prendre quelques minutes.');
+    const fini = vueBulletin(etat({ bulletin: null, veille: { enCours: false, message: 'Bulletin 2026-W40 : 4 idée(s).' } }), actions(), { veille: true });
+    expect([...fini.querySelectorAll('button')].find(b => b.textContent === 'Relancer la veille').disabled).toBe(false);
+    expect(fini.textContent).toContain('Bulletin 2026-W40 : 4 idée(s).');
+  });
 });

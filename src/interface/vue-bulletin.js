@@ -10,11 +10,12 @@ const lienRelance = config => (config?.url_routine?.startsWith('https://')
 
 const ECHEC_VEILLE = 'La veille a échoué : réessaie dans quelques minutes. Rien n’a été modifié.';
 
-function relance(config, actions, capacites) {
+// L'état de la veille (en cours, dernier message) vit dans l'état de la page : la vue peut être reconstruite sans le perdre.
+function relance(config, actions, capacites, veille) {
   if (capacites.veille === true) {
-    const message = h('p', { class: 'aide', role: 'status' });
+    const message = h('p', { class: 'aide', role: 'status' }, veille?.message ?? '');
     const bouton = h('button', {
-      type: 'button', class: 'bouton-secondaire',
+      type: 'button', class: 'bouton-secondaire', disabled: veille?.enCours === true,
       onclick: async () => {
         bouton.disabled = true;
         message.textContent = 'Veille en cours : cela peut prendre quelques minutes.';
@@ -54,11 +55,11 @@ function sectionRetrospective(retro) {
     manquants.length ? h('p', { class: 'aide' }, `Relevés manquants : ${manquants.map(m => `${m.accroche || 'Sans accroche'} (${m.releve === '48h' ? '48 h' : '7 jours'})`).join(', ')}.`) : null);
 }
 
-export function vueBulletin({ profil, fiches, bulletin, configVeille }, actions, capacites = {}) {
+export function vueBulletin({ profil, fiches, bulletin, configVeille, veille }, actions, capacites = {}) {
   const fz = profil.regles_studio.fuseau;
   if (bulletin === undefined) return h('div', { class: 'bulletin' }, h('p', { class: 'aide' }, 'Chargement du bulletin…'));
   if (bulletin === null) {
-    return h('div', { class: 'bulletin' }, h('p', { class: 'sans-bulletin' }, 'Pas de bulletin pour cette semaine.'), relance(configVeille, actions, capacites));
+    return h('div', { class: 'bulletin' }, h('p', { class: 'sans-bulletin' }, 'Pas de bulletin pour cette semaine.'), relance(configVeille, actions, capacites, veille));
   }
   const parId = new Map(fiches.map(f => [f.id, f]));
   const genere = new Date(bulletin.genere_le).toLocaleString('fr-FR', { timeZone: fz });
@@ -66,7 +67,7 @@ export function vueBulletin({ profil, fiches, bulletin, configVeille }, actions,
     h('header', { class: 'bulletin-tete' },
       h('h2', {}, `Semaine ${bulletin.semaine}`),
       h('p', { class: 'aide' }, `Préparé le ${genere}.`),
-      relance(configVeille, actions, capacites)),
+      relance(configVeille, actions, capacites, veille)),
     bulletin.sources_indisponibles ? h('p', { class: 'bulletin-partiel', role: 'status' }, 'Sources indisponibles : bulletin partiel.') : null,
     sectionRetrospective(bulletin.retrospective),
     h('section', {}, h('h3', {}, 'Tendances'),

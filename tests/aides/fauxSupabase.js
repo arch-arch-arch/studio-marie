@@ -104,7 +104,31 @@ export function creerFauxSupabase({ utilisateur = { id: 'u1', email: 'a@exemple.
       return canal;
     },
     removeChannel: async canal => { ecoutes.delete(canal._rappel()); statutsCanaux.delete(canal._statut()); },
-    rpc: async (nom, args) => { if (panne) return reponsePanne(); appelsRpc.push({ nom, args }); return { data: null, error: null }; },
+    // appliquer_veille (supabase/schema.sql) : transaction unique. 'verifier' compare data->>champ du document à la valeur attendue
+    // (null : le document ne doit pas exister) ; en cas d'écart, erreur postgrest-js { message: 'veille_conflit', code: 'P0001' } et rien n'est écrit.
+    // Un appel qui échoue n'est pas enregistré dans _rpc ; un appel réussi applique ses écritures à _lignes.
+    rpc: async (nom, args) => {
+      if (panne) return reponsePanne();
+      if (nom !== 'appliquer_veille') { appelsRpc.push({ nom, args }); return { data: null, error: null }; }
+      const copie = new Map(lignes);
+      for (const e of args.ecritures) {
+        const k = `${e.collection}/${e.doc_id}`;
+        if (e.op === 'verifier') {
+          if (e.champ !== 'genere_le') return { data: null, error: { message: `Champ de vérification inconnu : ${e.champ}`, code: 'P0001', details: null, hint: null }, status: 400 };
+          const l = copie.get(k);
+          if (e.valeur == null ? l !== undefined : l?.data?.genere_le !== e.valeur) return { data: null, error: { message: 'veille_conflit', code: 'P0001', details: null, hint: null }, status: 400 };
+        } else if (e.op === 'set') {
+          copie.set(k, { collection: e.collection, id: e.doc_id, data: structuredClone(e.data) });
+        } else if (e.op === 'delete') {
+          const l = copie.get(k);
+          if (l && (e.si_maj_le == null || l.data?.maj_le === e.si_maj_le)) copie.delete(k);
+        }
+      }
+      appelsRpc.push({ nom, args });
+      lignes.clear();
+      for (const [k, l] of copie) lignes.set(k, l);
+      return { data: null, error: null };
+    },
     storage: {
       from: espace => ({
         upload: async (chemin, fichier, options = {}) => {

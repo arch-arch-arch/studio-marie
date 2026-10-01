@@ -84,7 +84,7 @@ export function creerRendu(racine, actions, capacites, horloge) {
       // vueTableau ne lit ni fiches, ni bulletin, ni configVeille : ils ne doivent pas la reconstruire.
       reconstructionRequise = memo.profil !== e.profil || memo.vue !== e.vue || memo.ancre !== e.ancre || sortDuChargementTableau;
     } else {
-      reconstructionRequise = memo.profil !== e.profil || memo.fiches !== e.fiches || memo.vue !== e.vue || memo.ancre !== e.ancre || memo.bulletin !== e.bulletin || memo.configVeille !== e.configVeille
+      reconstructionRequise = memo.profil !== e.profil || memo.fiches !== e.fiches || memo.vue !== e.vue || memo.ancre !== e.ancre || memo.bulletin !== e.bulletin || memo.configVeille !== e.configVeille || memo.veille !== e.veille
         || (e.vue === 'semaine' && memo.stats !== e.stats);
     }
     if (reconstructionRequise) {
@@ -102,7 +102,7 @@ export function creerRendu(racine, actions, capacites, horloge) {
     memo = {
       profil: e.profil, fiches: e.fiches, vue: e.vue, ancre: e.ancre, ficheOuverte: e.ficheOuverte, panneauAffiche: !!ouverte,
       reference: e.reference, resultatReference: e.resultatReference, verificationReference: e.verificationReference,
-      bulletin: e.bulletin, configVeille: e.configVeille,
+      bulletin: e.bulletin, configVeille: e.configVeille, veille: e.veille,
       stats: e.stats, relevesCompte: e.relevesCompte, fichesRecentes: e.fichesRecentes,
     };
   };

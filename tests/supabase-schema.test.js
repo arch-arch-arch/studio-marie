@@ -31,6 +31,15 @@ describe('schéma Supabase', () => {
     expect(sql).toContain("data->>'maj_le' = e->>'si_maj_le'");
     expect(sql).toContain("set search_path = ''");
   });
+  it('vérifie le bulletin dans le lot : opération verifier, conflit annulant la transaction', () => {
+    const corps = sql.slice(sql.indexOf('create or replace function public.appliquer_veille'), sql.indexOf('grant execute on function public.appliquer_veille'));
+    expect(corps).toContain("e->>'op' = 'verifier'");
+    expect(corps).toContain("raise exception 'veille_conflit'");
+    expect(corps).toContain("data->>'genere_le' = e->>'valeur'");
+    expect(corps).toContain("e->>'champ' is distinct from 'genere_le'");
+    expect(corps).toContain('pg_advisory_xact_lock');
+    expect(corps).not.toMatch(/executes+format|executes+'/i);
+  });
 });
 
 describe('secrets', () => {

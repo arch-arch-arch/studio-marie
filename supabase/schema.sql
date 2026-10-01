@@ -33,6 +33,8 @@ create policy "visuels : membres connectés" on storage.objects
   for all to authenticated using (bucket_id = 'visuels') with check (bucket_id = 'visuels');
 
 -- Écritures de la veille, en une seule transaction. Réservée à la clé de service.
+-- Opération 'verifier' : le bulletin de la semaine doit encore être dans l'état lu au départ (genere_le égal à valeur, ou document absent si valeur est null),
+-- sinon l'exception veille_conflit annule tout le lot. Un verrou de transaction sérialise deux veilles simultanées, même si le document n'existe pas encore.
 create or replace function public.appliquer_veille(ecritures jsonb) returns void
 language plpgsql security definer set search_path = '' as $$
 declare e jsonb;
@@ -42,6 +44,21 @@ begin
       delete from public.documents
       where collection = e->>'collection' and id = e->>'doc_id'
         and (e->>'si_maj_le' is null or data->>'maj_le' = e->>'si_maj_le');
+    elsif e->>'op' = 'verifier' then
+      if e->>'champ' is distinct from 'genere_le' then
+        raise exception 'Champ de vérification inconnu : %', e->>'champ';
+      end if;
+      perform pg_advisory_xact_lock(hashtext('veille:' || (e->>'collection') || '/' || (e->>'doc_id')));
+      if e->>'valeur' is null then
+        if exists (select 1 from public.documents where collection = e->>'collection' and id = e->>'doc_id') then
+          raise exception 'veille_conflit';
+        end if;
+      elsif not exists (
+        select 1 from public.documents
+        where collection = e->>'collection' and id = e->>'doc_id' and data->>'genere_le' = e->>'valeur'
+      ) then
+        raise exception 'veille_conflit';
+      end if;
     elsif e->>'op' = 'set' then
       insert into public.documents (collection, id, data, maj_le)
       values (e->>'collection', e->>'doc_id', e->'data', now())

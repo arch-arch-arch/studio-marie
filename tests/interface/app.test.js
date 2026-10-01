@@ -316,6 +316,29 @@ describe('demarrer', () => {
     expect(racine.querySelector('form.releve-compte')).not.toBeNull();
   });
 
+  it('garde l’état de la relance de la veille quand la vue est reconstruite', async () => {
+    const db = creerFausseBase();
+    const racine = document.createElement('div');
+    let fin;
+    const relancer = vi.fn(() => new Promise(r => { fin = r; }));
+    const app = await demarrer(racine, { use: async nom => (nom === 'db' ? db : nom === 'veille' ? { relancer } : null) }, { horloge });
+    await app.actions.importerProfil(JSON.stringify(fictif));
+    await vi.waitFor(() => expect(app.etat.lire().vue).toBe('semaine'));
+    await app.actions.changerVue('bulletin');
+    const bouton = () => [...racine.querySelectorAll('button')].find(b => b.textContent === 'Relancer la veille');
+    await vi.waitFor(() => expect(bouton()).toBeTruthy());
+    bouton().click();
+    await vi.waitFor(() => expect(bouton().disabled).toBe(true));
+    const avant = bouton();
+    app.etat.modifier({ configVeille: { url_routine: 'https://exemple.test/r' } });
+    expect(bouton()).not.toBe(avant);
+    expect(bouton().disabled).toBe(true);
+    expect(racine.textContent).toContain('Veille en cours : cela peut prendre quelques minutes.');
+    fin({ ok: true, message: 'Bulletin fait.' });
+    await vi.waitFor(() => expect(racine.textContent).toContain('Bulletin fait.'));
+    expect(bouton().disabled).toBe(false);
+  });
+
   it('passe downloads au contrôleur quand la capacité est disponible', async () => {
     const db = creerFausseBase();
     const save = vi.fn(async () => ({ status: 'saved' }));

@@ -355,7 +355,19 @@ export function creerControleur({ etat, depot, enregistreur, assets, horloge, id
       await connexion?.deconnecter();
     },
     reverifierFiches,
-    relancerVeille: async () => (veille ? veille.relancer() : { ok: false, raison: 'La veille n’est pas encore configurée.' }),
+    relancerVeille: async () => {
+      if (!veille) return { ok: false, raison: 'La veille n’est pas encore configurée.' };
+      if (etat.lire().veille?.enCours) return { ok: false, raison: 'Une veille est déjà en cours.' };
+      etat.modifier({ veille: { enCours: true, message: 'Veille en cours : cela peut prendre quelques minutes.' } });
+      let r;
+      try {
+        r = await veille.relancer();
+      } catch {
+        r = { ok: false, raison: 'La veille a échoué : réessaie dans quelques minutes. Rien n’a été modifié.' };
+      }
+      etat.modifier({ veille: { enCours: false, message: r.ok ? r.message : r.raison } });
+      return r;
+    },
     importerReference,
     verifierReference,
     arreterReference: () => controleurReference?.abort(),

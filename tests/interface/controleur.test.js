@@ -450,4 +450,37 @@ describe('relancerVeille', () => {
     expect(await avec.relancerVeille()).toEqual({ ok: true, message: 'Fait.' });
     expect(await monter().actions.relancerVeille()).toEqual({ ok: false, raison: 'La veille n’est pas encore configurée.' });
   });
+  it('met l’état à jour avant et après, et refuse un second appel pendant la veille', async () => {
+    const db = creerFausseBase();
+    const depot = creerDepot(db);
+    const enregistreur = creerEnregistreur(f => depot.enregistrerFiche(f), 600);
+    const etat = creerEtat({ profil: { ...fictif, version: 1 }, fiches: [], vue: 'bulletin', ancre: T, ficheOuverte: null, erreur: null, sauvegarde: 'ok' });
+    let fin;
+    const veille = { relancer: vi.fn(() => new Promise(r => { fin = r; })) };
+    const actions = creerControleur({ etat, depot, enregistreur, assets: null, horloge: () => T, veille });
+    const premier = actions.relancerVeille();
+    expect(etat.lire().veille).toEqual({ enCours: true, message: 'Veille en cours : cela peut prendre quelques minutes.' });
+    expect(await actions.relancerVeille()).toEqual({ ok: false, raison: 'Une veille est déjà en cours.' });
+    expect(veille.relancer).toHaveBeenCalledTimes(1);
+    fin({ ok: true, message: 'Fait.' });
+    expect(await premier).toEqual({ ok: true, message: 'Fait.' });
+    expect(etat.lire().veille).toEqual({ enCours: false, message: 'Fait.' });
+    const suivant = actions.relancerVeille();
+    fin({ ok: false, raison: 'Trop de demandes.' });
+    await suivant;
+    expect(etat.lire().veille).toEqual({ enCours: false, message: 'Trop de demandes.' });
+  });
+  it('remet l’état au repos avec un message d’échec si la capacité lève', async () => {
+    const db = creerFausseBase();
+    const depot = creerDepot(db);
+    const enregistreur = creerEnregistreur(f => depot.enregistrerFiche(f), 600);
+    const etat = creerEtat({ profil: { ...fictif, version: 1 }, fiches: [], vue: 'bulletin', ancre: T, ficheOuverte: null, erreur: null, sauvegarde: 'ok' });
+    const veille = { relancer: vi.fn(async () => { throw new Error('boum'); }) };
+    const actions = creerControleur({ etat, depot, enregistreur, assets: null, horloge: () => T, veille });
+    const r = await actions.relancerVeille();
+    expect(r.ok).toBe(false);
+    const attendu = 'La veille a échoué : réessaie dans quelques minutes. Rien n’a été modifié.';
+    expect(r.raison).toBe(attendu);
+    expect(etat.lire().veille).toEqual({ enCours: false, message: attendu });
+  });
 });
