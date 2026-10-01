@@ -128,9 +128,10 @@ export function creerFauxSupabase({ utilisateur = { id: 'u1', email: 'a@exemple.
     },
     auth: {
       getSession: async () => ({ data: { session }, error: null }),
+      // Forme réelle (auth-js GoTrueClient.ts l. 3247-3290, types.ts l. 268-273) : { data: { user }, error: null } ou { data: { user: null }, error: AuthError }.
       getUser: async jeton => (session && jeton === session.access_token
         ? { data: { user: session.user }, error: null }
-        : { data: { user: null }, error: { message: 'invalid JWT', status: 401 } }),
+        : { data: { user: null }, error: erreurAuth('invalid JWT', 401, 'bad_jwt') }),
       signInWithOtp: async ({ email }) => (panne
         ? { data: { user: null, session: null }, error: erreurPanneAuth() }
         : invites && !invites.includes(email)

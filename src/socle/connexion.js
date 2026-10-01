@@ -48,7 +48,9 @@ export async function suivreSession(connexion, recharger) {
     if (connecte !== null && connecte !== maintenant) recharger();
     connecte = maintenant;
   });
-  connecte = !!(await connexion.session());
+  // Un changement réel reçu pendant la lecture initiale fait foi : la lecture, plus ancienne, ne l'écrase pas.
+  const initial = !!(await connexion.session());
+  if (connecte === null) connecte = initial;
   return connecte;
 }
 
@@ -59,4 +61,20 @@ export function lienInvalide(emplacement) {
     const params = new URLSearchParams(String(brut ?? '').replace(/^[#?]/, ''));
     return params.has('error') || params.has('error_code');
   });
+}
+
+const PARAMETRES_ERREUR = ['error', 'error_code', 'error_description'];
+
+// Retire l'erreur d'authentification de l'adresse (fragment et requête) pour que l'avis ne réapparaisse pas au rechargement.
+export function retirerErreurDeLAdresse(emplacement, historique) {
+  let retire = false;
+  const nettoyer = (brut, prefixe) => {
+    const params = new URLSearchParams(String(brut ?? '').replace(/^[#?]/, ''));
+    for (const cle of PARAMETRES_ERREUR) if (params.has(cle)) { params.delete(cle); retire = true; }
+    const texte = params.toString();
+    return texte ? prefixe + texte : '';
+  };
+  const search = nettoyer(emplacement.search, '?');
+  const hash = nettoyer(emplacement.hash, '#');
+  if (retire) historique.replaceState(null, '', emplacement.pathname + search + hash);
 }

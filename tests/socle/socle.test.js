@@ -15,4 +15,20 @@ describe('creerSocle', () => {
     expect(await socle.use('veille')).toBeNull();
     expect(await socle.use('inconnu')).toBeNull();
   });
+  it('traite une réponse null de /api/capacites comme aucune capacité', async () => {
+    const client = creerFauxSupabase();
+    const socle = creerSocle({ client, connexion: creerConnexion(client, { origine: 'https://studio.test' }), document, capacitesServeur: null, extras: { sample: { json: async () => ({}) } } });
+    expect(await socle.use('sample')).toBeNull();
+    expect(await socle.use('veille')).toBeNull();
+    expect(await socle.use('db')).not.toBeNull();
+  });
+  it('sert l’adaptateur d’évaluation seulement quand le serveur l’annonce', async () => {
+    const client = creerFauxSupabase();
+    const connexion = creerConnexion(client, { origine: 'https://studio.test' });
+    const sample = { json: async () => ({}), limits: async () => ({}) };
+    const allume = creerSocle({ client, connexion, document, capacitesServeur: { evaluation: true, veille: false }, extras: { sample } });
+    expect(await allume.use('sample')).toBe(sample);
+    const eteint = creerSocle({ client, connexion, document, capacitesServeur: { evaluation: false, veille: false }, extras: { sample } });
+    expect(await eteint.use('sample')).toBeNull();
+  });
 });

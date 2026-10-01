@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { creerFauxSupabase } from '../aides/fauxSupabase.js';
-import { creerConnexion, suivreSession, lienInvalide } from '../../src/socle/connexion.js';
+import { creerConnexion, suivreSession, lienInvalide, retirerErreurDeLAdresse } from '../../src/socle/connexion.js';
 
 const ORIGINE = { origine: 'https://studio.test' };
 
@@ -135,6 +135,23 @@ describe('suivreSession', () => {
     await vider();
     expect(recharger).toHaveBeenCalledTimes(1);
   });
+  it('ne laisse pas la lecture initiale écraser un changement arrivé avant elle', async () => {
+    const client = creerFauxSupabase({ utilisateur: null, motsDePasse: { 'a@exemple.test': 'motdepasse-test' } });
+    const connexion = creerConnexion(client, ORIGINE);
+    let rendreLaSession;
+    connexion.session = () => new Promise(r => { rendreLaSession = r; });
+    const recharger = vi.fn();
+    const suivi = suivreSession(connexion, recharger);
+    await vider();
+    // Changement réel (déconnecté vers connecté) reçu avant la fin de la lecture initiale.
+    client._session({ access_token: 'jeton-test', user: { id: 'u1', email: 'a@exemple.test' } });
+    await vider();
+    rendreLaSession(null); // la lecture initiale, périmée, voit encore « déconnecté »
+    expect(await suivi).toBe(true);
+    client._session(null);
+    await vider();
+    expect(recharger).toHaveBeenCalledTimes(1);
+  });
   it('recharge une seule fois à la connexion par mot de passe', async () => {
     const { connexion, recharger } = await monter(null);
     expect(await connexion.connecterParMotDePasse('a@exemple.test', 'motdepasse-test')).toEqual({ ok: true });
@@ -153,5 +170,18 @@ describe('lienInvalide', () => {
     expect(lienInvalide({ search: '', hash: '' })).toBe(false);
     expect(lienInvalide({ search: '?vue=semaine', hash: '#access_token=abc&type=magiclink' })).toBe(false);
     expect(lienInvalide(null)).toBe(false);
+  });
+});
+
+describe('retirerErreurDeLAdresse', () => {
+  it('retire l’erreur du fragment et de la requête sans toucher au reste', () => {
+    const historique = { replaceState: vi.fn() };
+    retirerErreurDeLAdresse({ pathname: '/', search: '?vue=semaine&error=access_denied', hash: '#error_code=otp_expired&error_description=x' }, historique);
+    expect(historique.replaceState).toHaveBeenCalledWith(null, '', '/?vue=semaine');
+  });
+  it('ne touche à rien quand l’adresse est sans erreur', () => {
+    const historique = { replaceState: vi.fn() };
+    retirerErreurDeLAdresse({ pathname: '/', search: '?vue=semaine', hash: '' }, historique);
+    expect(historique.replaceState).not.toHaveBeenCalled();
   });
 });
