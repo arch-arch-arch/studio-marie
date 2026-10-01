@@ -14,7 +14,7 @@ const sansExtension = nom => { const point = nom.lastIndexOf('.'); return point 
 // Lit le texte d'un export : retire un BOM UTF-8, message fixe si le JSON est illisible (aucun fragment du contenu).
 export function lireExport(texte) {
   try {
-    return JSON.parse(String(texte).replace(/^﻿/, ''));
+    return JSON.parse(String(texte).replace(/^\uFEFF/, ''));
   } catch {
     throw new Error('Le fichier d’export n’est pas un JSON lisible.');
   }
@@ -49,11 +49,13 @@ export function associerVisuels(nomsDeFichiers, idsReferences) {
 
 async function lireCible(supabase) {
   const presents = new Set();
-  for (let debut = 0; ; debut += PAGE) {
+  // Le plafond de lignes du projet (PostgREST « Max rows ») peut être sous PAGE : on avance de ce qui est reçu et on s'arrête sur une page vide.
+  for (let debut = 0; ;) {
     const { data, error } = await supabase.from('documents').select('collection,id').order('collection').order('id').range(debut, debut + PAGE - 1);
     if (error) throw new Error(`Lecture de la cible impossible : ${error.message}`);
     for (const l of data) presents.add(`${l.collection}/${l.id}`);
-    if (data.length < PAGE) return presents;
+    if (data.length === 0) return presents;
+    debut += data.length;
   }
 }
 
@@ -154,6 +156,26 @@ export async function migrer({ exportJson, visuels, supabase, journal = console.
   return { ok: true, documents, visuels: visuelsEcrits };
 }
 
+const USAGE = 'Usage : node --env-file=.env.local scripts/migrer.mjs --export <fichier.json> [--visuels <dossier>] [--simuler] [--ecraser]\nSUPABASE_URL et SUPABASE_SERVICE_ROLE_KEY doivent être définies (sauf avec --simuler).\n--ecraser autorise le remplacement des documents déjà présents dans la cible.';
+
+// Analyse stricte de la ligne de commande : une faute de frappe ne doit jamais lancer une migration réelle.
+export function lireArguments(args) {
+  const options = { export: null, visuels: null, simuler: false, ecraser: false };
+  for (let i = 0; i < args.length; i += 1) {
+    const a = args[i];
+    if (a === '--simuler') options.simuler = true;
+    else if (a === '--ecraser') options.ecraser = true;
+    else if (a === '--export' || a === '--visuels') {
+      const valeur = args[i + 1];
+      if (valeur === undefined || valeur.startsWith('--')) return { ok: false, erreur: `Valeur manquante pour ${a}.` };
+      options[a.slice(2)] = valeur;
+      i += 1;
+    } else if (a.startsWith('--')) return { ok: false, erreur: `Option inconnue : ${a}.` };
+    else return { ok: false, erreur: `Argument inattendu : ${a}.` };
+  }
+  return { ok: true, options };
+}
+
 function lanceDirectement() {
   try {
     return Boolean(process.argv[1]) && realpathSync(process.argv[1]).toLowerCase() === realpathSync(fileURLToPath(import.meta.url)).toLowerCase();
@@ -163,16 +185,16 @@ function lanceDirectement() {
 }
 
 if (lanceDirectement()) {
-  const args = process.argv.slice(2);
-  const option = nom => { const i = args.indexOf(`--${nom}`); return i >= 0 ? args[i + 1] : null; };
-  const simuler = args.includes('--simuler');
-  const ecraser = args.includes('--ecraser');
-  const fichier = option('export');
-  const dossier = option('visuels');
+  const lecture = lireArguments(process.argv.slice(2));
   const env = process.env;
   const cibleDefinie = Boolean(env.SUPABASE_URL && env.SUPABASE_SERVICE_ROLE_KEY);
+  if (!lecture.ok) {
+    console.error(`${lecture.erreur}\n${USAGE}`);
+    process.exit(1);
+  }
+  const { export: fichier, visuels: dossier, simuler, ecraser } = lecture.options;
   if (!fichier || (!simuler && !cibleDefinie)) {
-    console.error('Usage : node --env-file=.env.local scripts/migrer.mjs --export <fichier.json> [--visuels <dossier>] [--simuler] [--ecraser]\nSUPABASE_URL et SUPABASE_SERVICE_ROLE_KEY doivent être définies (sauf avec --simuler).\n--ecraser autorise le remplacement des documents déjà présents dans la cible.');
+    console.error(USAGE);
     process.exit(1);
   }
   try {

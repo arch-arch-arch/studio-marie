@@ -6,6 +6,7 @@ const RAISONS = {
   conflict: 'Une autre veille vient de se terminer : recharge le bulletin.',
 };
 const DELAI_MS = 310_000;
+const NON_REPONDU = 'La veille n’a pas répondu : regarde le bulletin dans quelques minutes.'; // le serveur peut encore écrire
 const ECHEC = 'La veille a échoué : réessaie dans quelques minutes. Rien n’a été modifié.';
 
 export function creerVeilleApi({ fetch: requeter, jeton }) {
@@ -19,7 +20,7 @@ export function creerVeilleApi({ fetch: requeter, jeton }) {
         if (reponse.ok && corps.ok) return { ok: true, message: corps.resume };
         return { ok: false, raison: RAISONS[corps?.code] ?? ECHEC };
       } catch {
-        return { ok: false, raison: ECHEC };
+        return { ok: false, raison: NON_REPONDU };
       } finally {
         clearTimeout(minuterie);
       }

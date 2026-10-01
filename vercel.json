@@ -2,6 +2,10 @@
   "buildCommand": "npm run build",
   "outputDirectory": "public",
   "framework": null,
+  "functions": {
+    "api/veille.js": { "maxDuration": 300 },
+    "api/evaluer.js": { "maxDuration": 120 }
+  },
   "crons": [
     { "path": "/api/veille", "schedule": "0 0 * * 1" },
     { "path": "/api/veille", "schedule": "0 1 * * 1" }

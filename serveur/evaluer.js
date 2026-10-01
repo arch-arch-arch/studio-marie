@@ -9,6 +9,8 @@ const TYPES_IMAGE = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif
 const PROMPT_MAX = 65536;
 const IMAGE_MAX_CARACTERES = 4_000_000;
 const BASE64 = /^[A-Za-z0-9+/]+={0,2}$/;
+// Le message de l'API n'est ni journalisé ni renvoyé : il sert seulement à savoir si le 400 concerne l'image.
+const concerneLImage = e => [e?.error?.error?.message, e?.error?.message, e?.message].some(m => typeof m === 'string' && /image/i.test(m));
 const octets = t => new TextEncoder().encode(t).length;
 const reponse = (statut, corps) => ({ statut, corps });
 
@@ -28,7 +30,7 @@ export async function traiterEvaluation({ env, autorisation, corps: brut, supaba
   } catch (e) {
     journaliser('evaluer', e);
     let code = codeErreur(e);
-    if (code === 'invalid_request' && image != null) code = 'image_rejected';
+    if (code === 'invalid_request' && image != null && concerneLImage(e)) code = 'image_rejected';
     return reponse(code === 'rate_limited' ? 429 : 502, { code });
   }
 }

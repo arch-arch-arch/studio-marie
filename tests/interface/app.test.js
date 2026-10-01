@@ -27,13 +27,97 @@ describe('demarrer', () => {
   it('affiche un message clair quand la base est indisponible', async () => {
     const racine = document.createElement('div');
     expect(await demarrer(racine, { use: async () => null }, { horloge })).toBeNull();
-    expect(racine.textContent).toContain('La base du studio n’est pas accessible depuis cette vue.');
+    expect(racine.textContent).toContain('Le studio n’a pas pu ouvrir sa base. Recharge la page dans un instant.');
+    expect(racine.textContent).not.toContain('claude.ai');
   });
 
   it('affiche aussi le message quand window.claude est absent', async () => {
     const racine = document.createElement('div');
     await demarrer(racine, undefined, { horloge });
-    expect(racine.textContent).toContain('pas accessible');
+    expect(racine.textContent).toContain('pas pu ouvrir sa base');
+  });
+
+  it('affiche le message de session expirée pour une erreur revoked', async () => {
+    const reelle = creerFausseBase();
+    const db = {
+      ...reelle,
+      doc(chemin) {
+        if (chemin === 'profil/courant') return { ...reelle.doc(chemin), onSnapshot: (suivant, erreur) => { erreur({ code: 'revoked' }); return () => {}; } };
+        return reelle.doc(chemin);
+      },
+    };
+    const racine = document.createElement('div');
+    await demarrer(racine, { use: async nom => (nom === 'db' ? db : null) }, { horloge });
+    expect(racine.textContent).toContain('Ta session a expiré : recharge la page pour te reconnecter.');
+  });
+
+  function baseAvecStatsPilotables() {
+    const reelle = creerFausseBase();
+    const ecoutes = { stats: null, bulletin: null };
+    const db = {
+      ...reelle,
+      collection(nom) {
+        const c = reelle.collection(nom);
+        if (nom !== 'stats_contenu') return c;
+        return { ...c, where: (...a) => { const w = c.where(...a); return { ...w, onSnapshot: (s, e) => { ecoutes.stats = { s, e }; return w.onSnapshot(s, e); } }; } };
+      },
+      doc(chemin) {
+        const d = reelle.doc(chemin);
+        if (!chemin.startsWith('bulletins/')) return d;
+        return { ...d, onSnapshot: (s, e) => { ecoutes.bulletin = { s, e }; return d.onSnapshot(s, e); } };
+      },
+    };
+    return { db, ecoutes };
+  }
+  const instantaneStats = () => ({ docs: [{ id: 'x_48h', data: () => ({ fiche: 'x', releve: '48h' }) }] });
+  const instantaneBulletin = () => ({ exists: true, data: () => ({ semaine: '2026-W40' }) });
+
+  it('garde stats et bulletin affichés quand une erreur unavailable arrive, puis efface le bandeau au prochain instantané', async () => {
+    const { db, ecoutes } = baseAvecStatsPilotables();
+    const racine = document.createElement('div');
+    const app = await demarrer(racine, { use: async nom => (nom === 'db' ? db : null) }, { horloge });
+    await app.actions.importerProfil(JSON.stringify(fictif));
+    await vi.waitFor(() => expect(ecoutes.stats && ecoutes.bulletin).toBeTruthy());
+    ecoutes.stats.s(instantaneStats());
+    ecoutes.bulletin.s(instantaneBulletin());
+    expect(app.etat.lire().stats).toHaveLength(1);
+    ecoutes.stats.e({ code: 'unavailable' });
+    ecoutes.bulletin.e({ code: 'unavailable' });
+    expect(app.etat.lire().erreur).toBe('La base du studio ne répond pas. Recharge la page dans un instant.');
+    expect(app.etat.lire().stats).toHaveLength(1);
+    expect(app.etat.lire().bulletin).toEqual({ semaine: '2026-W40' });
+    expect(racine.textContent).toContain('La base du studio ne répond pas.');
+    ecoutes.stats.s(instantaneStats());
+    expect(app.etat.lire().erreur).toBeNull();
+    expect(racine.textContent).not.toContain('La base du studio ne répond pas.');
+  });
+
+  it('vide encore stats et bulletin sur une erreur revoked', async () => {
+    const { db, ecoutes } = baseAvecStatsPilotables();
+    const racine = document.createElement('div');
+    const app = await demarrer(racine, { use: async nom => (nom === 'db' ? db : null) }, { horloge });
+    await app.actions.importerProfil(JSON.stringify(fictif));
+    await vi.waitFor(() => expect(ecoutes.stats && ecoutes.bulletin).toBeTruthy());
+    ecoutes.stats.s(instantaneStats());
+    ecoutes.bulletin.s(instantaneBulletin());
+    ecoutes.stats.e({ code: 'revoked' });
+    ecoutes.bulletin.e({ code: 'revoked' });
+    expect(app.etat.lire().stats).toEqual([]);
+    expect(app.etat.lire().bulletin).toBeNull();
+    expect(app.etat.lire().erreur).toBe('Ta session a expiré : recharge la page pour te reconnecter.');
+    ecoutes.stats.s(instantaneStats());
+    expect(app.etat.lire().erreur).toBe('Ta session a expiré : recharge la page pour te reconnecter.');
+  });
+
+  it('n’efface pas un autre message d’erreur quand un instantané arrive', async () => {
+    const { db, ecoutes } = baseAvecStatsPilotables();
+    const racine = document.createElement('div');
+    const app = await demarrer(racine, { use: async nom => (nom === 'db' ? db : null) }, { horloge });
+    await app.actions.importerProfil(JSON.stringify(fictif));
+    await vi.waitFor(() => expect(ecoutes.stats).toBeTruthy());
+    app.etat.modifier({ erreur: 'Un autre message pas encore lu.' });
+    ecoutes.stats.s(instantaneStats());
+    expect(app.etat.lire().erreur).toBe('Un autre message pas encore lu.');
   });
 
   it('ouvre l’onglet Profil tant qu’aucun profil n’est importé, puis la semaine', async () => {
@@ -60,7 +144,7 @@ describe('demarrer', () => {
     };
     const racine = document.createElement('div');
     await demarrer(racine, { use: async nom => (nom === 'db' ? db : null) }, { horloge });
-    expect(racine.textContent).toContain('L’accès au studio a été retiré pour cette vue.');
+    expect(racine.textContent).toContain('Ta session a expiré : recharge la page pour te reconnecter.');
     expect(racine.textContent).not.toContain('Chargement du studio…');
   });
 

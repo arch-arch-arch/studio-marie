@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { lireCorps, configurationSupabase, clientSupabaseServeur, clientSupabaseService, refuserMethode, repondre } from '../../serveur/http.js';
+import { lireCorps, configurationSupabase, clientSupabaseServeur, clientSupabaseService, refuserMethode, repondre, journaliser } from '../../serveur/http.js';
 
 describe('lireCorps', () => {
   it('laisse passer un objet, décode une chaîne JSON et refuse le reste', () => {
@@ -51,6 +51,24 @@ describe('refuserMethode', () => {
   it('répond 405 pour une autre méthode que celle attendue', () => {
     expect(refuserMethode('POST', 'GET')).toEqual({ statut: 405, corps: { code: 'invalid_request' } });
     expect(refuserMethode('GET', 'GET')).toBeNull();
+  });
+});
+
+describe('journaliser', () => {
+  it('ajoute le type d’erreur de l’API quand il existe, jamais le message', () => {
+    const espion = vi.spyOn(console, 'error').mockImplementation(() => {});
+    journaliser('evaluer', Object.assign(new Error('SECRET-MESSAGE'), { status: 400, name: 'BadRequestError', error: { type: 'error', error: { type: 'invalid_request_error', message: 'SECRET-MESSAGE' } } }));
+    journaliser('evaluer', Object.assign(new Error('SECRET-MESSAGE'), { status: 400, name: 'BadRequestError', type: 'invalid_request_error' }));
+    journaliser('evaluer', Object.assign(new Error('x'), { status: 500, name: 'Boom', type: 'SECRET-TYPE LIBRE' }));
+    journaliser('evaluer', { status: 500, name: 'Boom' });
+    expect(espion.mock.calls).toEqual([
+      ['[evaluer]', 400, 'BadRequestError', 'invalid_request_error'],
+      ['[evaluer]', 400, 'BadRequestError', 'invalid_request_error'],
+      ['[evaluer]', 500, 'Boom'],
+      ['[evaluer]', 500, 'Boom'],
+    ]);
+    expect(JSON.stringify(espion.mock.calls)).not.toContain('SECRET');
+    espion.mockRestore();
   });
 });
 

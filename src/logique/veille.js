@@ -12,7 +12,7 @@ const texte = v => typeof v === 'string' && v.trim().length > 0;
 const texteOuVide = v => typeof v === 'string';
 
 const FENETRE_DEBUT = 18 * 60 + 30;
-const FENETRE_FIN = 21 * 60 + 29;
+const FENETRE_FIN = 21 * 60 + 59;
 
 export function plageVeille(regles, maintenant) {
   const fz = regles.fuseau;

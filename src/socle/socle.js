@@ -2,10 +2,10 @@ import { creerBaseSupabase } from './base-supabase.js';
 import { creerVisuelsSupabase } from './visuels-supabase.js';
 import { creerTelechargement } from './telechargement.js';
 
-export function creerSocle({ client, connexion, document: doc, capacitesServeur = {}, extras = {} }) {
+export function creerSocle({ client, connexion, document: doc, capacitesServeur = {}, extras = {}, delaiGraceMs }) {
   const serveur = capacitesServeur ?? {};
   const capacites = {
-    db: creerBaseSupabase(client),
+    db: creerBaseSupabase(client, delaiGraceMs === undefined ? undefined : { delaiGraceMs }),
     assets: creerVisuelsSupabase(client),
     downloads: creerTelechargement(doc),
     connexion,

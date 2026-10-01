@@ -180,6 +180,35 @@ describe('lancerVeille : garde-fous', () => {
     expect(refus.ok).toBe(false);
     expect(supabase._lignes.has('config/veille_en_cours')).toBe(false);
   });
+  it('ne retire pas un marqueur qui n’est plus celui de cette exécution', async () => {
+    const supabase = base();
+    const claude = claudeQui();
+    const autre = { depuis: '2026-10-04T18:04:00.000Z' };
+    claude._final.mockImplementationOnce(async () => {
+      supabase._lignes.set('config/veille_en_cours', { collection: 'config', id: 'veille_en_cours', data: autre });
+      return message(JSON.stringify(entree));
+    });
+    expect((await lancerVeille({ supabase, claude, maintenant: DIMANCHE_20H, forcer: false, idAleatoire })).ok).toBe(true);
+    expect(supabase._lignes.get('config/veille_en_cours').data).toEqual(autre);
+  });
+  it('lit d’abord la réponse finale seule : une accolade dans la narration d’un segment en pause ne coûte pas un essai', async () => {
+    const supabase = base();
+    const pause = { stop_reason: 'pause_turn', content: [{ type: 'text', text: 'Je cherche { des pistes' }] };
+    const claude = claudeQui(pause, message(JSON.stringify(entree)));
+    const r = await lancerVeille({ supabase, claude, maintenant: DIMANCHE_20H, forcer: false, idAleatoire });
+    expect(r.ok).toBe(true);
+    expect(claude.messages.stream).toHaveBeenCalledTimes(2);
+    expect(supabase._rpc).toHaveLength(1);
+    expect(supabase._lignes.has('bulletins/2026-W41')).toBe(true);
+  });
+  it('se rabat sur le texte de tous les segments si la réponse finale seule n’est pas un JSON', async () => {
+    const supabase = base();
+    const pause = { stop_reason: 'pause_turn', content: [{ type: 'text', text: JSON.stringify(entree) }] };
+    const claude = claudeQui(pause, message('Voilà, c’est fait.'));
+    const r = await lancerVeille({ supabase, claude, maintenant: DIMANCHE_20H, forcer: false, idAleatoire });
+    expect(r.ok).toBe(true);
+    expect(claude.messages.stream).toHaveBeenCalledTimes(2);
+  });
   it('ne pose pas de marqueur hors horaire', async () => {
     const supabase = base();
     await lancerVeille({ supabase, claude: claudeQui(), maintenant: '2026-10-04T19:10:00.000Z', forcer: false, idAleatoire });

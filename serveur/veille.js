@@ -45,8 +45,9 @@ async function marqueurRecent(supabase, maintenant) {
 async function poserMarqueur(supabase, maintenant) {
   try { await supabase.from(TABLE).upsert({ collection: 'config', id: MARQUEUR, data: { depuis: maintenant } }); } catch { /* sans effet sur la veille */ }
 }
-async function retirerMarqueur(supabase) {
-  try { await supabase.from(TABLE).delete().eq('collection', 'config').eq('id', MARQUEUR); } catch { /* sans effet sur la veille */ }
+// Le marqueur n'est retiré que s'il est encore celui de cette exécution (même `depuis`) : il peut avoir été reposé par une autre veille.
+async function retirerMarqueur(supabase, maintenant) {
+  try { await supabase.from(TABLE).delete().eq('collection', 'config').eq('id', MARQUEUR).eq('data->>depuis', maintenant); } catch { /* sans effet sur la veille */ }
 }
 
 // Renvoie la réponse finale et l'historique des messages qui y mène : chaque segment en pause y figure.
@@ -98,9 +99,13 @@ export async function lancerVeille({ supabase, claude, maintenant, forcer = fals
         resultat = { ok: false, erreurs: TRONQUEE };
       } else {
         let entree;
-        // Le texte de l'essai : tous les segments d'assistant ajoutés depuis le début de l'essai, puis la réponse finale.
-        const texteEssai = [...historique.slice(messages.length), reponse].map(m => texteDe(m)).join('');
-        try { entree = extraireJson(texteEssai); } catch { entree = null; }
+        // La réponse finale seule d'abord : la narration d'un segment en pause peut contenir une accolade.
+        // Sinon, le texte de tous les segments de l'essai (ajoutés depuis son début), puis la réponse finale.
+        try { entree = extraireJson(texteDe(reponse)); } catch { entree = null; }
+        if (!entree) {
+          const texteEssai = [...historique.slice(messages.length), reponse].map(m => texteDe(m)).join('');
+          try { entree = extraireJson(texteEssai); } catch { entree = null; }
+        }
         resultat = entree
           ? construireVeille({ profil, fiches, entree, maintenant, idAleatoire, stats, relevesCompte })
           : { ok: false, erreurs: ['La réponse n’était pas un objet JSON.'] };
@@ -125,7 +130,7 @@ export async function lancerVeille({ supabase, claude, maintenant, forcer = fals
   } catch (e) {
     return echec(codeErreur(e));
   } finally {
-    if (marqueurPose) await retirerMarqueur(supabase);
+    if (marqueurPose) await retirerMarqueur(supabase, maintenant);
   }
 }
 

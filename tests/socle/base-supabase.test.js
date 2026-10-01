@@ -128,19 +128,20 @@ describe('creerBaseSupabase', () => {
 
   it('signale une erreur de canal à chaque abonné', async () => {
     const client = creerFauxSupabase();
-    const db = creerBaseSupabase(client);
+    const db = creerBaseSupabase(client, { delaiGraceMs: 0 });
     const erreurs = [];
     db.collection('fiches').onSnapshot(() => {}, e => erreurs.push(['c', e.code]));
     db.doc('profil/courant').onSnapshot(() => {}, e => erreurs.push(['d', e.code]));
     await attendre();
     client._canal('CHANNEL_ERROR');
     client._canal('CHANNEL_ERROR');
+    await attendre();
     expect(erreurs).toEqual([['c', 'unavailable'], ['d', 'unavailable']]);
   });
 
   it('relivre l’état courant, même inchangé, après une erreur de canal puis SUBSCRIBED', async () => {
     const client = creerFauxSupabase();
-    const db = creerBaseSupabase(client);
+    const db = creerBaseSupabase(client, { delaiGraceMs: 0 });
     const recus = [];
     const erreurs = [];
     client._lignes.set('fiches/a', { collection: 'fiches', id: 'a', data: {} });
@@ -148,10 +149,41 @@ describe('creerBaseSupabase', () => {
     await attendre();
     expect(recus).toEqual([['a']]);
     client._canal('TIMED_OUT');
+    await attendre();
     expect(erreurs).toEqual(['unavailable']);
     client._canal('SUBSCRIBED');
     await attendre();
     expect(recus).toEqual([['a'], ['a']]);
+  });
+
+  it('ne signale pas d’erreur quand SUBSCRIBED revient avant le délai de grâce, et relit tous les abonnés', async () => {
+    const client = creerFauxSupabase();
+    const db = creerBaseSupabase(client, { delaiGraceMs: 150 });
+    const recus = [];
+    const erreurs = [];
+    db.collection('fiches').onSnapshot(s => recus.push(s.docs.map(d => d.id)), e => erreurs.push(e.code));
+    await attendre();
+    client._lignes.set('fiches/z', { collection: 'fiches', id: 'z', data: {} });
+    client._canal('CHANNEL_ERROR');
+    client._canal('TIMED_OUT');
+    await attendre(40);
+    client._canal('SUBSCRIBED');
+    await attendre(250);
+    expect(erreurs).toEqual([]);
+    expect(recus.at(-1)).toEqual(['z']);
+  });
+
+  it('signale l’erreur de canal une seule fois quand SUBSCRIBED ne revient pas dans le délai de grâce', async () => {
+    const client = creerFauxSupabase();
+    const db = creerBaseSupabase(client, { delaiGraceMs: 100 });
+    const erreurs = [];
+    db.collection('fiches').onSnapshot(() => {}, e => erreurs.push(e.code));
+    await attendre();
+    client._canal('CHANNEL_ERROR');
+    await attendre(40);
+    expect(erreurs).toEqual([]);
+    await attendre(120);
+    expect(erreurs).toEqual(['unavailable']);
   });
 
   it('ne signale pas comme erreur de base une exception du consommateur', async () => {

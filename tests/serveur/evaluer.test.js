@@ -51,7 +51,8 @@ describe('traiterEvaluation', () => {
     const illisible = { messages: { create: async () => ({ stop_reason: 'end_turn', content: [{ type: 'text', text: 'non' }] }) } };
     expect(await traiterEvaluation({ ...base, supabase: creerFauxSupabase(), claude: illisible })).toEqual({ statut: 502, corps: { code: 'invalid_json' } });
   });
-  const api400 = () => ({ messages: { create: async () => { throw new Anthropic.APIError(400, { type: 'error' }, 'erreur', new Headers()); } } });
+  const erreurApi = (statut, type, message) => new Anthropic.APIError(statut, { type: 'error', error: { type, message } }, undefined, new Headers(), type);
+  const api400 = (message = 'messages.0.content.0.image.source.base64: invalid image data') => ({ messages: { create: async () => { throw erreurApi(400, 'invalid_request_error', message); } } });
   it('distingue un visuel refusé, sans appeler Claude', async () => {
     const supabase = creerFauxSupabase();
     for (const data of ['pas du base64 !', 'QUJD'.repeat(1000001), 'QQ=A']) {
@@ -67,6 +68,25 @@ describe('traiterEvaluation', () => {
     expect(await traiterEvaluation({ ...base, corps: avec, supabase, claude: api400() })).toEqual({ statut: 502, corps: { code: 'image_rejected' } });
     expect(await traiterEvaluation({ ...base, supabase, claude: api400() })).toEqual({ statut: 502, corps: { code: 'invalid_request' } });
     espion.mockRestore();
+  });
+  it('ne prend pas pour un visuel refusé un 400 sans rapport avec l’image', async () => {
+    const supabase = creerFauxSupabase();
+    const espion = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const avec = { prompt: 'x', image: { media_type: 'image/png', data: 'QUJD' } };
+    expect(await traiterEvaluation({ ...base, corps: avec, supabase, claude: api400('Your credit balance is too low to access the API.') })).toEqual({ statut: 502, corps: { code: 'invalid_request' } });
+    expect(await traiterEvaluation({ ...base, corps: avec, supabase, claude: api400('Image does not match the provided media type') })).toEqual({ statut: 502, corps: { code: 'image_rejected' } });
+    espion.mockRestore();
+  });
+  it('journalise le type d’erreur de l’API, jamais son message', async () => {
+    const espions = ['error', 'log', 'warn'].map(n => vi.spyOn(console, n).mockImplementation(() => {}));
+    const echec = { messages: { create: async () => { throw erreurApi(401, 'authentication_error', 'SECRET-PROMPT SECRET-IMAGE SECRET-JETON'); } } };
+    const r = await traiterEvaluation({ ...base, corps: { prompt: 'SECRET-PROMPT', image: { media_type: 'image/png', data: 'U0VDUkVU' } }, autorisation: OK, supabase: creerFauxSupabase(), claude: echec });
+    expect(r).toEqual({ statut: 502, corps: { code: 'not_granted' } });
+    expect(espions[0]).toHaveBeenCalledTimes(1);
+    expect(espions[0].mock.calls[0]).toEqual(['[evaluer]', 401, 'Error', 'authentication_error']);
+    const ecrit = JSON.stringify(espions.flatMap(e => e.mock.calls));
+    for (const secret of ['SECRET', 'U0VDUkVU', 'jeton-test']) expect(ecrit).not.toContain(secret);
+    espions.forEach(e => e.mockRestore());
   });
   it('répond empty_completion pour une réponse tronquée', async () => {
     const espion = vi.spyOn(console, 'error').mockImplementation(() => {});

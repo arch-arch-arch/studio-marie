@@ -1,6 +1,7 @@
 const TABLE = 'documents';
 const PAGE = 1000;
 const DELAI_RELECTURE = 40;
+const DELAI_GRACE_CANAL = 10000;
 const OPERATEURS = { '>=': 'gte', '<': 'lt', '==': 'eq' };
 const CODES_REVOQUES = new Set(['PGRST301', 'PGRST302', 'PGRST303', '42501']);
 
@@ -12,9 +13,10 @@ function erreurBase(error, status) {
 
 const signature = v => JSON.stringify(v.docs ? v.docs.map(d => [d.id, d.data()]) : [v.exists, v.data()]);
 
-export function creerBaseSupabase(client) {
+export function creerBaseSupabase(client, { delaiGraceMs = DELAI_GRACE_CANAL } = {}) {
   const abonnes = new Map(); // collection -> Set de { relire, erreur }
   let canal = null;
+  let minuteurGrace = null;
 
   function chaqueAbonne(action) {
     for (const ensemble of [...abonnes.values()]) for (const a of [...ensemble]) action(a);
@@ -26,9 +28,16 @@ export function creerBaseSupabase(client) {
       const collection = charge.new?.collection ?? charge.old?.collection;
       for (const a of [...(abonnes.get(collection) ?? [])]) a.relire();
     }).subscribe(statut => {
-      if (statut === 'SUBSCRIBED') chaqueAbonne(a => a.relire());
-      else if (statut === 'CHANNEL_ERROR' || statut === 'TIMED_OUT') {
-        chaqueAbonne(a => a.erreur?.(Object.assign(new Error('Canal temps réel indisponible.'), { code: 'unavailable' })));
+      if (statut === 'SUBSCRIBED') {
+        if (minuteurGrace) { clearTimeout(minuteurGrace); minuteurGrace = null; }
+        chaqueAbonne(a => a.relire());
+      } else if ((statut === 'CHANNEL_ERROR' || statut === 'TIMED_OUT') && !minuteurGrace) {
+        // realtime-js émet CHANNEL_ERROR à chaque fermeture du socket (veille, réseau, onglet masqué) puis se reconnecte seul :
+        // l'erreur n'est signalée que si SUBSCRIBED ne revient pas dans le délai de grâce.
+        minuteurGrace = setTimeout(() => {
+          minuteurGrace = null;
+          chaqueAbonne(a => a.erreur?.(Object.assign(new Error('Canal temps réel indisponible.'), { code: 'unavailable' })));
+        }, delaiGraceMs);
       }
     });
   }

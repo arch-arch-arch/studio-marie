@@ -7,6 +7,7 @@ export function creerFauxSupabase({ utilisateur = { id: 'u1', email: 'a@exemple.
   let session = utilisateur ? { access_token: 'jeton-test', user: utilisateur } : null;
   let panne = null;
   let delaiLecture = 0;
+  let plafond = Infinity;
   const statutsCanaux = new Set();
   const reponsePanne = () => ({ data: null, error: { message: panne.message, code: panne.code }, status: panne.status });
   // Forme réelle de StorageApiError (storage-js) : message, name, status numérique, statusCode en chaîne, code.
@@ -68,6 +69,8 @@ export function creerFauxSupabase({ utilisateur = { id: 'u1', email: 'a@exemple.
       compteurs.simultaneesMax = Math.max(compteurs.simultaneesMax, compteurs.enCours);
       let res = cible.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)).map(l => Object.fromEntries(colonnes.map(c => [c, c === 'data' ? structuredClone(l.data) : l[c]])));
       if (plage) res = res.slice(plage[0], plage[1] + 1);
+      // Comme PostgREST (réglage « Max rows ») : au plus `plafond` lignes par requête, quelle que soit la plage demandée.
+      res = res.slice(0, plafond);
       if (delaiLecture > 0) await new Promise(r => setTimeout(r, delaiLecture));
       compteurs.enCours -= 1;
       return { data: unique ? (res[0] ?? null) : res, error: null };
@@ -179,6 +182,7 @@ export function creerFauxSupabase({ utilisateur = { id: 'u1', email: 'a@exemple.
     _rpc: appelsRpc,
     _panne: p => { panne = p; },
     _delaiLecture: ms => { delaiLecture = ms; },
+    _plafond: n => { plafond = n; },
     _canal: statut => { for (const f of [...statutsCanaux]) f(statut); },
     _session: s => { session = s; for (const e of [...ecoutesAuth]) e(s ? 'SIGNED_IN' : 'SIGNED_OUT', s); },
     get _lecturesSimultaneesMax() { return compteurs.simultaneesMax; },

@@ -37,9 +37,18 @@ export function lireCorps(body) {
   }
 }
 
-// Journal minimal : la route, le statut et le nom de l'erreur. Jamais le message (il peut citer le prompt, l'image ou le jeton).
+// Type d'erreur de l'API Anthropic (`invalid_request_error`, `authentication_error`, ...) : porté par `e.type` ou par le corps `e.error.error.type`.
+// Seule une forme `xxx_error` est retenue : le type ne peut pas servir à faire passer du texte libre dans le journal.
+const FORME_TYPE = /^[a-z]+(_[a-z]+)*_error$/;
+function typeErreurApi(e) {
+  for (const t of [e?.type, e?.error?.error?.type]) if (typeof t === 'string' && FORME_TYPE.test(t)) return t;
+  return null;
+}
+
+// Journal minimal : la route, le statut, le nom et le type d'erreur de l'API. Jamais le message (il peut citer le prompt, l'image ou le jeton).
 export function journaliser(route, e) {
-  console.error(`[${route}]`, e?.status, e?.name);
+  const type = typeErreurApi(e);
+  console.error(`[${route}]`, e?.status, e?.name, ...(type ? [type] : []));
 }
 
 export async function repondre(res, traiter, route) {

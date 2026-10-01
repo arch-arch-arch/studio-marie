@@ -31,3 +31,6 @@ veille-tmp/
 dist/
 public/
 .studio.local.json
+
+# Liaison locale avec le projet Vercel
+.vercel/

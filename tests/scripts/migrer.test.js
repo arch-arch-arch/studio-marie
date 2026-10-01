@@ -3,7 +3,7 @@ import fictif from '../../exemples/profil-fictif.json';
 import { creerFauxSupabase } from '../aides/fauxSupabase.js';
 import { construireExport, COLLECTIONS_EXPORT } from '../../src/logique/sauvegarde.js';
 import { TAILLE_MAX } from '../../src/socle/visuels-supabase.js';
-import { migrer, associerVisuels, lireExport, referencesVisuels } from '../../scripts/migrer.mjs';
+import { migrer, associerVisuels, lireExport, referencesVisuels, lireArguments } from '../../scripts/migrer.mjs';
 
 const vide = () => Object.fromEntries(COLLECTIONS_EXPORT.map(c => [c, []]));
 const exportAvec = docs => construireExport({ ...vide(), ...docs }, '2026-10-01T08:00:00.000Z');
@@ -170,7 +170,17 @@ describe('migrer : lecture de la cible', () => {
     for (let i = 0; i <= 1000; i++) poser(supabase, ligne('fiches', `d${String(i).padStart(4, '0')}`));
     const r = await migrer({ exportJson: exportAvec({ fiches: [{ id: 'd1000', data: {} }] }), visuels: [], supabase, journal: () => {} });
     expect(r.erreurs[0]).toMatch(/^La cible contient déjà 1 document/);
-    expect(supabase._lectures).toBe(2);
+    expect(supabase._lectures).toBe(3);
+  });
+  it('lit la cible en entier quand le plafond de lignes du projet est sous 1000', async () => {
+    const supabase = creerFauxSupabase();
+    supabase._plafond(10);
+    for (let i = 0; i < 25; i++) poser(supabase, ligne('fiches', `d${String(i).padStart(4, '0')}`));
+    const journal = [];
+    const r = await migrer({ exportJson: exportAvec({ fiches: [{ id: 'd0024', data: {} }] }), visuels: [], supabase, journal: m => journal.push(m) });
+    expect(r.erreurs[0]).toMatch(/^La cible contient déjà 1 document/);
+    expect(journal).toContain('Déjà présents dans la cible : 25 document(s), dont 1 seraient remplacés.');
+    expect(supabase._lectures).toBe(4);
   });
   it('s’arrête avant d’écrire si la lecture de la cible échoue', async () => {
     const faux = creerFauxSupabase();
@@ -278,10 +288,29 @@ describe('migrer : échec en cours d’écriture', () => {
   });
 });
 
+describe('lireArguments', () => {
+  it('lit les options connues', () => {
+    expect(lireArguments(['--export', 'a.json', '--visuels', 'dossier', '--simuler', '--ecraser'])).toEqual({ ok: true, options: { export: 'a.json', visuels: 'dossier', simuler: true, ecraser: true } });
+    expect(lireArguments(['--export', 'a.json'])).toEqual({ ok: true, options: { export: 'a.json', visuels: null, simuler: false, ecraser: false } });
+    expect(lireArguments([])).toEqual({ ok: true, options: { export: null, visuels: null, simuler: false, ecraser: false } });
+  });
+  it('refuse une option inconnue, même proche de --simuler', () => {
+    expect(lireArguments(['--export', 'a.json', '--simuller'])).toEqual({ ok: false, erreur: 'Option inconnue : --simuller.' });
+    expect(lireArguments(['--force'])).toEqual({ ok: false, erreur: 'Option inconnue : --force.' });
+  });
+  it('refuse une valeur manquante ou qui ressemble à une option', () => {
+    expect(lireArguments(['--export'])).toEqual({ ok: false, erreur: 'Valeur manquante pour --export.' });
+    expect(lireArguments(['--visuels', '--simuler'])).toEqual({ ok: false, erreur: 'Valeur manquante pour --visuels.' });
+  });
+  it('refuse un argument positionnel inattendu', () => {
+    expect(lireArguments(['--export', 'a.json', 'b.json'])).toEqual({ ok: false, erreur: 'Argument inattendu : b.json.' });
+  });
+});
+
 describe('lireExport et referencesVisuels', () => {
   it('lit un JSON, avec ou sans BOM', () => {
     expect(lireExport('{"a":1}')).toEqual({ a: 1 });
-    expect(lireExport('﻿{"a":1}')).toEqual({ a: 1 });
+    expect(lireExport('\uFEFF{"a":1}')).toEqual({ a: 1 });
   });
   it('donne un message fixe pour un JSON illisible, sans fragment du contenu', () => {
     expect(() => lireExport('{"secret": oups')).toThrow('Le fichier d’export n’est pas un JSON lisible.');

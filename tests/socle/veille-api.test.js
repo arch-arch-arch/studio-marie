@@ -20,6 +20,16 @@ describe('creerVeilleApi', () => {
     expect((await coupe.relancer()).ok).toBe(false);
   });
 
+  it('dit que la veille n’a pas répondu quand la requête est coupée, car le serveur peut encore écrire', async () => {
+    const NON_REPONDU = 'La veille n’a pas répondu : regarde le bulletin dans quelques minutes.';
+    const coupe = creerVeilleApi({ fetch: async () => { throw new Error('Failed to fetch'); }, jeton: async () => 'j' });
+    expect(await coupe.relancer()).toEqual({ ok: false, raison: NON_REPONDU });
+    const abandonnee = creerVeilleApi({ fetch: async () => { throw Object.assign(new Error('abort'), { name: 'AbortError' }); }, jeton: async () => 'j' });
+    expect(await abandonnee.relancer()).toEqual({ ok: false, raison: NON_REPONDU });
+    const serveur = creerVeilleApi({ fetch: async () => reponse(500, {}), jeton: async () => 'j' });
+    expect(await serveur.relancer()).toEqual({ ok: false, raison: 'La veille a échoué : réessaie dans quelques minutes. Rien n’a été modifié.' });
+  });
+
   it('abandonne la requête au bout de 310 secondes', async () => {
     vi.useFakeTimers();
     try {
@@ -28,7 +38,7 @@ describe('creerVeilleApi', () => {
       await vi.advanceTimersByTimeAsync(309_000);
       expect(fetchLent.mock.calls[0][1].signal.aborted).toBe(false);
       await vi.advanceTimersByTimeAsync(1_500);
-      expect(await attente).toEqual({ ok: false, raison: 'La veille a échoué : réessaie dans quelques minutes. Rien n’a été modifié.' });
+      expect(await attente).toEqual({ ok: false, raison: 'La veille n’a pas répondu : regarde le bulletin dans quelques minutes.' });
       expect(fetchLent.mock.calls[0][1].signal.aborted).toBe(true);
     } finally {
       vi.useRealTimers();

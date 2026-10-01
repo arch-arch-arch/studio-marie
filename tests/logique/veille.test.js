@@ -281,4 +281,9 @@ describe('plageVeille et doitTourner', () => {
     expect(doitTourner(NY, '2026-10-05T01:00:00.000Z', { forcer: true })).toBe(true);
     expect(doitTourner(NY, '2026-10-07T15:00:00.000Z')).toBe(true);
   });
+  it('ne relance pas la veille pour un déclenchement approximatif entre 21 h 30 et 21 h 59 locale', () => {
+    expect(doitTourner(NY, '2026-10-05T01:45:00.000Z')).toBe(false); // dimanche 21 h 45, hors de l’heure 20
+    expect(doitTourner(NY, '2026-10-05T01:59:00.000Z')).toBe(false);
+    expect(doitTourner(NY, '2026-10-05T02:00:00.000Z')).toBe(true); // lundi 22 h : fenêtre close
+  });
 });
