@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import fictif from '../../exemples/profil-fictif.json';
 import { nouvelleFiche } from '../../src/logique/fiche.js';
 import { depuisSaisieLocale, cleJour, ajouterJours } from '../../src/logique/dates.js';
-import { fichesRemplacables, placerIdees, validerEntreeVeille, construireVeille } from '../../src/logique/veille.js';
+import { fichesRemplacables, placerIdees, validerEntreeVeille, construireVeille, plageVeille, doitTourner } from '../../src/logique/veille.js';
 import entreeFictive from '../../exemples/entree-veille-fictive.json';
 
 const R = fictif.regles_studio;
@@ -262,5 +262,23 @@ describe('construireVeille', () => {
   it('rétrospective : rappel sans relevés, comme avant', () => {
     const r = construireVeille({ profil: { ...fictif, version: 1 }, fiches: [], entree: entree(), maintenant: '2026-09-27T18:00:00.000Z', idAleatoire: () => `id${n++}` });
     expect(r.bulletin.retrospective.type).toBe('rappel');
+  });
+});
+
+describe('plageVeille et doitTourner', () => {
+  const NY = { ...R, fuseau: 'America/New_York' };
+  it('vise la semaine de maintenant + 1 jour', () => {
+    expect(plageVeille(NY, '2026-10-05T00:00:00.000Z')).toEqual({
+      semaine: '2026-W41', debut: '2026-10-05T04:00:00.000Z', fin: '2026-10-12T04:00:00.000Z',
+      lecture_debut: '2026-09-21T04:00:00.000Z', lecture_fin: '2026-11-09T05:00:00.000Z',
+    });
+  });
+  it('ne tourne qu’une fois le dimanche à 20 h locale, sauf si on force', () => {
+    expect(doitTourner(NY, '2026-10-05T00:00:00.000Z')).toBe(true);
+    expect(doitTourner(NY, '2026-10-05T01:00:00.000Z')).toBe(false);
+    expect(doitTourner(NY, '2026-11-09T00:00:00.000Z')).toBe(false);
+    expect(doitTourner(NY, '2026-11-09T01:00:00.000Z')).toBe(true);
+    expect(doitTourner(NY, '2026-10-05T01:00:00.000Z', { forcer: true })).toBe(true);
+    expect(doitTourner(NY, '2026-10-07T15:00:00.000Z')).toBe(true);
   });
 });

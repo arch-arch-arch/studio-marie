@@ -23,6 +23,7 @@ export async function demarrer(racine, claude, { horloge = () => new Date().toIS
   }
   const assets = (await claude.use('assets')) ?? null;
   const sample = (await claude.use('sample')) ?? null;
+  const veille = (await claude.use('veille')) ?? null;
   const downloads = (await claude.use('downloads')) ?? null;
   const connexion = (await claude.use('connexion')) ?? null;
   const depot = creerDepot(db);
@@ -40,8 +41,8 @@ export async function demarrer(racine, claude, { horloge = () => new Date().toIS
       if (e?.code === 'quota_exceeded' || e?.code === 'revoked') etat.modifier({ erreur: messageErreurBase(e) });
     },
   );
-  const actions = creerControleur({ etat, depot, enregistreur, assets, horloge, sample, downloads, connexion, ...(typeof assets?.telecharger === 'function' ? { chargerImage: id => assets.telecharger(id) } : {}) });
-  const rendre = creerRendu(racine, actions, { assets: !!assets, sample: !!sample, downloads: !!downloads, connexion: !!connexion }, horloge);
+  const actions = creerControleur({ etat, depot, enregistreur, assets, horloge, sample, downloads, connexion, veille, ...(typeof assets?.telecharger === 'function' ? { chargerImage: id => assets.telecharger(id) } : {}) });
+  const rendre = creerRendu(racine, actions, { assets: !!assets, sample: !!sample, downloads: !!downloads, connexion: !!connexion, veille: !!veille }, horloge);
 
   let arreterFiches = null;
   let plageCourante = '';

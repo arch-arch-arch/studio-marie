@@ -438,3 +438,16 @@ describe('seDeconnecter', () => {
     expect(etat.lire().erreur).toBe('Des modifications ne sont pas encore enregistrées : attends le retour de la connexion avant de te déconnecter.');
   });
 });
+
+describe('relancerVeille', () => {
+  it('délègue à la capacité veille, ou dit qu’elle manque', async () => {
+    const db = creerFausseBase();
+    const depot = creerDepot(db);
+    const enregistreur = creerEnregistreur(f => depot.enregistrerFiche(f), 600);
+    const etat = creerEtat({ profil: { ...fictif, version: 1 }, fiches: [], vue: 'bulletin', ancre: T, ficheOuverte: null, erreur: null, sauvegarde: 'ok' });
+    const veille = { relancer: vi.fn(async () => ({ ok: true, message: 'Fait.' })) };
+    const avec = creerControleur({ etat, depot, enregistreur, assets: null, horloge: () => T, veille });
+    expect(await avec.relancerVeille()).toEqual({ ok: true, message: 'Fait.' });
+    expect(await monter().actions.relancerVeille()).toEqual({ ok: false, raison: 'La veille n’est pas encore configurée.' });
+  });
+});

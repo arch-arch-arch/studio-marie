@@ -1,5 +1,9 @@
 {
   "buildCommand": "npm run build",
   "outputDirectory": "public",
-  "framework": null
+  "framework": null,
+  "crons": [
+    { "path": "/api/veille", "schedule": "0 0 * * 1" },
+    { "path": "/api/veille", "schedule": "0 1 * * 1" }
+  ]
 }

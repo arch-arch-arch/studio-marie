@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { lireCorps, configurationSupabase, clientSupabaseServeur, refuserMethode, repondre } from '../../serveur/http.js';
+import { lireCorps, configurationSupabase, clientSupabaseServeur, clientSupabaseService, refuserMethode, repondre } from '../../serveur/http.js';
 
 describe('lireCorps', () => {
   it('laisse passer un objet, décode une chaîne JSON et refuse le reste', () => {
@@ -27,6 +27,22 @@ describe('clientSupabaseServeur', () => {
   it('renvoie null sans configuration', () => {
     const creer = vi.fn();
     expect(clientSupabaseServeur({}, creer)).toBeNull();
+    expect(creer).not.toHaveBeenCalled();
+  });
+});
+
+describe('clientSupabaseService', () => {
+  const env = { SUPABASE_URL: 'https://projet.test', SUPABASE_ANON_KEY: 'cle', SUPABASE_SERVICE_ROLE_KEY: 'cle-service' };
+  it('crée un client avec la clé de service, sans session persistante ni rafraîchissement', () => {
+    const creer = vi.fn(() => 'client');
+    expect(clientSupabaseService(env, creer)).toBe('client');
+    expect(creer).toHaveBeenCalledWith('https://projet.test', 'cle-service', { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } });
+  });
+  it('renvoie null sans clé de service, vide, ou sans configuration Supabase', () => {
+    const creer = vi.fn();
+    expect(clientSupabaseService({ ...env, SUPABASE_SERVICE_ROLE_KEY: undefined }, creer)).toBeNull();
+    expect(clientSupabaseService({ ...env, SUPABASE_SERVICE_ROLE_KEY: '  ' }, creer)).toBeNull();
+    expect(clientSupabaseService({ SUPABASE_SERVICE_ROLE_KEY: 'cle-service' }, creer)).toBeNull();
     expect(creer).not.toHaveBeenCalled();
   });
 });

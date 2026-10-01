@@ -12,7 +12,12 @@ describe('traiterCapacites', () => {
     const supabase = creerFauxSupabase();
     expect((await traiterCapacites({ env: {}, autorisation: undefined, supabase })).statut).toBe(401);
     expect(await traiterCapacites({ env: {}, autorisation: OK, supabase })).toEqual({ statut: 200, corps: { evaluation: false, veille: false } });
-    expect(await traiterCapacites({ env: { ANTHROPIC_API_KEY: 'x' }, autorisation: OK, supabase })).toEqual({ statut: 200, corps: { evaluation: true, veille: true } });
+    expect(await traiterCapacites({ env: { ANTHROPIC_API_KEY: 'x' }, autorisation: OK, supabase })).toEqual({ statut: 200, corps: { evaluation: true, veille: false } });
+    expect(await traiterCapacites({ env: { ANTHROPIC_API_KEY: 'x', SUPABASE_SERVICE_ROLE_KEY: 'cle-service-secrete' }, autorisation: OK, supabase })).toEqual({ statut: 200, corps: { evaluation: true, veille: true } });
+    expect(await traiterCapacites({ env: { SUPABASE_SERVICE_ROLE_KEY: 'cle-service-secrete' }, autorisation: OK, supabase })).toEqual({ statut: 200, corps: { evaluation: false, veille: false } });
+    expect(await traiterCapacites({ env: { ANTHROPIC_API_KEY: 'x', SUPABASE_SERVICE_ROLE_KEY: '  ' }, autorisation: OK, supabase })).toEqual({ statut: 200, corps: { evaluation: true, veille: false } });
+    const avecLesDeux = await traiterCapacites({ env: { ANTHROPIC_API_KEY: 'cle-anthropic-secrete', SUPABASE_SERVICE_ROLE_KEY: 'cle-service-secrete' }, autorisation: OK, supabase });
+    expect(JSON.stringify(avecLesDeux)).not.toContain('secrete');
   });
 });
 

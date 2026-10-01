@@ -3,8 +3,9 @@ import { cleConfiguree, modele } from './configuration.js';
 
 export { cleConfiguree, modele };
 export const MODELE = modele(process.env);
-// La fonction Vercel s'arrête à 120 s : le client abandonne avant (le défaut du SDK est de 10 minutes et 2 relances).
-export const creerClient = () => new Anthropic({ timeout: 100_000, maxRetries: 1 });
+// Le défaut du SDK est de 10 minutes et 2 relances. Le client abandonne avant la fin de la fonction Vercel
+// (120 s pour l'évaluation, 300 s pour la veille) et ne relance jamais : une relance dépasserait la limite de la fonction.
+export const creerClient = ({ timeout = 100_000, maxRetries = 0 } = {}) => new Anthropic({ timeout, maxRetries });
 export const texteDe = message => (message.content ?? []).filter(b => b.type === 'text').map(b => b.text).join('');
 const erreur = code => Object.assign(new Error(code), { code });
 

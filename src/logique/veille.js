@@ -1,5 +1,5 @@
 import { FORMATS, analyserHashtags, nouvelleFiche, appliquerEvaluation } from './fiche.js';
-import { depuisSaisieLocale, cleJour, ajouterJours, debutSemaine, debutJour, cleSemaineIso } from './dates.js';
+import { depuisSaisieLocale, cleJour, ajouterJours, debutSemaine, debutJour, cleSemaineIso, partiesLocales } from './dates.js';
 import { creneauxDisponibles } from './creneaux.js';
 import { validerReponse, extraireProfilDetaille } from '../claude/evaluation.js';
 import { verifierRegles } from './regles-score.js';
@@ -10,6 +10,24 @@ import { retrospective } from './tableau-bord.js';
 export const ROLES_CAPTION = ['engagement', 'cta', 'deadpan'];
 const texte = v => typeof v === 'string' && v.trim().length > 0;
 const texteOuVide = v => typeof v === 'string';
+
+const FENETRE_DEBUT = 18 * 60 + 30;
+const FENETRE_FIN = 21 * 60 + 29;
+
+export function plageVeille(regles, maintenant) {
+  const fz = regles.fuseau;
+  const debut = debutSemaine(ajouterJours(maintenant, 1, fz), fz);
+  const fin = ajouterJours(debut, 7, fz);
+  return { semaine: cleSemaineIso(debut, fz), debut, fin, lecture_debut: ajouterJours(debut, -14, fz), lecture_fin: ajouterJours(fin, 28, fz) };
+}
+
+export function doitTourner(regles, maintenant, { forcer = false } = {}) {
+  if (forcer) return true;
+  const local = partiesLocales(maintenant, regles.fuseau);
+  const minutes = local.heure * 60 + local.minute;
+  const fenetre = local.jourSemaine === 7 && minutes >= FENETRE_DEBUT && minutes <= FENETRE_FIN;
+  return !(fenetre && local.heure !== 20);
+}
 
 export function fichesRemplacables(fiches, cle) {
   return fiches.filter(f => f.origine?.type === 'veille' && f.origine?.bulletin === cle

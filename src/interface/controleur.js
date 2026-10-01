@@ -47,7 +47,7 @@ async function chargerImageParDefaut(id) {
 
 const INDISPONIBLE = { ok: false, raison: 'L’évaluation par Claude n’est pas disponible dans cette vue.', indisponible: true };
 
-export function creerControleur({ etat, depot, enregistreur, assets, horloge, idAleatoire = nouvelId, sample = null, chargerImage = chargerImageParDefaut, downloads = null, connexion = null }) {
+export function creerControleur({ etat, depot, enregistreur, assets, horloge, idAleatoire = nouvelId, sample = null, chargerImage = chargerImageParDefaut, downloads = null, connexion = null, veille = null }) {
   const trouver = id => etat.lire().fiches.find(f => f.id === id);
   const fuseau = () => etat.lire().profil.regles_studio.fuseau;
   const remplacer = f => etat.modifier({ fiches: etat.lire().fiches.map(x => (x.id === f.id ? f : x)) });
@@ -355,6 +355,7 @@ export function creerControleur({ etat, depot, enregistreur, assets, horloge, id
       await connexion?.deconnecter();
     },
     reverifierFiches,
+    relancerVeille: async () => (veille ? veille.relancer() : { ok: false, raison: 'La veille n’est pas encore configurée.' }),
     importerReference,
     verifierReference,
     arreterReference: () => controleurReference?.abort(),

@@ -73,3 +73,31 @@ describe('vueBulletin', () => {
     expect(el.textContent).toContain('Relevés manquants : Oubliée (48 h).');
   });
 });
+
+describe('relance depuis le site', () => {
+  it('propose le bouton quand la veille serveur est active, et affiche le résultat', async () => {
+    const a = { ...actions(), relancerVeille: vi.fn(async () => ({ ok: true, message: 'Bulletin 2026-W40 : 4 idée(s), 0 remplacée(s), statut complet.' })) };
+    const el = vueBulletin(etat({ bulletin: null }), a, { veille: true });
+    const bouton = [...el.querySelectorAll('button')].find(b => b.textContent === 'Relancer la veille');
+    bouton.click();
+    expect(bouton.disabled).toBe(true);
+    expect(el.textContent).toContain('Veille en cours : cela peut prendre quelques minutes.');
+    await vi.waitFor(() => expect(el.textContent).toContain('Bulletin 2026-W40 : 4 idée(s)'));
+    expect(bouton.disabled).toBe(false);
+  });
+  it('dit que la veille n’est pas configurée quand elle est éteinte', () => {
+    const el = vueBulletin(etat({ bulletin: null, configVeille: null }), actions(), { veille: false });
+    expect(el.textContent).toContain('La veille n’est pas encore configurée.');
+    expect([...el.querySelectorAll('button')].some(b => b.textContent === 'Relancer la veille')).toBe(false);
+  });
+  it('réactive le bouton et affiche l’échec si l’action lève', async () => {
+    const a = { ...actions(), relancerVeille: vi.fn(async () => { throw new Error('boum'); }) };
+    const el = vueBulletin(etat({ bulletin: null }), a, { veille: true });
+    const bouton = [...el.querySelectorAll('button')].find(b => b.textContent === 'Relancer la veille');
+    bouton.click();
+    expect(bouton.disabled).toBe(true);
+    await vi.waitFor(() => expect(el.textContent).toContain('La veille a échoué : réessaie dans quelques minutes. Rien n’a été modifié.'));
+    expect(bouton.disabled).toBe(false);
+    expect(el.textContent).not.toContain('Veille en cours');
+  });
+});

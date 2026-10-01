@@ -7,10 +7,20 @@ export function configurationSupabase(env) {
 }
 
 // Côté serveur, aucune session n'est conservée : chaque requête porte son propre jeton.
+const OPTIONS_SERVEUR = { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } };
+
 export function clientSupabaseServeur(env, creer = createClient) {
   const config = configurationSupabase(env);
   if (!config) return null;
-  return creer(config.url, config.cle, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } });
+  return creer(config.url, config.cle, OPTIONS_SERVEUR);
+}
+
+// Client de service (contourne les règles d'accès) : réservé aux tâches serveur déjà authentifiées. Null sans clé ou sans configuration.
+export function clientSupabaseService(env, creer = createClient) {
+  const config = configurationSupabase(env);
+  const cle = typeof env.SUPABASE_SERVICE_ROLE_KEY === 'string' ? env.SUPABASE_SERVICE_ROLE_KEY.trim() : '';
+  if (!config || !cle) return null;
+  return creer(config.url, cle, OPTIONS_SERVEUR);
 }
 
 export function refuserMethode(methode, attendue) {

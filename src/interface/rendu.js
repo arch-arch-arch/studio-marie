@@ -44,7 +44,7 @@ function contenuVue(e, actions, capacites, extras) {
   if (!e.profil || e.vue === 'profil') return vueProfil(e, actions, capacites, extras);
   if (e.vue === 'mois') return vueMois(e, actions);
   if (e.vue === 'jour') return vueJour(e, actions);
-  if (e.vue === 'bulletin') return vueBulletin(e, actions);
+  if (e.vue === 'bulletin') return vueBulletin(e, actions, capacites);
   if (e.vue === 'tableau') return vueTableau(e, actions);
   return vueSemaine(e, actions);
 }

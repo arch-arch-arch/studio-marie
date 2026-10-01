@@ -69,9 +69,12 @@ describe('claude', () => {
   it('borne le client sous la limite de la fonction Vercel', () => {
     vi.stubEnv('ANTHROPIC_API_KEY', 'cle-factice');
     const client = creerClient();
+    const veille = creerClient({ timeout: 280_000, maxRetries: 0 });
     vi.unstubAllEnvs();
     expect(client.timeout).toBe(100000);
-    expect(client.maxRetries).toBe(1);
+    expect(client.maxRetries).toBe(0);
+    expect(veille.timeout).toBe(280000);
+    expect(veille.maxRetries).toBe(0);
   });
   it('partage cleConfiguree avec le module de configuration', () => {
     expect(cleConfiguree).toBe(cleDeConfiguration);

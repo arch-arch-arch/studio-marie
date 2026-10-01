@@ -8,6 +8,32 @@ const lienRelance = config => (config?.url_routine?.startsWith('https://')
   ? h('a', { href: config.url_routine, target: '_blank', rel: 'noopener', class: 'bouton-secondaire' }, 'Relancer la veille')
   : h('p', { class: 'aide' }, 'La veille n’est pas encore configurée.'));
 
+const ECHEC_VEILLE = 'La veille a échoué : réessaie dans quelques minutes. Rien n’a été modifié.';
+
+function relance(config, actions, capacites) {
+  if (capacites.veille === true) {
+    const message = h('p', { class: 'aide', role: 'status' });
+    const bouton = h('button', {
+      type: 'button', class: 'bouton-secondaire',
+      onclick: async () => {
+        bouton.disabled = true;
+        message.textContent = 'Veille en cours : cela peut prendre quelques minutes.';
+        try {
+          const r = await actions.relancerVeille();
+          message.textContent = r.ok ? r.message : r.raison;
+        } catch {
+          message.textContent = ECHEC_VEILLE;
+        } finally {
+          bouton.disabled = false;
+        }
+      },
+    }, 'Relancer la veille');
+    return h('div', { class: 'relance' }, bouton, message);
+  }
+  if (capacites.veille === false) return h('p', { class: 'aide' }, 'La veille n’est pas encore configurée.');
+  return lienRelance(config);
+}
+
 const source = s => (/^https?:\/\//.test(s) ? h('a', { href: s, target: '_blank', rel: 'noopener' }, s) : s);
 
 const pct = v => formaterValeur('taux_abonnes_par_vue', v);
@@ -28,11 +54,11 @@ function sectionRetrospective(retro) {
     manquants.length ? h('p', { class: 'aide' }, `Relevés manquants : ${manquants.map(m => `${m.accroche || 'Sans accroche'} (${m.releve === '48h' ? '48 h' : '7 jours'})`).join(', ')}.`) : null);
 }
 
-export function vueBulletin({ profil, fiches, bulletin, configVeille }, actions) {
+export function vueBulletin({ profil, fiches, bulletin, configVeille }, actions, capacites = {}) {
   const fz = profil.regles_studio.fuseau;
   if (bulletin === undefined) return h('div', { class: 'bulletin' }, h('p', { class: 'aide' }, 'Chargement du bulletin…'));
   if (bulletin === null) {
-    return h('div', { class: 'bulletin' }, h('p', { class: 'sans-bulletin' }, 'Pas de bulletin pour cette semaine.'), lienRelance(configVeille));
+    return h('div', { class: 'bulletin' }, h('p', { class: 'sans-bulletin' }, 'Pas de bulletin pour cette semaine.'), relance(configVeille, actions, capacites));
   }
   const parId = new Map(fiches.map(f => [f.id, f]));
   const genere = new Date(bulletin.genere_le).toLocaleString('fr-FR', { timeZone: fz });
@@ -40,7 +66,7 @@ export function vueBulletin({ profil, fiches, bulletin, configVeille }, actions)
     h('header', { class: 'bulletin-tete' },
       h('h2', {}, `Semaine ${bulletin.semaine}`),
       h('p', { class: 'aide' }, `Préparé le ${genere}.`),
-      lienRelance(configVeille)),
+      relance(configVeille, actions, capacites)),
     bulletin.sources_indisponibles ? h('p', { class: 'bulletin-partiel', role: 'status' }, 'Sources indisponibles : bulletin partiel.') : null,
     sectionRetrospective(bulletin.retrospective),
     h('section', {}, h('h3', {}, 'Tendances'),

@@ -5,6 +5,7 @@ import { vueConnexion } from './vue-connexion.js';
 import { creerConnexion, suivreSession, lienInvalide, retirerErreurDeLAdresse } from '../socle/connexion.js';
 import { creerSocle } from '../socle/socle.js';
 import { creerEvaluationApi } from '../socle/evaluation-api.js';
+import { creerVeilleApi } from '../socle/veille-api.js';
 
 const DELAI_CAPACITES_MS = 4000;
 const racine = document.getElementById('app');
@@ -31,7 +32,7 @@ async function ouvrir() {
     racine.replaceChildren(vueConnexion(connexion, { avis }));
     return;
   }
-  const socle = creerSocle({ client, connexion, document, capacitesServeur: await capacitesServeur(), extras: { sample: creerEvaluationApi({ fetch: window.fetch.bind(window), jeton: connexion.jeton }) } });
+  const socle = creerSocle({ client, connexion, document, capacitesServeur: await capacitesServeur(), extras: { sample: creerEvaluationApi({ fetch: window.fetch.bind(window), jeton: connexion.jeton }), veille: creerVeilleApi({ fetch: window.fetch.bind(window), jeton: connexion.jeton }) } });
   await demarrer(racine, socle);
 }
 
