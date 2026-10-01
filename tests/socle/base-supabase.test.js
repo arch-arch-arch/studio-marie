@@ -160,13 +160,17 @@ describe('creerBaseSupabase', () => {
     const journal = vi.spyOn(console, 'error').mockImplementation(() => {});
     const erreur = vi.fn();
     const suivant = vi.fn(() => { throw new Error('rendu cassé'); });
-    db.collection('fiches').onSnapshot(suivant, erreur);
-    await attendre();
-    await db.doc('fiches/a').set({});
-    await attendre();
-    expect(suivant).toHaveBeenCalledTimes(2);
-    expect(erreur).not.toHaveBeenCalled();
-    journal.mockRestore();
+    try {
+      db.collection('fiches').onSnapshot(suivant, erreur);
+      await attendre();
+      await db.doc('fiches/a').set({});
+      await attendre();
+      expect(suivant).toHaveBeenCalledTimes(2);
+      expect(erreur).not.toHaveBeenCalled();
+      expect(journal).toHaveBeenCalled();
+    } finally {
+      journal.mockRestore();
+    }
   });
 
   it('lit le statut sur la réponse même sans code d’erreur', async () => {
@@ -193,21 +197,20 @@ describe('creerBaseSupabase', () => {
     expect(recus.at(-1)).toEqual(['a', 'b']);
   });
 
-  it('limite les relectures pendant une longue rafale espacée', async () => {
+  it('ne lance jamais deux lectures en même temps pendant une longue rafale', async () => {
     const client = creerFauxSupabase();
     const db = creerBaseSupabase(client);
     const recus = [];
     db.collection('fiches').onSnapshot(s => recus.push(s.size), () => {});
     await attendre();
     client._delaiLecture(80);
-    const avant = client._lectures;
     for (let i = 0; i < 30; i += 1) {
       await db.doc(`fiches/f${i}`).set({ i });
       await attendre(10);
     }
     await attendre(400);
     expect(recus.at(-1)).toBe(30);
-    expect(client._lectures - avant).toBeLessThanOrEqual(7);
+    expect(client._lecturesSimultaneesMax).toBe(1);
   });
 
   it('fait fonctionner le dépôt existant', async () => {

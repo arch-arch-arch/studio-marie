@@ -9,7 +9,7 @@ export function creerFauxSupabase({ utilisateur = { id: 'u1', email: 'a@exemple.
   let delaiLecture = 0;
   const statutsCanaux = new Set();
   const reponsePanne = () => ({ data: null, error: { message: panne.message, code: panne.code }, status: panne.status });
-  const compteurs = { lectures: 0 };
+  const compteurs = { lectures: 0, enCours: 0, simultaneesMax: 0 };
   const emettre = (eventType, ancien, nouveau) => { for (const e of [...ecoutes]) e({ eventType, old: ancien ?? {}, new: nouveau ?? {} }); };
   const valeur = (l, col) => (col.startsWith('data->>') ? l.data?.[col.slice(7)] : l[col]);
 
@@ -44,9 +44,12 @@ export function creerFauxSupabase({ utilisateur = { id: 'u1', email: 'a@exemple.
         return { data: null, error: null };
       }
       compteurs.lectures += 1;
+      compteurs.enCours += 1;
+      compteurs.simultaneesMax = Math.max(compteurs.simultaneesMax, compteurs.enCours);
       let res = cible.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)).map(l => ({ id: l.id, data: structuredClone(l.data) }));
       if (plage) res = res.slice(plage[0], plage[1] + 1);
       if (delaiLecture > 0) await new Promise(r => setTimeout(r, delaiLecture));
+      compteurs.enCours -= 1;
       return { data: unique ? (res[0] ?? null) : res, error: null };
     }
     const q = {
@@ -117,6 +120,7 @@ export function creerFauxSupabase({ utilisateur = { id: 'u1', email: 'a@exemple.
     _delaiLecture: ms => { delaiLecture = ms; },
     _canal: statut => { for (const f of [...statutsCanaux]) f(statut); },
     _session: s => { session = s; for (const e of [...ecoutesAuth]) e(s ? 'SIGNED_IN' : 'SIGNED_OUT', s); },
+    get _lecturesSimultaneesMax() { return compteurs.simultaneesMax; },
     get _lectures() { return compteurs.lectures; },
   };
   return client;
