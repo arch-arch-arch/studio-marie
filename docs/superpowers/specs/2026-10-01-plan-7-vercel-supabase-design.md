@@ -100,6 +100,7 @@ create index documents_date_publication on documents (collection, (data->>'date_
 - Au chargement, la page lit la session.
   - Sans session, elle affiche l'écran de connexion : un champ e-mail, un bouton « Recevoir le lien de connexion », puis le message « Lien envoyé : ouvre ta boîte mail. ».
   - Avec une session, elle démarre le studio.
+- L'écran propose aussi une connexion par adresse et mot de passe, dans un bloc repliable sous le formulaire du lien. C'est un secours : tant qu'un SMTP n'est pas configuré, le service d'e-mail intégré de Supabase n'envoie qu'aux membres de l'organisation, donc le lien peut ne pas arriver. Les comptes restent créés par invitation, sans inscription libre.
 - Un bouton « Se déconnecter » apparaît dans l'onglet Profil.
 - Si la session expire, la page revient à l'écran de connexion.
 - Si l'adresse saisie n'est pas invitée, la page affiche : « Cette adresse n’a pas accès au studio. ».

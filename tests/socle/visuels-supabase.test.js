@@ -14,6 +14,16 @@ describe('creerVisuelsSupabase', () => {
     expect(await visuels.url(id)).toBe('https://stockage.test/visuels/abc.png?jeton=1');
     expect((await visuels.telecharger(id)).type).toBe('image/png');
   });
+  it('garde le type du Blob et ignore l’option contentType, comme storage-js', async () => {
+    const client = creerFauxSupabase();
+    const bucket = client.storage.from('visuels');
+    await bucket.upload('a.png', fichier('image/png'), { contentType: 'image/jpeg' });
+    expect(client._fichiers.get('visuels/a.png').type).toBe('image/png');
+    await bucket.upload('b.txt', new Uint8Array(3), { contentType: 'image/jpeg' });
+    expect(client._fichiers.get('visuels/b.txt').type).toBe('image/jpeg');
+    await bucket.upload('c.bin', new Uint8Array(3));
+    expect(client._fichiers.get('visuels/c.bin').type).toBe('text/plain;charset=utf-8'); // un Blob met son type en minuscules
+  });
   it('refuse d’écraser un fichier existant', async () => {
     const client = creerFauxSupabase();
     const visuels = creerVisuelsSupabase(client, { idAleatoire: () => 'dup' });

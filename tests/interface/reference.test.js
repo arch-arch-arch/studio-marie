@@ -340,3 +340,14 @@ describe('section Sauvegarde', () => {
     expect(a.analyserRestauration).not.toHaveBeenCalled();
   });
 });
+
+describe('déconnexion', () => {
+  it('propose de se déconnecter quand la connexion existe', async () => {
+    const actions = { importerProfil: vi.fn(), seDeconnecter: vi.fn(async () => {}) };
+    const v = vueProfil({ profil: fictif }, actions, { connexion: true });
+    [...v.querySelectorAll('button')].find(b => b.textContent === 'Se déconnecter').click();
+    expect(actions.seDeconnecter).toHaveBeenCalled();
+    const sans = vueProfil({ profil: fictif }, actions, {});
+    expect([...sans.querySelectorAll('button')].some(b => b.textContent === 'Se déconnecter')).toBe(false);
+  });
+});

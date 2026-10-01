@@ -1,4 +1,4 @@
-export function creerFauxSupabase({ utilisateur = { id: 'u1', email: 'a@exemple.test' }, invites = null } = {}) {
+export function creerFauxSupabase({ utilisateur = { id: 'u1', email: 'a@exemple.test' }, invites = null, motsDePasse = {} } = {}) {
   const lignes = new Map(); // `${collection}/${id}` -> { collection, id, data, maj_le }
   const fichiers = new Map(); // `${espace}/${chemin}` -> Blob
   const ecoutes = new Set();
@@ -17,6 +17,8 @@ export function creerFauxSupabase({ utilisateur = { id: 'u1', email: 'a@exemple.
     return { data: null, error: erreurStockage(panne.message, status, statusCode, panne.code) };
   };
   const introuvable = () => ({ data: null, error: erreurStockage('Object not found', 400, '404') });
+  // Forme réelle de AuthApiError (auth-js, lib/errors.js l. 41-48) : message, name, status numérique, code en chaîne.
+  const erreurAuth = (message, status, code) => Object.assign(new Error(message), { __isAuthError: true, name: 'AuthApiError', status, code });
   const compteurs = { lectures: 0, enCours: 0, simultaneesMax: 0 };
   const emettre = (eventType, ancien, nouveau) => { for (const e of [...ecoutes]) e({ eventType, old: ancien ?? {}, new: nouveau ?? {} }); };
   const valeur = (l, col) => (col.startsWith('data->>') ? l.data?.[col.slice(7)] : l[col]);
@@ -100,8 +102,10 @@ export function creerFauxSupabase({ utilisateur = { id: 'u1', email: 'a@exemple.
           if (panne) return echecStockage();
           // Le service refuse un doublon sans upsert : HTTP 400, statusCode '409' dans le corps (storage-js ne le définit pas, il relaie le corps).
           if (fichiers.has(`${espace}/${chemin}`) && !options.upsert) return { data: null, error: erreurStockage('The resource already exists', 400, '409') };
-          // Le type stocké vient de l'option contentType (le service ne devine rien).
-          fichiers.set(`${espace}/${chemin}`, new Blob([fichier], { type: options.contentType ?? '' }));
+          // storage-js ignore l'option contentType pour un Blob : c'est le type du Blob qui fait foi (index.mjs l. 598-634).
+          // Sans Blob, l'option s'applique, avec 'text/plain;charset=UTF-8' par défaut.
+          const type = fichier instanceof Blob ? fichier.type : (options.contentType ?? 'text/plain;charset=UTF-8');
+          fichiers.set(`${espace}/${chemin}`, new Blob([fichier], { type }));
           return { data: { path: chemin }, error: null };
         },
         createSignedUrl: async chemin => (panne ? echecStockage() : fichiers.has(`${espace}/${chemin}`)
@@ -118,9 +122,18 @@ export function creerFauxSupabase({ utilisateur = { id: 'u1', email: 'a@exemple.
       getUser: async jeton => (session && jeton === session.access_token
         ? { data: { user: session.user }, error: null }
         : { data: { user: null }, error: { message: 'invalid JWT', status: 401 } }),
-      signInWithOtp: async ({ email }) => (invites && !invites.includes(email)
-        ? { data: null, error: { message: 'Signups not allowed for otp', status: 422, code: 'otp_disabled' } }
-        : { data: {}, error: null }),
+      signInWithOtp: async ({ email }) => (panne
+        ? { data: { user: null, session: null }, error: erreurAuth(panne.message, panne.status ?? 500, panne.code) }
+        : invites && !invites.includes(email)
+          ? { data: { user: null, session: null }, error: erreurAuth('Signups not allowed for otp', 422, 'otp_disabled') }
+          : { data: { user: null, session: null }, error: null }),
+      signInWithPassword: async ({ email, password }) => {
+        if (panne) return { data: { user: null, session: null }, error: erreurAuth(panne.message, panne.status ?? 500, panne.code) };
+        if (!password || motsDePasse[email] !== password) return { data: { user: null, session: null }, error: erreurAuth('Invalid login credentials', 400, 'invalid_credentials') };
+        session = { access_token: 'jeton-test', user: { id: 'u1', email } };
+        for (const e of [...ecoutesAuth]) e('SIGNED_IN', session);
+        return { data: { user: session.user, session }, error: null };
+      },
       signOut: async () => { session = null; for (const e of [...ecoutesAuth]) e('SIGNED_OUT', null); return { error: null }; },
       onAuthStateChange: fn => { ecoutesAuth.add(fn); return { data: { subscription: { unsubscribe: () => ecoutesAuth.delete(fn) } } }; },
     },

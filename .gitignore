@@ -28,5 +28,5 @@ veille-tmp/
 .superpowers/
 
 # Build et adresses locales des studios
-dist/
+public/
 .studio.local.json
