@@ -326,7 +326,7 @@
       "import automatique des statistiques"
     ],
     "plan_5": "Parcours d'une fiche — fusionné",
-    "plan_6": "Confiance dans les données — terminé, en attente de fusion"
+    "plan_6": "Confiance dans les données — fusionné"
   },
   "parcours_d_une_fiche": {
     "prochaine_action": "Calculée pour chaque fiche (src/logique/parcours.js) : terminer (visuel, caption), évaluer, réévaluer, corriger la conformité, valider, confirmer la programmation, reconfirmer, confirmer la publication, saisir les stats à 48 h / 7 jours, sinon « Programmé pour le … », « Prochain relevé le … » ou « Terminé ». Marquée en retard quand la date prévue ou l'échéance est passée.",

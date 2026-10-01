@@ -121,7 +121,7 @@ Révisée à partir du profil de marque réel (fourni par Jean, conservé hors d
 | 3. Veille hebdo | Script `scripts/veille.mjs`, logique `src/logique/veille.js`, consignes `src/claude/veille.md`, onglet Bulletin | Fusionné dans `main` | **302 tests verts**, build OK (72 Ko) |
 | 4. Stats et tableau de bord | Relevés à 48 h et à 7 jours, relevé hebdo du compte, onglet Tableau de bord (6 graphiques SVG), rétrospective du bulletin | Fusionné dans `main` | **362 tests verts**, build OK (90 Ko) |
 | 5. Parcours d'une fiche | Prochaine action (cartes, bandeau de fiche, « À faire cette semaine »), confirmations datées de programmation et de publication, relevés depuis la date réelle | Fusionné dans `main` | **417 tests verts**, build OK (98 Ko) |
-| 6. Confiance dans les données | Bloc « ce que Claude a examiné », recommandations avec pourquoi, « Avis de Claude » ; tableau de bord par contenu et par format, comparaisons à partir de 5 contenus ; export JSON (capacité `downloads`) et restauration sans suppression | Branche `plan-6-confiance` poussée, **pas encore fusionnée** | **474 tests verts**, build OK (109 Ko) |
+| 6. Confiance dans les données | Bloc « ce que Claude a examiné », recommandations avec pourquoi, « Avis de Claude » ; tableau de bord par contenu et par format, comparaisons à partir de 5 contenus ; export JSON (capacité `downloads`) et restauration sans suppression | Fusionné dans `main` | **474 tests verts**, build OK (109 Ko) |
 
 ### Studios publiés (URL dans `.studio.local.json`, non versionné)
 - **Studio de test** : profil fictif, jeu de référence fictif, version de la page avec l'onglet Bulletin (republiée le 2026-09-29). Capacités : `db`, `assets`, `sample`.
@@ -193,7 +193,7 @@ Elles sont toutes détaillées dans le registre de chaque plan (`.superpowers/sd
 
 ### Prochaine étape
 1. **Jean** : checklist du plan 6 sur le studio de test (avis de Claude avec image puis vidéo, pourquoi des recommandations, tableau de bord, export puis restauration avec sauvegarde) ; checklists des plans 4 et 5 si pas encore faites.
-2. **Fusion** de `plan-6-confiance` dans `main`.
+2. (fait) Fusion du plan 6 dans `main`.
 3. **Après le dimanche 4 octobre :** lire le compte rendu de la première veille réelle.
 4. **Phase 2 :** publication automatique (`publisher/`) et import automatique des statistiques.
 
