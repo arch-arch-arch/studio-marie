@@ -134,8 +134,48 @@ describe('creerBaseSupabase', () => {
     db.doc('profil/courant').onSnapshot(() => {}, e => erreurs.push(['d', e.code]));
     await attendre();
     client._canal('CHANNEL_ERROR');
+    client._canal('CHANNEL_ERROR');
+    expect(erreurs).toEqual([['c', 'unavailable'], ['d', 'unavailable']]);
+  });
+
+  it('relivre l’état courant, même inchangé, après une erreur de canal puis SUBSCRIBED', async () => {
+    const client = creerFauxSupabase();
+    const db = creerBaseSupabase(client);
+    const recus = [];
+    const erreurs = [];
+    client._lignes.set('fiches/a', { collection: 'fiches', id: 'a', data: {} });
+    db.collection('fiches').onSnapshot(s => recus.push(s.docs.map(d => d.id)), e => erreurs.push(e.code));
+    await attendre();
+    expect(recus).toEqual([['a']]);
     client._canal('TIMED_OUT');
-    expect(erreurs).toEqual([['c', 'unavailable'], ['d', 'unavailable'], ['c', 'unavailable'], ['d', 'unavailable']]);
+    expect(erreurs).toEqual(['unavailable']);
+    client._canal('SUBSCRIBED');
+    await attendre();
+    expect(recus).toEqual([['a'], ['a']]);
+  });
+
+  it('ne signale pas comme erreur de base une exception du consommateur', async () => {
+    const client = creerFauxSupabase();
+    const db = creerBaseSupabase(client);
+    const journal = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const erreur = vi.fn();
+    const suivant = vi.fn(() => { throw new Error('rendu cassé'); });
+    db.collection('fiches').onSnapshot(suivant, erreur);
+    await attendre();
+    await db.doc('fiches/a').set({});
+    await attendre();
+    expect(suivant).toHaveBeenCalledTimes(2);
+    expect(erreur).not.toHaveBeenCalled();
+    journal.mockRestore();
+  });
+
+  it('lit le statut sur la réponse même sans code d’erreur', async () => {
+    const client = creerFauxSupabase();
+    const db = creerBaseSupabase(client);
+    client._panne({ message: 'refusé', code: '', status: 401 });
+    await expect(db.doc('fiches/a').get()).rejects.toMatchObject({ code: 'revoked' });
+    client._panne({ message: 'interdit', code: '', status: 403 });
+    await expect(db.doc('fiches/a').set({})).rejects.toMatchObject({ code: 'revoked' });
   });
 
   it('ne laisse pas une lecture lente écraser un état plus récent', async () => {
@@ -159,15 +199,15 @@ describe('creerBaseSupabase', () => {
     const recus = [];
     db.collection('fiches').onSnapshot(s => recus.push(s.size), () => {});
     await attendre();
-    client._delaiLecture(20);
+    client._delaiLecture(80);
     const avant = client._lectures;
     for (let i = 0; i < 30; i += 1) {
       await db.doc(`fiches/f${i}`).set({ i });
       await attendre(10);
     }
-    await attendre(300);
+    await attendre(400);
     expect(recus.at(-1)).toBe(30);
-    expect(client._lectures - avant).toBeLessThanOrEqual(12);
+    expect(client._lectures - avant).toBeLessThanOrEqual(7);
   });
 
   it('fait fonctionner le dépôt existant', async () => {

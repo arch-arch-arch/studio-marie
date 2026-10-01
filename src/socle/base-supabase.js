@@ -40,6 +40,12 @@ export function creerBaseSupabase(client) {
     let aRelire = false;
     let derniere = null;
     let derniereErreur = null;
+    // Même dédoublonnage pour les erreurs de lecture et de canal ; l'état sera relivré ensuite.
+    const signaler = e => {
+      derniere = null;
+      const cle = `${e?.code}|${e?.message}`;
+      if (actif && cle !== derniereErreur) { derniereErreur = cle; erreur?.(e); }
+    };
     // Une seule lecture à la fois : un événement pendant une lecture en programme une autre à la fin.
     async function livrer() {
       if (enVol) { aRelire = true; return; }
@@ -47,18 +53,16 @@ export function creerBaseSupabase(client) {
       try {
         do {
           aRelire = false;
-          try {
-            const v = await lire();
-            if (actif) {
-              derniereErreur = null;
-              const s = signature(v);
-              if (s !== derniere) { derniere = s; suivant(v); }
-            }
-          } catch (e) {
-            derniere = null;
-            const cle = `${e?.code}|${e?.message}`;
-            if (actif && cle !== derniereErreur) { derniereErreur = cle; erreur?.(e); }
-          }
+          let v = null;
+          let echec = null;
+          try { v = await lire(); } catch (e) { echec = e; }
+          if (!actif) break;
+          if (echec) { signaler(echec); continue; }
+          derniereErreur = null;
+          const s = signature(v);
+          if (s === derniere) continue;
+          derniere = s;
+          try { suivant(v); } catch (e) { console.error(e); } // une exception du consommateur n'est pas une erreur de base
         } while (aRelire && actif);
       } finally {
         enVol = false;
@@ -68,7 +72,7 @@ export function creerBaseSupabase(client) {
       if (minuteur || !actif) return;
       minuteur = setTimeout(() => { minuteur = null; if (actif) livrer(); }, DELAI_RELECTURE);
     };
-    const abonne = { relire, erreur };
+    const abonne = { relire, erreur: signaler };
     if (!abonnes.has(collection)) abonnes.set(collection, new Set());
     abonnes.get(collection).add(abonne);
     ouvrirCanal();
