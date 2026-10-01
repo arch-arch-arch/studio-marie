@@ -1,22 +1,26 @@
--- Studio Contenu : schéma Supabase. À exécuter une fois dans l'éditeur SQL de chaque projet (test et réel).
+-- Studio Contenu : schéma Supabase. À exécuter dans l'éditeur SQL de chaque projet (test et réel). Peut être réexécuté sans risque.
 
-create table if not exists documents (
+create table if not exists public.documents (
   collection text not null,
   id text not null,
   data jsonb not null,
   maj_le timestamptz not null default now(),
   primary key (collection, id)
 );
-create index if not exists documents_date_heure on documents (collection, (data->>'date_heure'));
-create index if not exists documents_date_publication on documents (collection, (data->>'date_publication'));
+create index if not exists documents_date_heure on public.documents (collection, (data->>'date_heure'));
+create index if not exists documents_date_publication on public.documents (collection, (data->>'date_publication'));
 
-alter table documents enable row level security;
-drop policy if exists "documents : membres connectés" on documents;
-create policy "documents : membres connectés" on documents
+alter table public.documents enable row level security;
+drop policy if exists "documents : membres connectés" on public.documents;
+create policy "documents : membres connectés" on public.documents
   for all to authenticated using (true) with check (true);
 
+revoke all on table public.documents from anon, public;
+grant select, insert, update, delete on table public.documents to authenticated;
+grant all on table public.documents to service_role;
+
 do $$ begin
-  alter publication supabase_realtime add table documents;
+  alter publication supabase_realtime add table public.documents;
 exception when duplicate_object then null; end $$;
 
 -- Stockage privé des visuels (20 Mo au plus par fichier).
@@ -29,17 +33,17 @@ create policy "visuels : membres connectés" on storage.objects
   for all to authenticated using (bucket_id = 'visuels') with check (bucket_id = 'visuels');
 
 -- Écritures de la veille, en une seule transaction. Réservée à la clé de service.
-create or replace function appliquer_veille(ecritures jsonb) returns void
-language plpgsql security definer set search_path = public as $$
+create or replace function public.appliquer_veille(ecritures jsonb) returns void
+language plpgsql security definer set search_path = '' as $$
 declare e jsonb;
 begin
   for e in select * from jsonb_array_elements(ecritures) loop
     if e->>'op' = 'delete' then
-      delete from documents
+      delete from public.documents
       where collection = e->>'collection' and id = e->>'doc_id'
         and (e->>'si_maj_le' is null or data->>'maj_le' = e->>'si_maj_le');
     elsif e->>'op' = 'set' then
-      insert into documents (collection, id, data, maj_le)
+      insert into public.documents (collection, id, data, maj_le)
       values (e->>'collection', e->>'doc_id', e->'data', now())
       on conflict (collection, id) do update set data = excluded.data, maj_le = now();
     else
@@ -47,5 +51,5 @@ begin
     end if;
   end loop;
 end $$;
-revoke all on function appliquer_veille(jsonb) from public, anon, authenticated;
-grant execute on function appliquer_veille(jsonb) to service_role;
+revoke all on function public.appliquer_veille(jsonb) from public, anon, authenticated;
+grant execute on function public.appliquer_veille(jsonb) to service_role;

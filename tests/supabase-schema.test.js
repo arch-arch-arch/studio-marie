@@ -8,8 +8,8 @@ const ignore = readFileSync(new URL('../.gitignore', import.meta.url), 'utf8');
 describe('schéma Supabase', () => {
   it('crée la table, ses index et active la sécurité par ligne', () => {
     for (const attendu of [
-      'create table if not exists documents', 'primary key (collection, id)', "(data->>'date_heure')", "(data->>'date_publication')",
-      'alter table documents enable row level security', 'to authenticated', 'alter publication supabase_realtime add table documents',
+      'create table if not exists public.documents', 'primary key (collection, id)', "(data->>'date_heure')", "(data->>'date_publication')",
+      'alter table public.documents enable row level security', 'to authenticated', 'alter publication supabase_realtime add table public.documents',
     ]) expect(sql).toContain(attendu);
     expect(sql).not.toMatch(/to anon\b/);
   });
@@ -19,10 +19,11 @@ describe('schéma Supabase', () => {
     expect(sql).toContain('storage.objects');
   });
   it('réserve appliquer_veille au rôle de service', () => {
-    expect(sql).toContain('create or replace function appliquer_veille(ecritures jsonb)');
-    expect(sql).toContain('revoke all on function appliquer_veille(jsonb) from public, anon, authenticated');
-    expect(sql).toContain('grant execute on function appliquer_veille(jsonb) to service_role');
+    expect(sql).toContain('create or replace function public.appliquer_veille(ecritures jsonb)');
+    expect(sql).toContain('revoke all on function public.appliquer_veille(jsonb) from public, anon, authenticated');
+    expect(sql).toContain('grant execute on function public.appliquer_veille(jsonb) to service_role');
     expect(sql).toContain("data->>'maj_le' = e->>'si_maj_le'");
+    expect(sql).toContain("set search_path = ''");
   });
 });
 
