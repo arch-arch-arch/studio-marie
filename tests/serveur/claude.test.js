@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import Anthropic from '@anthropic-ai/sdk';
-import { MODELE, cleConfiguree, extraireJson, codeErreur, evaluer } from '../../serveur/claude.js';
+import { MODELE, modele, cleConfiguree, extraireJson, codeErreur, evaluer, creerClient } from '../../serveur/claude.js';
+import { cleConfiguree as cleDeConfiguration } from '../../serveur/configuration.js';
 
 const message = (texte, stop_reason = 'end_turn') => ({ stop_reason, content: [{ type: 'text', text: texte }] });
 
@@ -42,5 +43,37 @@ describe('claude', () => {
     expect(codeErreur(api(529))).toBe('unavailable');
     expect(codeErreur({ code: 'refused' })).toBe('refused');
     expect(codeErreur(new Error('x'))).toBe('unavailable');
+  });
+  it('garde le modèle par défaut, même avec une valeur vide', () => {
+    expect(modele({})).toBe('claude-opus-4-8');
+    expect(modele({ MODELE_CLAUDE: '   ' })).toBe('claude-opus-4-8');
+    expect(modele({ MODELE_CLAUDE: ' autre-modele ' })).toBe('autre-modele');
+  });
+  it('refuse un JSON invalide malgré ses accolades', () => {
+    expect(() => extraireJson('{mal}')).toThrow();
+    let code = null;
+    try { extraireJson('{mal}'); } catch (e) { code = e.code; }
+    expect(code).toBe('invalid_json');
+  });
+  it('ne laisse ressortir que les codes internes connus', () => {
+    expect(codeErreur({ code: 'ECONNRESET' })).toBe('unavailable');
+    for (const code of ['refused', 'invalid_json', 'empty_completion']) expect(codeErreur({ code })).toBe(code);
+  });
+  it('signale une réponse tronquée, hors contexte ou sans texte', async () => {
+    const vide = c => evaluer({ messages: { create: async () => c } }, { prompt: 'x' });
+    await expect(vide({ stop_reason: 'max_tokens', content: [{ type: 'text', text: '{"a":1}' }] })).rejects.toMatchObject({ code: 'empty_completion' });
+    await expect(vide({ stop_reason: 'model_context_window_exceeded', content: [{ type: 'text', text: '{"a":1}' }] })).rejects.toMatchObject({ code: 'empty_completion' });
+    await expect(vide({ stop_reason: 'end_turn', content: [] })).rejects.toMatchObject({ code: 'empty_completion' });
+    await expect(vide({ stop_reason: 'end_turn', content: [{ type: 'text', text: '  ' }] })).rejects.toMatchObject({ code: 'empty_completion' });
+  });
+  it('borne le client sous la limite de la fonction Vercel', () => {
+    vi.stubEnv('ANTHROPIC_API_KEY', 'cle-factice');
+    const client = creerClient();
+    vi.unstubAllEnvs();
+    expect(client.timeout).toBe(100000);
+    expect(client.maxRetries).toBe(1);
+  });
+  it('partage cleConfiguree avec le module de configuration', () => {
+    expect(cleConfiguree).toBe(cleDeConfiguration);
   });
 });

@@ -1,8 +1,10 @@
 import Anthropic from '@anthropic-ai/sdk';
+import { cleConfiguree, modele } from './configuration.js';
 
-export const MODELE = process.env.MODELE_CLAUDE || 'claude-opus-4-8';
-export const cleConfiguree = env => typeof env.ANTHROPIC_API_KEY === 'string' && env.ANTHROPIC_API_KEY.trim().length > 0;
-export const creerClient = () => new Anthropic();
+export { cleConfiguree, modele };
+export const MODELE = modele(process.env);
+// La fonction Vercel s'arrête à 120 s : le client abandonne avant (le défaut du SDK est de 10 minutes et 2 relances).
+export const creerClient = () => new Anthropic({ timeout: 100_000, maxRetries: 1 });
 export const texteDe = message => (message.content ?? []).filter(b => b.type === 'text').map(b => b.text).join('');
 const erreur = code => Object.assign(new Error(code), { code });
 
@@ -17,8 +19,10 @@ export function extraireJson(texte) {
   }
 }
 
+const CODES_INTERNES = new Set(['refused', 'invalid_json', 'empty_completion']);
+
 export function codeErreur(e) {
-  if (typeof e?.code === 'string' && !(e instanceof Anthropic.APIError)) return e.code;
+  if (!(e instanceof Anthropic.APIError) && CODES_INTERNES.has(e?.code)) return e.code;
   if (e instanceof Anthropic.APIError) {
     if (e.status === 429) return 'rate_limited';
     if (e.status === 401 || e.status === 403) return 'not_granted';
@@ -35,5 +39,7 @@ export async function evaluer(client, { prompt, image }) {
   ];
   const message = await client.messages.create({ model: MODELE, max_tokens: 8000, messages: [{ role: 'user', content }] });
   if (message.stop_reason === 'refusal') throw erreur('refused');
-  return extraireJson(texteDe(message));
+  const texte = texteDe(message);
+  if (message.stop_reason === 'max_tokens' || message.stop_reason === 'model_context_window_exceeded' || !texte.trim()) throw erreur('empty_completion');
+  return extraireJson(texte);
 }

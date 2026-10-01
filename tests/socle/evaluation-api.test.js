@@ -37,4 +37,10 @@ describe('creerEvaluationApi', () => {
     const sansJeton = creerEvaluationApi({ fetch: vi.fn(), jeton: async () => null });
     await expect(sansJeton.json('x')).rejects.toMatchObject({ code: 'session_expired' });
   });
+  it('signale l’annulation survenue pendant la lecture de la réponse', async () => {
+    const controle = new AbortController();
+    const fetchFaux = async () => ({ ok: true, status: 200, json: async () => { controle.abort(); return { reponse: { notes: {} } }; } });
+    const api = creerEvaluationApi({ fetch: fetchFaux, jeton: async () => 'j' });
+    await expect(api.json('x', { signal: controle.signal })).rejects.toMatchObject({ code: 'cancelled' });
+  });
 });

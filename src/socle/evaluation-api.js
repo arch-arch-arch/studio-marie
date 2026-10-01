@@ -28,6 +28,7 @@ export function creerEvaluationApi({ fetch: requeter, jeton }) {
         throw erreur(e?.name === 'AbortError' ? 'cancelled' : 'unavailable');
       }
       const corps = await reponse.json().catch(() => ({}));
+      if (signal?.aborted) throw erreur('cancelled');
       if (!reponse.ok) throw erreur(corps?.code ?? 'unavailable');
       return corps.reponse;
     },

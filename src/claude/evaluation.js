@@ -121,7 +121,7 @@ export function messageErreurSample(e) {
   switch (e?.code) {
     case 'cancelled': return '';
     case 'rate_limited': return 'Trop de demandes à Claude pour le moment : réessaie un peu plus tard.';
-    case 'session_expired': return 'Ta session a expiré : reconnecte-toi à claude.ai, puis réessaie.';
+    case 'session_expired': return 'Ta session a expiré : reconnecte-toi, puis réessaie.';
     case 'invalid_json': return 'La réponse de Claude était illisible : réessaie. Rien n’a été modifié.';
     case 'refused': return 'Claude a refusé d’évaluer ce contenu : reformule-le, puis réessaie.';
     case 'prompt_too_large': return 'Le contenu envoyé à Claude est trop volumineux : raccourcis la caption, les hashtags ou le géotag.';
