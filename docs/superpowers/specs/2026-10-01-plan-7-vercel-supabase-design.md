@@ -54,7 +54,7 @@ scripts/           build (page et configuration publique), veille (logique réut
 ```
 
 - **Build** : esbuild assemble toujours une seule page. Il y injecte l'URL du projet Supabase et sa clé publique (« anon »), lues dans les variables d'environnement au moment du build. Ces deux valeurs sont publiques par nature : la sécurité vient des règles d'accès.
-- **Dépendance nouvelle** : `@supabase/supabase-js`, côté page et côté fonctions. L'API Claude est appelée par `fetch`, sans SDK.
+- **Dépendances nouvelles** : `@supabase/supabase-js` (page et fonctions) et `@anthropic-ai/sdk` (fonctions serveur seulement). Le modèle Claude est lu dans la variable `MODELE_CLAUDE` (par défaut `claude-opus-4-8`).
 
 ## 3. Base de données
 
@@ -129,7 +129,7 @@ Trois fonctions serveur Vercel. Toutes vérifient le jeton de session Supabase, 
     1. lire le profil, les fiches, le bulletin et les relevés ;
     2. demander à Claude les tendances et les idées, avec l'outil de recherche web et les consignes de `src/claude/veille.md` adaptées ;
     3. appeler `construireVeille` (inchangée) ;
-    4. écrire les fiches et le bulletin dans Supabase avec la clé de service.
+    4. écrire les fiches et le bulletin dans Supabase avec la clé de service, en une seule transaction (fonction SQL `appliquer_veille`). Une idée à remplacer n'est supprimée que si elle n'a pas changé depuis sa lecture.
   - Les règles de relance et de non-duplication ne changent pas.
   - Sans clé, la fonction répond `not_granted` et n'écrit rien.
   - `config/veille` n'est plus nécessaire : le bouton appelle directement la fonction.
@@ -150,6 +150,7 @@ Trois fonctions serveur Vercel. Toutes vérifient le jeton de session Supabase, 
 | `SUPABASE_SERVICE_ROLE_KEY` | Vercel (fonctions), **secrète** | Écritures de la veille |
 | `CRON_SECRET` | Vercel, **secrète** | Authentifie la tâche planifiée |
 | `ANTHROPIC_API_KEY` | Vercel, **secrète**, facultative | Active l'évaluation et la veille |
+| `MODELE_CLAUDE` | Vercel, facultative | Modèle utilisé (par défaut `claude-opus-4-8`) |
 
 - **Deux projets Supabase** : un de test, utilisé par les déploiements de prévisualisation Vercel, et un réel, utilisé par la production.
 - Aucune de ces valeurs ne se trouve dans git. Un fichier `.env.example` liste leurs noms, sans valeurs. `.env*` est ignoré par git.
