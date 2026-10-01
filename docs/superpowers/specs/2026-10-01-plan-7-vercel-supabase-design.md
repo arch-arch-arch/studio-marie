@@ -170,7 +170,9 @@ Trois fonctions serveur Vercel. Toutes vérifient le jeton de session Supabase, 
 - **Réseau coupé** : les écritures de fiches gardent le mécanisme actuel (indicateur « Échec de l’enregistrement », nouvelle tentative).
 - **Realtime déconnecté** : la page relit les données à la reconnexion.
 - **Lien magique ouvert sur un autre appareil** : la session s'ouvre sur cet appareil-là. C'est le comportement normal de Supabase, et la marche à suivre le signale.
-- **Tâche planifiée sur l'offre gratuite de Vercel** : l'heure de déclenchement est approximative, dans l'heure. La règle `doit-tourner` l'accepte déjà.
+- **Tâche planifiée sur l'offre gratuite de Vercel** : l'heure de déclenchement est approximative, dans l'heure. La règle `doit-tourner` l'accepte : la fenêtre du dimanche va de 18 h 30 à 21 h 59 locale, et seule l'heure de 20 h y déclenche la veille.
+- **Deux veilles simultanées** : une vérification dans la transaction `appliquer_veille` (le bulletin de la semaine doit être resté tel que lu au départ) et un marqueur « veille en cours » de 6 minutes, retiré seulement s'il est encore celui de l'exécution.
+- **Migration** : le script refuse d'écrire quand la cible contient déjà des documents de l'export ; seule l'option `--ecraser` autorise leur remplacement, pour reprendre une migration interrompue.
 
 ## 11. Tests
 
