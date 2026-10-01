@@ -95,6 +95,81 @@ describe('creerBaseSupabase', () => {
     await expect(db.doc('fiches/a').get()).rejects.toMatchObject({ code: 'XX000' });
   });
 
+  it('traite PGRST303 avec le statut 401 comme une session révoquée', async () => {
+    const client = creerFauxSupabase();
+    const db = creerBaseSupabase(client);
+    client._panne({ message: 'JWT issued at future', code: 'PGRST303', status: 401 });
+    await expect(db.doc('fiches/a').get()).rejects.toMatchObject({ code: 'revoked' });
+    client._panne({ message: 'JWT invalide', code: 'PGRST303' });
+    await expect(db.doc('fiches/a').get()).rejects.toMatchObject({ code: 'revoked' });
+  });
+
+  it('donne le code unavailable quand le code d’erreur est vide ou absent', async () => {
+    const client = creerFauxSupabase();
+    const db = creerBaseSupabase(client);
+    client._panne({ message: 'hors ligne', code: '', status: 503 });
+    await expect(db.doc('fiches/a').get()).rejects.toMatchObject({ code: 'unavailable' });
+    client._panne({ message: 'hors ligne', status: 503 });
+    await expect(db.doc('fiches/a').set({})).rejects.toMatchObject({ code: 'unavailable' });
+  });
+
+  it('relit tous les abonnés quand le canal (re)devient SUBSCRIBED', async () => {
+    const client = creerFauxSupabase();
+    const db = creerBaseSupabase(client);
+    const recus = [];
+    db.collection('fiches').onSnapshot(s => recus.push(s.docs.map(d => d.id)), () => {});
+    await attendre();
+    expect(recus).toEqual([[]]);
+    client._lignes.set('fiches/z', { collection: 'fiches', id: 'z', data: {} });
+    client._canal('SUBSCRIBED');
+    await attendre();
+    expect(recus.at(-1)).toEqual(['z']);
+  });
+
+  it('signale une erreur de canal à chaque abonné', async () => {
+    const client = creerFauxSupabase();
+    const db = creerBaseSupabase(client);
+    const erreurs = [];
+    db.collection('fiches').onSnapshot(() => {}, e => erreurs.push(['c', e.code]));
+    db.doc('profil/courant').onSnapshot(() => {}, e => erreurs.push(['d', e.code]));
+    await attendre();
+    client._canal('CHANNEL_ERROR');
+    client._canal('TIMED_OUT');
+    expect(erreurs).toEqual([['c', 'unavailable'], ['d', 'unavailable'], ['c', 'unavailable'], ['d', 'unavailable']]);
+  });
+
+  it('ne laisse pas une lecture lente écraser un état plus récent', async () => {
+    const client = creerFauxSupabase();
+    const db = creerBaseSupabase(client);
+    const recus = [];
+    db.collection('fiches').onSnapshot(s => recus.push(s.docs.map(d => d.id)), () => {});
+    await attendre();
+    client._delaiLecture(120);
+    await db.doc('fiches/a').set({});
+    await attendre(70); // la lecture lente (état : a) est en vol
+    client._delaiLecture(0);
+    await db.doc('fiches/b').set({});
+    await attendre(400);
+    expect(recus.at(-1)).toEqual(['a', 'b']);
+  });
+
+  it('limite les relectures pendant une longue rafale espacée', async () => {
+    const client = creerFauxSupabase();
+    const db = creerBaseSupabase(client);
+    const recus = [];
+    db.collection('fiches').onSnapshot(s => recus.push(s.size), () => {});
+    await attendre();
+    client._delaiLecture(20);
+    const avant = client._lectures;
+    for (let i = 0; i < 30; i += 1) {
+      await db.doc(`fiches/f${i}`).set({ i });
+      await attendre(10);
+    }
+    await attendre(300);
+    expect(recus.at(-1)).toBe(30);
+    expect(client._lectures - avant).toBeLessThanOrEqual(12);
+  });
+
   it('fait fonctionner le dépôt existant', async () => {
     const client = creerFauxSupabase();
     const depot = creerDepot(creerBaseSupabase(client));

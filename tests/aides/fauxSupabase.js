@@ -6,6 +6,9 @@ export function creerFauxSupabase({ utilisateur = { id: 'u1', email: 'a@exemple.
   const appelsRpc = [];
   let session = utilisateur ? { access_token: 'jeton-test', user: utilisateur } : null;
   let panne = null;
+  let delaiLecture = 0;
+  const statutsCanaux = new Set();
+  const reponsePanne = () => ({ data: null, error: { message: panne.message, code: panne.code }, status: panne.status });
   const compteurs = { lectures: 0 };
   const emettre = (eventType, ancien, nouveau) => { for (const e of [...ecoutes]) e({ eventType, old: ancien ?? {}, new: nouveau ?? {} }); };
   const valeur = (l, col) => (col.startsWith('data->>') ? l.data?.[col.slice(7)] : l[col]);
@@ -17,7 +20,7 @@ export function creerFauxSupabase({ utilisateur = { id: 'u1', email: 'a@exemple.
     let plage = null;
     let unique = false;
     async function executer() {
-      if (panne) return { data: null, error: panne };
+      if (panne) return reponsePanne();
       if (table !== 'documents') return { data: null, error: { message: `table inconnue : ${table}` } };
       const cible = [...lignes.values()].filter(l => filtres.every(([col, op, v]) => {
         const x = valeur(l, col);
@@ -43,6 +46,7 @@ export function creerFauxSupabase({ utilisateur = { id: 'u1', email: 'a@exemple.
       compteurs.lectures += 1;
       let res = cible.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)).map(l => ({ id: l.id, data: structuredClone(l.data) }));
       if (plage) res = res.slice(plage[0], plage[1] + 1);
+      if (delaiLecture > 0) await new Promise(r => setTimeout(r, delaiLecture));
       return { data: unique ? (res[0] ?? null) : res, error: null };
     }
     const q = {
@@ -64,19 +68,25 @@ export function creerFauxSupabase({ utilisateur = { id: 'u1', email: 'a@exemple.
     from: requete,
     channel: () => {
       let rappel = null;
+      let statutCanal = null;
       const canal = {
         on: (_type, _filtre, fn) => { rappel = fn; return canal; },
-        subscribe: () => { if (rappel) ecoutes.add(rappel); return canal; },
+        subscribe: statut => {
+          if (rappel) ecoutes.add(rappel);
+          if (statut) { statutCanal = statut; statutsCanaux.add(statut); queueMicrotask(() => statut('SUBSCRIBED')); }
+          return canal;
+        },
         _rappel: () => rappel,
+        _statut: () => statutCanal,
       };
       return canal;
     },
-    removeChannel: async canal => { ecoutes.delete(canal._rappel()); },
-    rpc: async (nom, args) => { if (panne) return { data: null, error: panne }; appelsRpc.push({ nom, args }); return { data: null, error: null }; },
+    removeChannel: async canal => { ecoutes.delete(canal._rappel()); statutsCanaux.delete(canal._statut()); },
+    rpc: async (nom, args) => { if (panne) return reponsePanne(); appelsRpc.push({ nom, args }); return { data: null, error: null }; },
     storage: {
       from: espace => ({
         upload: async (chemin, fichier) => {
-          if (panne) return { data: null, error: panne };
+          if (panne) return reponsePanne();
           fichiers.set(`${espace}/${chemin}`, fichier);
           return { data: { path: chemin }, error: null };
         },
@@ -104,6 +114,8 @@ export function creerFauxSupabase({ utilisateur = { id: 'u1', email: 'a@exemple.
     _fichiers: fichiers,
     _rpc: appelsRpc,
     _panne: p => { panne = p; },
+    _delaiLecture: ms => { delaiLecture = ms; },
+    _canal: statut => { for (const f of [...statutsCanaux]) f(statut); },
     _session: s => { session = s; for (const e of [...ecoutesAuth]) e(s ? 'SIGNED_IN' : 'SIGNED_OUT', s); },
     get _lectures() { return compteurs.lectures; },
   };

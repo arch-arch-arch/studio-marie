@@ -2,41 +2,81 @@ const TABLE = 'documents';
 const PAGE = 1000;
 const DELAI_RELECTURE = 40;
 const OPERATEURS = { '>=': 'gte', '<': 'lt', '==': 'eq' };
-const CODES_REVOQUES = new Set(['PGRST301', 'PGRST302', '42501']);
+const CODES_REVOQUES = new Set(['PGRST301', 'PGRST302', 'PGRST303', '42501']);
 
-function erreurBase(error) {
-  const revoque = error?.status === 401 || error?.status === 403 || CODES_REVOQUES.has(error?.code);
-  return Object.assign(new Error(error?.message ?? 'Erreur de la base.'), { code: revoque ? 'revoked' : (error?.code ?? 'unavailable') });
+// Dans postgrest-js, `status` est sur la réponse ; `error` ne porte que { message, details, hint, code }.
+function erreurBase(error, status) {
+  const revoque = status === 401 || status === 403 || CODES_REVOQUES.has(error?.code);
+  return Object.assign(new Error(error?.message || 'Erreur de la base.'), { code: revoque ? 'revoked' : (error?.code || 'unavailable') });
 }
 
+const signature = v => JSON.stringify(v.docs ? v.docs.map(d => [d.id, d.data()]) : [v.exists, v.data()]);
+
 export function creerBaseSupabase(client) {
-  const abonnes = new Map(); // collection -> Set de relectures
+  const abonnes = new Map(); // collection -> Set de { relire, erreur }
   let canal = null;
+
+  function chaqueAbonne(action) {
+    for (const ensemble of [...abonnes.values()]) for (const a of [...ensemble]) action(a);
+  }
 
   function ouvrirCanal() {
     if (canal) return;
     canal = client.channel('documents').on('postgres_changes', { event: '*', schema: 'public', table: TABLE }, charge => {
       const collection = charge.new?.collection ?? charge.old?.collection;
-      for (const relire of [...(abonnes.get(collection) ?? [])]) relire();
-    }).subscribe();
+      for (const a of [...(abonnes.get(collection) ?? [])]) a.relire();
+    }).subscribe(statut => {
+      if (statut === 'SUBSCRIBED') chaqueAbonne(a => a.relire());
+      else if (statut === 'CHANNEL_ERROR' || statut === 'TIMED_OUT') {
+        chaqueAbonne(a => a.erreur?.(Object.assign(new Error('Canal temps réel indisponible.'), { code: 'unavailable' })));
+      }
+    });
   }
 
   function ecouter(collection, lire, suivant, erreur) {
     let actif = true;
     let minuteur = null;
-    const livrer = () => lire().then(v => { if (actif) suivant(v); }, e => { if (actif) erreur?.(e); });
+    let enVol = false;
+    let aRelire = false;
+    let derniere = null;
+    let derniereErreur = null;
+    // Une seule lecture à la fois : un événement pendant une lecture en programme une autre à la fin.
+    async function livrer() {
+      if (enVol) { aRelire = true; return; }
+      enVol = true;
+      try {
+        do {
+          aRelire = false;
+          try {
+            const v = await lire();
+            if (actif) {
+              derniereErreur = null;
+              const s = signature(v);
+              if (s !== derniere) { derniere = s; suivant(v); }
+            }
+          } catch (e) {
+            derniere = null;
+            const cle = `${e?.code}|${e?.message}`;
+            if (actif && cle !== derniereErreur) { derniereErreur = cle; erreur?.(e); }
+          }
+        } while (aRelire && actif);
+      } finally {
+        enVol = false;
+      }
+    }
     const relire = () => {
-      if (minuteur) return;
+      if (minuteur || !actif) return;
       minuteur = setTimeout(() => { minuteur = null; if (actif) livrer(); }, DELAI_RELECTURE);
     };
+    const abonne = { relire, erreur };
     if (!abonnes.has(collection)) abonnes.set(collection, new Set());
-    abonnes.get(collection).add(relire);
+    abonnes.get(collection).add(abonne);
     ouvrirCanal();
     livrer();
     return () => {
       actif = false;
       if (minuteur) clearTimeout(minuteur);
-      abonnes.get(collection)?.delete(relire);
+      abonnes.get(collection)?.delete(abonne);
     };
   }
 
@@ -47,8 +87,8 @@ export function creerBaseSupabase(client) {
     const collection = chemin.slice(0, coupe);
     const id = chemin.slice(coupe + 1);
     const lire = async () => {
-      const { data, error } = await client.from(TABLE).select('id,data').eq('collection', collection).eq('id', id).maybeSingle();
-      if (error) throw erreurBase(error);
+      const { data, error, status } = await client.from(TABLE).select('id,data').eq('collection', collection).eq('id', id).maybeSingle();
+      if (error) throw erreurBase(error, status);
       return instantane(id, data);
     };
     return {
@@ -56,12 +96,12 @@ export function creerBaseSupabase(client) {
       path: chemin,
       get: lire,
       async set(corps) {
-        const { error } = await client.from(TABLE).upsert({ collection, id, data: corps, maj_le: new Date().toISOString() });
-        if (error) throw erreurBase(error);
+        const { error, status } = await client.from(TABLE).upsert({ collection, id, data: corps, maj_le: new Date().toISOString() });
+        if (error) throw erreurBase(error, status);
       },
       async delete() {
-        const { error } = await client.from(TABLE).delete().eq('collection', collection).eq('id', id);
-        if (error) throw erreurBase(error);
+        const { error, status } = await client.from(TABLE).delete().eq('collection', collection).eq('id', id);
+        if (error) throw erreurBase(error, status);
       },
       onSnapshot: (suivant, erreur) => ecouter(collection, lire, suivant, erreur),
     };
@@ -73,8 +113,8 @@ export function creerBaseSupabase(client) {
       for (let debut = 0; ; debut += PAGE) {
         let q = client.from(TABLE).select('id,data').eq('collection', collection);
         for (const [champ, op, v] of filtres) q = q[OPERATEURS[op]](`data->>${champ}`, v);
-        const { data, error } = await q.order('id').range(debut, debut + PAGE - 1);
-        if (error) throw erreurBase(error);
+        const { data, error, status } = await q.order('id').range(debut, debut + PAGE - 1);
+        if (error) throw erreurBase(error, status);
         lignes.push(...data);
         if (data.length < PAGE) break;
       }
