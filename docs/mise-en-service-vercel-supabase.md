@@ -56,10 +56,19 @@ Maintenant que le site existe, retourne dans chaque projet Supabase, dans Authen
 
 ## 5. En local
 
-1. À la racine du dépôt, copie le fichier `.env.example` et nomme la copie `.env.local`.
-2. Ouvre `.env.local` et remplis les valeurs avec celles du projet de **test** pendant les essais.
-3. Pour la migration du studio réel, mets-y temporairement les valeurs du projet réel, puis retire-les dès la migration terminée.
-4. Ce fichier sert seulement au script de migration des données (section 6). Il n'est jamais envoyé sur GitHub : ne le renomme pas et ne le copie pas ailleurs.
+Le script de migration des données (section 6) se lance depuis ton ordinateur. Il lui faut un petit fichier de réglages.
+
+1. Ouvre un terminal à la racine du dépôt et lance `npm install` une fois.
+2. Crée à la racine du dépôt un fichier nommé `.env.local` avec seulement ces deux lignes, remplies avec les valeurs du projet de **test** pendant les essais :
+
+```
+SUPABASE_URL=
+SUPABASE_SERVICE_ROLE_KEY=
+```
+
+   N'y mets ni la clé Claude ni `CRON_SECRET` : le script n'en a pas besoin.
+3. Pour la migration du studio réel, remplace ces deux valeurs par celles du projet réel, puis retire-les dès la migration terminée.
+4. Ce fichier n'est jamais envoyé sur GitHub : ne le renomme pas et ne le copie pas ailleurs.
 
 ## 6. Migrer les données
 
@@ -68,13 +77,13 @@ Cette étape reprend dans Supabase les données de l'ancien studio : le profil, 
 **Ce qu'il te faut avant de commencer.**
 
 - Node 20.6 ou plus (tape `node --version` dans un terminal pour le savoir).
-- Un fichier `.env.local` à la racine du dépôt, jamais envoyé sur GitHub, qui contient seulement ces deux variables, avec les valeurs du projet visé : `SUPABASE_URL` et `SUPABASE_SERVICE_ROLE_KEY`.
+- Le fichier `.env.local` de la section 5, avec les deux valeurs du projet visé. Lance les commandes depuis la racine du dépôt.
 - L'export de l'ancien studio : un fichier `.json`, obtenu avec le bouton « Exporter les données » (ou un nom voisin) de l'ancienne page.
 - Le dossier qui contient les visuels. Chaque fichier porte l'identifiant du visuel comme nom, suivi d'une extension : `png`, `jpg`, `webp`, `gif`, `mp4`, `mov` ou `webm`.
 
 **Dans cet ordre.**
 
-1. Commence par le projet de test, puis fais le projet réel. Pour changer de projet, remplace les deux valeurs de `.env.local`.
+1. Commence par le projet de test. Une fois sa migration terminée, crée un utilisateur de test (section 7), ouvre le site de prévisualisation et vérifie que le profil, les fiches et les visuels sont là. Fais le projet réel seulement après ce contrôle. Pour changer de projet, remplace les deux valeurs de `.env.local`.
 2. Lance d'abord la simulation, qui n'écrit rien :
 
 ```
@@ -101,7 +110,7 @@ node --env-file=.env.local scripts/migrer.mjs --export <fichier.json> --visuels 
 
 ## 7. Supabase : créer les utilisateurs
 
-Fais cette étape en dernier, dans chaque projet, une fois les adresses de retour réglées et les données migrées (section 6). Créer un utilisateur, c'est donner l'accès au studio.
+Fais cette étape dans chaque projet après la migration de ses données (section 6) et le réglage des adresses de retour (section 4). Créer un utilisateur, c'est donner l'accès au studio.
 
 Le service d'e-mail intégré de Supabase n'envoie des messages qu'aux adresses qui sont membres de l'organisation du projet Supabase, et seulement quelques messages par heure. Il y a donc deux façons de laisser quelqu'un se connecter.
 
