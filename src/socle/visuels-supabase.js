@@ -8,6 +8,7 @@ const idParDefaut = () => `${Date.now().toString(36)}${Math.random().toString(36
 // `status` le statut HTTP numérique. Le corps prime : le stockage répond parfois HTTP 400 avec statusCode '404'.
 function traduire(e) {
   const statut = String(e?.statusCode ?? e?.status ?? '');
+  if (statut === '401' || statut === '403') return erreur('revoked', e.message);
   if (statut === '413') return erreur('too_large', e.message);
   if (statut === '429') return erreur('rate_limited', e.message);
   if (statut === '404') return erreur('not_found', e.message);

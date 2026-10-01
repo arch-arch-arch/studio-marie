@@ -12,7 +12,8 @@ export function creerTelechargement(doc) {
       doc.body.append(lien);
       lien.click();
       lien.remove();
-      URL.revokeObjectURL(url);
+      // Safari peut produire un fichier vide si l'URL est révoquée dans le même tour que le clic.
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
       return { status: 'saved' };
     },
   };

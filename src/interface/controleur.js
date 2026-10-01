@@ -15,6 +15,7 @@ const MESSAGES_TELEVERSEMENT = {
   too_large: 'Fichier trop lourd (20 Mo au maximum).',
   unsupported_type: 'Ce type de fichier n’est pas accepté.',
   rate_limited: 'Trop d’envois d’un coup : réessaie dans un instant.',
+  revoked: 'Ta session a expiré : reconnecte-toi puis réessaie.',
 };
 
 export function plageDeVue(vue, ancre, fuseau) {

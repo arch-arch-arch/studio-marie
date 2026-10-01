@@ -14,6 +14,23 @@ describe('creerVisuelsSupabase', () => {
     expect(await visuels.url(id)).toBe('https://stockage.test/visuels/abc.png?jeton=1');
     expect((await visuels.telecharger(id)).type).toBe('image/png');
   });
+  it('refuse d’écraser un fichier existant', async () => {
+    const client = creerFauxSupabase();
+    const visuels = creerVisuelsSupabase(client, { idAleatoire: () => 'dup' });
+    await visuels.upload(fichier('image/png', 10));
+    const premier = client._fichiers.get('visuels/dup.png');
+    await expect(visuels.upload(fichier('image/png', 20))).rejects.toMatchObject({ code: 'unavailable' });
+    expect(client._fichiers.get('visuels/dup.png')).toBe(premier);
+  });
+  it('distingue la session expirée (401, 403)', async () => {
+    const client = creerFauxSupabase();
+    const visuels = creerVisuelsSupabase(client, { idAleatoire: () => 'x' });
+    for (const statusCode of ['401', '403']) {
+      client._panne({ message: 'Unauthorized', statusCode });
+      await expect(visuels.upload(fichier('image/png'))).rejects.toMatchObject({ code: 'revoked' });
+      await expect(visuels.url('a.png')).rejects.toMatchObject({ code: 'revoked' });
+    }
+  });
   it('donne une extension selon le type quand le nom n’en a pas', async () => {
     const visuels = creerVisuelsSupabase(creerFauxSupabase(), { idAleatoire: () => 'v1' });
     expect((await visuels.upload(fichier('video/mp4', 10, 'clip'))).id).toBe('v1.mp4');

@@ -477,8 +477,31 @@ describe('visuel signé', () => {
     expect(p.querySelector('img.apercu').getAttribute('src')).toBe('/_blob/a1');
   });
   it('signale un visuel introuvable', async () => {
-    const actions = { ...actionsFactices(), urlVisuel: vi.fn(async () => { throw new Error('x'); }) };
+    const actions = { ...actionsFactices(), urlVisuel: vi.fn(async () => { throw Object.assign(new Error('x'), { code: 'not_found' }); }) };
     const p = panneauFiche(fiche({ visuel: 'a.png', visuel_type: 'image' }), fictif, actions, { assets: true });
     await vi.waitFor(() => expect(p.querySelector('.zone-visuel').textContent).toContain('Visuel introuvable.'));
+  });
+  it('signale un visuel indisponible quand l’échec n’est pas un fichier absent', async () => {
+    const actions = { ...actionsFactices(), urlVisuel: vi.fn(async () => { throw new Error('x'); }) };
+    const p = panneauFiche(fiche({ visuel: 'a.png', visuel_type: 'image' }), fictif, actions, { assets: true });
+    await vi.waitFor(() => expect(p.querySelector('.zone-visuel p[role="status"]')?.textContent).toBe('Visuel indisponible pour l’instant : réessaie.'));
+  });
+  it('n’ajoute aucun avis quand le lien arrive bien', async () => {
+    const actions = { ...actionsFactices(), urlVisuel: vi.fn(async id => `https://stockage.test/${id}`) };
+    const p = panneauFiche(fiche({ visuel: 'a.png', visuel_type: 'image' }), fictif, actions, { assets: true });
+    await vi.waitFor(() => expect(p.querySelector('img.apercu').getAttribute('src')).toBe('https://stockage.test/a.png'));
+    expect(p.querySelector('.zone-visuel p[role="status"]')).toBeNull();
+  });
+  it('redemande le lien une seule fois quand l’aperçu échoue', async () => {
+    let n = 0;
+    const actions = { ...actionsFactices(), urlVisuel: vi.fn(async id => `https://stockage.test/${id}?n=${++n}`) };
+    const p = panneauFiche(fiche({ visuel: 'a.png', visuel_type: 'image' }), fictif, actions, { assets: true });
+    await vi.waitFor(() => expect(p.querySelector('img.apercu').getAttribute('src')).toBe('https://stockage.test/a.png?n=1'));
+    p.querySelector('img.apercu').dispatchEvent(new Event('error'));
+    await vi.waitFor(() => expect(p.querySelector('img.apercu').getAttribute('src')).toBe('https://stockage.test/a.png?n=2'));
+    expect(actions.urlVisuel).toHaveBeenCalledTimes(2);
+    p.querySelector('img.apercu').dispatchEvent(new Event('error'));
+    await vi.waitFor(() => expect(p.querySelector('.zone-visuel p[role="status"]')?.textContent).toBe('Visuel indisponible pour l’instant : réessaie.'));
+    expect(actions.urlVisuel).toHaveBeenCalledTimes(2);
   });
 });

@@ -234,17 +234,26 @@ export function panneauFiche(fiche, profil, actions, capacites, releves = []) {
   const sectionVisuel = () => {
     if (!capacites.assets) return h('p', { class: 'aide' }, 'Le téléversement de visuels n’est pas disponible dans cette vue.');
     let apercu = null;
-    let avis = null;
     if (brouillon.visuel) {
       apercu = brouillon.visuel_type === 'video'
         ? h('video', { class: 'apercu', controls: true })
         : h('img', { class: 'apercu', alt: 'Visuel de la fiche' });
       if (typeof actions.urlVisuel === 'function') {
-        avis = h('p', { class: 'aide', role: 'status' });
-        actions.urlVisuel(brouillon.visuel).then(
-          url => { apercu.setAttribute('src', url); },
-          () => { avis.textContent = 'Visuel introuvable.'; },
-        );
+        let avis = null;
+        let redemande = false;
+        const echec = e => {
+          if (avis) return;
+          avis = h('p', { class: 'aide', role: 'status' }, e?.code === 'not_found' ? 'Visuel introuvable.' : 'Visuel indisponible pour l’instant : réessaie.');
+          apercu.after(avis);
+        };
+        const charger = () => actions.urlVisuel(brouillon.visuel).then(url => { apercu.setAttribute('src', url); }, echec);
+        // Le lien signé dure une heure : une seule nouvelle demande si l'aperçu échoue.
+        apercu.addEventListener('error', () => {
+          if (redemande) { echec(null); return; }
+          redemande = true;
+          charger();
+        });
+        charger();
       } else {
         apercu.setAttribute('src', `/_blob/${brouillon.visuel}`);
       }
@@ -255,7 +264,6 @@ export function panneauFiche(fiche, profil, actions, capacites, releves = []) {
       ondrop: e => { e.preventDefault(); e.stopPropagation(); envoyer(e.dataTransfer?.files?.[0]); },
     },
     apercu,
-    avis,
     h('label', { class: 'bouton-secondaire' },
       brouillon.visuel ? 'Remplacer le visuel' : 'Glisse un visuel ici ou choisis un fichier',
       h('input', { type: 'file', accept: 'image/*,video/*', onchange: e => envoyer(e.target.files?.[0]) })));

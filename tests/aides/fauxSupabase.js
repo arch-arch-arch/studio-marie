@@ -96,9 +96,12 @@ export function creerFauxSupabase({ utilisateur = { id: 'u1', email: 'a@exemple.
     rpc: async (nom, args) => { if (panne) return reponsePanne(); appelsRpc.push({ nom, args }); return { data: null, error: null }; },
     storage: {
       from: espace => ({
-        upload: async (chemin, fichier) => {
+        upload: async (chemin, fichier, options = {}) => {
           if (panne) return echecStockage();
-          fichiers.set(`${espace}/${chemin}`, fichier);
+          // Le service refuse un doublon sans upsert : HTTP 400, statusCode '409' dans le corps (storage-js ne le définit pas, il relaie le corps).
+          if (fichiers.has(`${espace}/${chemin}`) && !options.upsert) return { data: null, error: erreurStockage('The resource already exists', 400, '409') };
+          // Le type stocké vient de l'option contentType (le service ne devine rien).
+          fichiers.set(`${espace}/${chemin}`, new Blob([fichier], { type: options.contentType ?? '' }));
           return { data: { path: chemin }, error: null };
         },
         createSignedUrl: async chemin => (panne ? echecStockage() : fichiers.has(`${espace}/${chemin}`)

@@ -107,6 +107,14 @@ describe('creerControleur', () => {
     expect(avec.etat.lire().fiches[0]).toMatchObject({ visuel: 'asset1', visuel_type: 'video' });
   });
 
+  it('invite à se reconnecter quand la session a expiré', async () => {
+    const assets = { upload: vi.fn(async () => { throw Object.assign(new Error('x'), { code: 'revoked' }); }) };
+    const avec = monter({ assets });
+    await avec.actions.creerFiche({ format: 'reel', date_heure: '2026-09-28T10:00:00.000Z' });
+    expect(await avec.actions.televerserVisuel('f1', { type: 'image/png' }))
+      .toEqual({ ok: false, raison: 'Ta session a expiré : reconnecte-toi puis réessaie.' });
+  });
+
   it('signale qu’une fiche supprimée entre-temps ne peut plus recevoir de visuel', async () => {
     const assets = { upload: vi.fn(async () => ({ id: 'asset1', url: '/_blob/asset1' })) };
     const avec = monter({ assets });
