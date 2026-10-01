@@ -19,6 +19,15 @@ export function creerFauxSupabase({ utilisateur = { id: 'u1', email: 'a@exemple.
   const introuvable = () => ({ data: null, error: erreurStockage('Object not found', 400, '404') });
   // Forme réelle de AuthApiError (auth-js, lib/errors.js l. 41-48) : message, name, status numérique, code en chaîne.
   const erreurAuth = (message, status, code) => Object.assign(new Error(message), { __isAuthError: true, name: 'AuthApiError', status, code });
+  // Forme réelle de AuthRetryableFetchError (auth-js, errors.js l. 217-221 ; fetch.js l. 22-44) : sans code, statut 0 pour une panne réseau,
+  // pour les statuts 500-504 et 520-530.
+  const STATUTS_RETENTABLES = [500, 501, 502, 503, 504, 520, 521, 522, 523, 524, 525, 526, 527, 528, 529, 530];
+  const erreurPanneAuth = () => {
+    if (panne.status == null || STATUTS_RETENTABLES.includes(panne.status)) {
+      return Object.assign(new Error(panne.message), { __isAuthError: true, name: 'AuthRetryableFetchError', status: panne.status ?? 0, code: undefined });
+    }
+    return erreurAuth(panne.message, panne.status, panne.code);
+  };
   const compteurs = { lectures: 0, enCours: 0, simultaneesMax: 0 };
   const emettre = (eventType, ancien, nouveau) => { for (const e of [...ecoutes]) e({ eventType, old: ancien ?? {}, new: nouveau ?? {} }); };
   const valeur = (l, col) => (col.startsWith('data->>') ? l.data?.[col.slice(7)] : l[col]);
@@ -123,19 +132,20 @@ export function creerFauxSupabase({ utilisateur = { id: 'u1', email: 'a@exemple.
         ? { data: { user: session.user }, error: null }
         : { data: { user: null }, error: { message: 'invalid JWT', status: 401 } }),
       signInWithOtp: async ({ email }) => (panne
-        ? { data: { user: null, session: null }, error: erreurAuth(panne.message, panne.status ?? 500, panne.code) }
+        ? { data: { user: null, session: null }, error: erreurPanneAuth() }
         : invites && !invites.includes(email)
           ? { data: { user: null, session: null }, error: erreurAuth('Signups not allowed for otp', 422, 'otp_disabled') }
           : { data: { user: null, session: null }, error: null }),
       signInWithPassword: async ({ email, password }) => {
-        if (panne) return { data: { user: null, session: null }, error: erreurAuth(panne.message, panne.status ?? 500, panne.code) };
+        if (panne) return { data: { user: null, session: null }, error: erreurPanneAuth() };
         if (!password || motsDePasse[email] !== password) return { data: { user: null, session: null }, error: erreurAuth('Invalid login credentials', 400, 'invalid_credentials') };
         session = { access_token: 'jeton-test', user: { id: 'u1', email } };
         for (const e of [...ecoutesAuth]) e('SIGNED_IN', session);
         return { data: { user: session.user, session }, error: null };
       },
       signOut: async () => { session = null; for (const e of [...ecoutesAuth]) e('SIGNED_OUT', null); return { error: null }; },
-      onAuthStateChange: fn => { ecoutesAuth.add(fn); return { data: { subscription: { unsubscribe: () => ecoutesAuth.delete(fn) } } }; },
+      // Comme GoTrueClient.js (l. 3645-3656) : INITIAL_SESSION arrive de façon asynchrone après l'abonnement.
+      onAuthStateChange: fn => { ecoutesAuth.add(fn); Promise.resolve().then(() => { if (ecoutesAuth.has(fn)) fn('INITIAL_SESSION', session); }); return { data: { subscription: { unsubscribe: () => ecoutesAuth.delete(fn) } } }; },
     },
     _lignes: lignes,
     _fichiers: fichiers,

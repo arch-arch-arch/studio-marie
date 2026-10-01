@@ -346,7 +346,14 @@ export function creerControleur({ etat, depot, enregistreur, assets, horloge, id
     modifierFiche,
     evaluerFiche,
     evaluationDisponible: () => !evaluationIndisponible,
-    seDeconnecter: async () => { await enregistreur.viderTout(); await connexion?.deconnecter(); },
+    seDeconnecter: async () => {
+      await enregistreur.viderTout();
+      if (enregistreur.enEchec().length > 0) {
+        etat.modifier({ erreur: 'Des modifications ne sont pas encore enregistrées : attends le retour de la connexion avant de te déconnecter.' });
+        return;
+      }
+      await connexion?.deconnecter();
+    },
     reverifierFiches,
     importerReference,
     verifierReference,

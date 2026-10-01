@@ -72,3 +72,36 @@ describe('vueConnexion : mot de passe', () => {
     expect(v.textContent).not.toContain('null');
   });
 });
+
+describe('vueConnexion : avis, exceptions et Entrée', () => {
+  it('affiche l’avis fourni dans l’état du formulaire du lien', () => {
+    const v = vueConnexion({ demanderLien: vi.fn() }, { avis: 'Ce lien n’est plus valable : demande-en un nouveau.' });
+    expect(v.querySelector('form [role="status"]').textContent).toBe('Ce lien n’est plus valable : demande-en un nouveau.');
+    expect(vueConnexion({ demanderLien: vi.fn() }).textContent).not.toContain('null');
+  });
+  it('réactive le bouton du lien si l’appel lève une exception', async () => {
+    const v = vueConnexion({ demanderLien: vi.fn(async () => { throw new Error('réseau'); }) });
+    v.querySelector('input[type="email"]').value = 'a@exemple.test';
+    v.querySelector('form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    await vi.waitFor(() => expect(v.querySelector('form [role="status"]').textContent).toBe('Le lien n’a pas pu être envoyé : réessaie dans un instant.'));
+    expect(v.querySelector('button[type="submit"]').disabled).toBe(false);
+  });
+  it('réactive le bouton du mot de passe si l’appel lève une exception', async () => {
+    const v = vueConnexion({ demanderLien: vi.fn(), connecterParMotDePasse: vi.fn(async () => { throw new Error('réseau'); }) });
+    v.querySelector('input[type="email"]').value = 'a@exemple.test';
+    v.querySelector('input[type="password"]').value = 'motdepasse-test';
+    v.querySelector('details form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    await vi.waitFor(() => expect(v.querySelector('details [role="status"]').textContent).toBe('La connexion a échoué : réessaie dans un instant.'));
+    expect(v.querySelector('details button[type="submit"]').disabled).toBe(false);
+  });
+  it('lance la connexion par mot de passe, pas le lien, quand le mot de passe est rempli', async () => {
+    const connexion = { demanderLien: vi.fn(), connecterParMotDePasse: vi.fn(async () => ({ ok: true })) };
+    const v = vueConnexion(connexion);
+    v.querySelector('input[type="password"]').value = 'motdepasse-test';
+    envoyer(v, 'a@exemple.test');
+    await vi.waitFor(() => expect(connexion.connecterParMotDePasse).toHaveBeenCalledWith('a@exemple.test', 'motdepasse-test'));
+    expect(connexion.demanderLien).not.toHaveBeenCalled();
+    expect(v.querySelector('details').open).toBe(true);
+    await vi.waitFor(() => expect(v.querySelector('details [role="status"]').textContent).toBe('Connexion réussie.'));
+  });
+});

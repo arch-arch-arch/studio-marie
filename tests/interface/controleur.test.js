@@ -410,3 +410,31 @@ describe('urlVisuel', () => {
     expect(await sans.actions.urlVisuel('a1')).toBe('/_blob/a1');
   });
 });
+
+describe('seDeconnecter', () => {
+  const monterConnexion = (enregistrer = async () => {}) => {
+    const etat = creerEtat({ profil: { ...fictif, version: 1 }, fiches: [], vue: 'profil', ancre: T, ficheOuverte: null, erreur: null, sauvegarde: 'ok' });
+    const enregistreur = creerEnregistreur(enregistrer, 600);
+    const ordre = [];
+    const viderTout = enregistreur.viderTout;
+    enregistreur.viderTout = async () => { ordre.push('vidage'); await viderTout(); };
+    const connexion = { deconnecter: vi.fn(async () => { ordre.push('deconnexion'); }) };
+    const actions = creerControleur({ etat, depot: {}, enregistreur, assets: null, horloge: () => T, connexion });
+    return { etat, enregistreur, connexion, actions, ordre };
+  };
+
+  it('vide les écritures en attente puis déconnecte', async () => {
+    const { actions, connexion, ordre, enregistreur } = monterConnexion();
+    enregistreur.planifier({ id: 'f1', accroche: 'a' });
+    await actions.seDeconnecter();
+    expect(ordre).toEqual(['vidage', 'deconnexion']);
+    expect(connexion.deconnecter).toHaveBeenCalledTimes(1);
+  });
+  it('ne déconnecte pas quand une écriture est en échec', async () => {
+    const { actions, connexion, etat, enregistreur } = monterConnexion(async () => { throw { code: 'unavailable' }; });
+    enregistreur.planifier({ id: 'f1', accroche: 'a' });
+    await actions.seDeconnecter();
+    expect(connexion.deconnecter).not.toHaveBeenCalled();
+    expect(etat.lire().erreur).toBe('Des modifications ne sont pas encore enregistrées : attends le retour de la connexion avant de te déconnecter.');
+  });
+});

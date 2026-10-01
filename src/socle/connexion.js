@@ -4,7 +4,8 @@ const limiteDeDebit = e => e?.status === 429 || e?.code === 'over_request_rate_l
 // Forme réelle (auth-js) : AuthApiError { status numérique, code en chaîne, message }.
 // Une adresse inconnue avec shouldCreateUser: false donne otp_disabled (ou signup_disabled), HTTP 422.
 const adresseRefusee = e => e?.code === 'otp_disabled' || e?.code === 'signup_disabled' || e?.status === 422 || /signups? not allowed/i.test(e?.message ?? '');
-const identifiantsRefuses = e => e?.code === 'invalid_credentials' || e?.status === 400;
+// Identifiants refusés : code invalid_credentials, ou message hérité (invalid_grant, Invalid login credentials). Un autre 400 (email_not_confirmed) n'en fait pas partie.
+const identifiantsRefuses = e => e?.code === 'invalid_credentials' || /invalid_grant|invalid login credentials/i.test(e?.message ?? '');
 
 export function creerConnexion(client, { origine }) {
   const session = async () => (await client.auth.getSession()).data.session ?? null;
@@ -32,8 +33,30 @@ export function creerConnexion(client, { origine }) {
     },
     deconnecter: async () => { await client.auth.signOut(); },
     surChangement(fn) {
-      const { data } = client.auth.onAuthStateChange((_evenement, s) => fn(s ?? null));
+      const { data } = client.auth.onAuthStateChange((evenement, s) => { if (evenement !== 'INITIAL_SESSION') fn(s ?? null); });
       return () => data.subscription.unsubscribe();
     },
   };
+}
+
+// Recharge la page (une fois par changement) quand l'état connecté ou déconnecté change réellement.
+// Un rafraîchissement de jeton (session non nulle vers non nulle) ne change rien.
+export async function suivreSession(connexion, recharger) {
+  let connecte = null;
+  connexion.surChangement(session => {
+    const maintenant = !!session;
+    if (connecte !== null && connecte !== maintenant) recharger();
+    connecte = maintenant;
+  });
+  connecte = !!(await connexion.session());
+  return connecte;
+}
+
+// Supabase renvoie l'erreur dans le fragment (ou la requête) d'un lien invalide ou expiré.
+export function lienInvalide(emplacement) {
+  if (!emplacement) return false;
+  return [emplacement.hash, emplacement.search].some(brut => {
+    const params = new URLSearchParams(String(brut ?? '').replace(/^[#?]/, ''));
+    return params.has('error') || params.has('error_code');
+  });
 }

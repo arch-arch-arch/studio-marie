@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { creerFauxSupabase } from '../aides/fauxSupabase.js';
-import { creerConnexion } from '../../src/socle/connexion.js';
+import { creerConnexion, suivreSession, lienInvalide } from '../../src/socle/connexion.js';
 
 const ORIGINE = { origine: 'https://studio.test' };
 
@@ -30,7 +30,9 @@ describe('creerConnexion', () => {
     const c = creerConnexion(client, ORIGINE);
     client._panne({ message: 'Email rate limit exceeded', status: 429, code: 'over_email_send_rate_limit' });
     expect(await c.demanderLien('a@exemple.test')).toEqual({ ok: false, raison: 'Trop de demandes : réessaie dans une minute.' });
-    client._panne({ message: 'Error sending magic link email', status: 500, code: 'unexpected_failure' });
+    client._panne({ message: 'Error sending magic link email', status: 503 });
+    expect(await c.demanderLien('a@exemple.test')).toEqual({ ok: false, raison: 'Le lien n’a pas pu être envoyé : réessaie dans un instant.' });
+    client._panne({ message: 'Failed to fetch' });
     expect(await c.demanderLien('a@exemple.test')).toEqual({ ok: false, raison: 'Le lien n’a pas pu être envoyé : réessaie dans un instant.' });
     client._panne({ message: 'Email address not authorized', status: 400, code: 'email_address_not_authorized' });
     expect(await c.demanderLien('a@exemple.test')).toEqual({ ok: false, raison: 'Le lien n’a pas pu être envoyé : réessaie dans un instant.' });
@@ -82,7 +84,74 @@ describe('creerConnexion : mot de passe', () => {
     const c = creerConnexion(client, ORIGINE);
     client._panne({ message: 'Request rate limit reached', status: 429, code: 'over_request_rate_limit' });
     expect(await c.connecterParMotDePasse('a@exemple.test', 'motdepasse-test')).toEqual({ ok: false, raison: 'Trop de tentatives : réessaie dans une minute.' });
-    client._panne({ message: 'Database error', status: 500, code: 'unexpected_failure' });
+    client._panne({ message: 'Database error', status: 500 });
     expect(await c.connecterParMotDePasse('a@exemple.test', 'motdepasse-test')).toEqual({ ok: false, raison: 'La connexion a échoué : réessaie dans un instant.' });
+    client._panne({ message: 'Failed to fetch' });
+    expect(await c.connecterParMotDePasse('a@exemple.test', 'motdepasse-test')).toEqual({ ok: false, raison: 'La connexion a échoué : réessaie dans un instant.' });
+  });
+  it('ne prend pas tout 400 pour un mauvais mot de passe', async () => {
+    const client = sansSession();
+    const c = creerConnexion(client, ORIGINE);
+    client._panne({ message: 'Email not confirmed', status: 400, code: 'email_not_confirmed' });
+    expect(await c.connecterParMotDePasse('a@exemple.test', 'motdepasse-test')).toEqual({ ok: false, raison: 'La connexion a échoué : réessaie dans un instant.' });
+    for (const message of ['Invalid login credentials', 'invalid_grant']) {
+      client._panne({ message, status: 400 });
+      expect(await c.connecterParMotDePasse('a@exemple.test', 'motdepasse-test')).toEqual({ ok: false, raison: 'Adresse ou mot de passe incorrect.' });
+    }
+  });
+  it('le faux client renvoie la forme réelle d’une panne réseau', async () => {
+    const client = sansSession();
+    client._panne({ message: 'Failed to fetch' });
+    const { error } = await client.auth.signInWithPassword({ email: 'a@exemple.test', password: 'motdepasse-test' });
+    expect(error).toMatchObject({ name: 'AuthRetryableFetchError', status: 0, __isAuthError: true });
+    expect(error.code).toBeUndefined();
+  });
+});
+
+describe('suivreSession', () => {
+  const vider = () => new Promise(r => setTimeout(r, 0));
+  const monter = async utilisateur => {
+    const client = creerFauxSupabase({ utilisateur, motsDePasse: { 'a@exemple.test': 'motdepasse-test' } });
+    const connexion = creerConnexion(client, ORIGINE);
+    const recharger = vi.fn();
+    await suivreSession(connexion, recharger);
+    await vider();
+    return { client, connexion, recharger };
+  };
+
+  it('ne recharge pas à l’abonnement', async () => {
+    expect((await monter(null)).recharger).not.toHaveBeenCalled();
+    expect((await monter({ id: 'u1', email: 'a@exemple.test' })).recharger).not.toHaveBeenCalled();
+  });
+  it('ne recharge pas sur un rafraîchissement de jeton', async () => {
+    const { client, recharger } = await monter({ id: 'u1', email: 'a@exemple.test' });
+    client._session({ access_token: 'nouveau-jeton', user: { id: 'u1', email: 'a@exemple.test' } });
+    await vider();
+    expect(recharger).not.toHaveBeenCalled();
+  });
+  it('recharge une seule fois à la déconnexion', async () => {
+    const { connexion, recharger } = await monter({ id: 'u1', email: 'a@exemple.test' });
+    await connexion.deconnecter();
+    await vider();
+    expect(recharger).toHaveBeenCalledTimes(1);
+  });
+  it('recharge une seule fois à la connexion par mot de passe', async () => {
+    const { connexion, recharger } = await monter(null);
+    expect(await connexion.connecterParMotDePasse('a@exemple.test', 'motdepasse-test')).toEqual({ ok: true });
+    await vider();
+    expect(recharger).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('lienInvalide', () => {
+  it('détecte l’erreur d’authentification dans le fragment ou la requête', () => {
+    expect(lienInvalide({ search: '', hash: '#error=access_denied&error_code=otp_expired&error_description=Email+link+is+invalid' })).toBe(true);
+    expect(lienInvalide({ search: '?error_code=otp_expired', hash: '' })).toBe(true);
+    expect(lienInvalide({ search: '?error=access_denied', hash: '' })).toBe(true);
+  });
+  it('ignore une adresse sans erreur', () => {
+    expect(lienInvalide({ search: '', hash: '' })).toBe(false);
+    expect(lienInvalide({ search: '?vue=semaine', hash: '#access_token=abc&type=magiclink' })).toBe(false);
+    expect(lienInvalide(null)).toBe(false);
   });
 });
