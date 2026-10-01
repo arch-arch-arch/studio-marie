@@ -12,6 +12,12 @@ describe('schéma Supabase', () => {
       'alter table public.documents enable row level security', 'to authenticated', 'alter publication supabase_realtime add table public.documents',
     ]) expect(sql).toContain(attendu);
     expect(sql).not.toMatch(/to anon\b/);
+    for (const ligne of [
+      'revoke all on table public.documents from anon, authenticated, public;',
+      'grant select, insert, update, delete on table public.documents to authenticated;',
+      'grant all on table public.documents to service_role;',
+      'Peut être réexécuté sans risque.',
+    ]) expect(sql).toContain(ligne);
   });
   it('crée le stockage privé des visuels', () => {
     expect(sql).toContain("'visuels'");

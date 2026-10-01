@@ -15,7 +15,7 @@ drop policy if exists "documents : membres connectés" on public.documents;
 create policy "documents : membres connectés" on public.documents
   for all to authenticated using (true) with check (true);
 
-revoke all on table public.documents from anon, public;
+revoke all on table public.documents from anon, authenticated, public;
 grant select, insert, update, delete on table public.documents to authenticated;
 grant all on table public.documents to service_role;
 
