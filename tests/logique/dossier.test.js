@@ -87,7 +87,7 @@ describe('enListes', () => {
     const lignes = enListes({ a_b: 'x', n: null, v: true, f: false, nb: 3, liste: ['un', { k: 'v', vide: null }], sous: { z: [1, 2], o: { p: 'q' } } });
     const texte = lignes.join('\n');
     expect(texte).not.toContain('{"');
-    expect(texte).not.toMatch(/null|true|false|undefined|\[object/);
+    expect(texte).not.toMatch(/\bnull\b|\btrue\b|\bfalse\b|\bundefined\b|\[object/);
     expect(texte).toContain('- a b : x');
     expect(texte).toContain('- n : non renseigné');
     expect(texte).toContain('- v : oui');
@@ -121,7 +121,7 @@ describe('contenuDossier', () => {
     expect(c.sectionsProfil).toContain('regles_studio');
     expect(c.strategie.every(s => typeof s.titre === 'string' && s.lignes.every(l => typeof l === 'string'))).toBe(true);
     expect(texteStrategie).not.toContain('{"');
-    expect(texteStrategie).not.toMatch(/null|undefined|\[object/);
+    expect(texteStrategie).not.toMatch(/\bnull\b|\bundefined\b|\[object/);
   });
   it('donne les règles de la période', () => {
     expect(c.regles.join('\n')).toContain('Reels');
@@ -154,5 +154,103 @@ describe('contenuDossier', () => {
   });
   it('fixe le message à coller', () => {
     expect(MESSAGE_A_COLLER).toBe('Voici le dossier d’analyse de mes contenus. Lis-le en entier, regarde chaque visuel, puis réponds en suivant exactement la consigne qui se trouve à la fin du dossier.');
+  });
+});
+
+describe('correction 1 : règles de la période lisibles', () => {
+  const periode = periodeAffichee('semaine', '2026-10-07T10:00:00.000Z', FZ);
+  const f1 = fiche('a', '2026-10-05T10:00:00.000Z');
+  const c = contenuDossier({ profil, entrees: [{ ref: 'F01', fiche: f1, etat: etatVisuel(f1, null) }], periode, code: 'D-abc123', toutesLesFiches: [f1] });
+  it('utilise des libellés propres au dossier et une légende', () => {
+    expect(c.regles[0]).toBe('Pour chaque semaine : compté/objectif, puis l’état par rapport à l’objectif de la semaine (vert, orange ou rouge). Ces états concernent la cadence, pas la conformité d’un contenu.'.replace(/’/g, "'"));
+    const texte = c.regles.join('\n');
+    expect(texte).toContain("- Appels vers l'offre : ");
+    expect(texte).toContain('- Rôles des captions (engagement/cta/deadpan) : ');
+    expect(texte).toContain('- Reels : ');
+    expect(JSON.stringify(c)).not.toContain("Appels à l'action");
+  });
+});
+
+describe('correction 1 : enListes et indentation', () => {
+  it('aligne les clés d’un objet de liste, gère les vides et les textes multi-lignes', () => {
+    const v = { liste: [{ a: 1, b: 2 }, ['x', 'y']], vide: [], o: {}, s: '', m: 'l1\nl2' };
+    expect(enListes(v)).toEqual([
+      '- liste :', '  - a : 1', '    b : 2', '  - liste :', '    - x', '    - y',
+      '- vide : aucun', '- o : aucun', '- s : non renseigné', '- m : l1', '    l2',
+    ]);
+  });
+  it('indente sous la clé les listes d’un objet de liste', () => {
+    expect(enListes({ l: [{ k: ['p'], z: 1 }] })).toEqual(['- l :', '  - k :', '      - p', '    z : 1']);
+  });
+  it('gère les éléments vides ou multi-lignes dans une liste', () => {
+    expect(enListes(['', [], {}, 'u\nv'])).toEqual(['- non renseigné', '- aucun', '- aucun', '- u', '    v']);
+  });
+});
+
+describe('correction 1 : versLatin1 étendu', () => {
+  it('normalise en NFC et traduit les signes courants', () => {
+    expect(versLatin1('e\u0301te\u0301')).toBe('été');
+    expect(versLatin1('a\u2011b\u2212c')).toBe('a-b-c');
+    expect(versLatin1('a\u200Bb')).toBe('ab');
+    expect(versLatin1('\u201Ex\u201C \u2039y\u203A')).toBe('"x" <y>');
+    expect(versLatin1('Marque\u2122 \uFB01n \uFB02ot')).toBe('Marque(TM) fin flot');
+    expect(versLatin1('a\r\nb\rc')).toBe('a\nb\nc');
+  });
+});
+
+describe('correction 1 : libellé de semaine', () => {
+  it('nomme les deux mois ou les deux années quand la semaine est à cheval', () => {
+    expect(periodeAffichee('semaine', '2026-09-30T10:00:00.000Z', FZ).libelle).toBe('semaine du 28 septembre au 4 octobre 2026');
+    expect(periodeAffichee('semaine', '2026-12-30T10:00:00.000Z', FZ).libelle).toBe('semaine du 28 décembre 2026 au 3 janvier 2027');
+    expect(periodeAffichee('semaine', '2026-10-07T10:00:00.000Z', FZ).libelle).toBe('semaine du 5 au 11 octobre 2026');
+  });
+});
+
+describe('correction 1 : consigne', () => {
+  const periode = periodeAffichee('semaine', '2026-10-07T10:00:00.000Z', FZ);
+  const f1 = fiche('a', '2026-10-05T10:00:00.000Z');
+  const seul = contenuDossier({ profil, entrees: [{ ref: 'F01', fiche: f1, etat: etatVisuel(f1, null) }], periode, code: 'D-abc123', toutesLesFiches: [f1] });
+  const texte = seul.consigne.join('\n');
+  it('ne promet le bandeau que pour les visuels joints', () => {
+    expect(texte).not.toContain('écrite en gros sur le bandeau noir de son visuel.');
+    expect(texte).toContain('indiquée dans son bloc');
+    expect(texte).toContain('quand un visuel est joint');
+    expect(seul.intro).toContain('dans son bloc');
+    expect(seul.intro).toContain('quand un visuel est joint');
+  });
+  it('précise le critère voix, les émojis et les références', () => {
+    expect(texte).toContain('esthétique si le visuel est joint');
+    expect(texte).toContain("Quand le visuel n'est pas joint, juge le texte seul et dis-le dans la phrase du critère.");
+    expect(texte).toContain('Dans tes captions et tes accroches, écris de vrais émojis si tu en utilises, jamais leur code entre crochets.');
+    expect(texte).toContain('(F01) ;');
+    expect(texte).not.toContain('F01 à F01');
+    expect(texte).toContain('parmi engagement, cta, deadpan');
+  });
+});
+
+describe('correction 1 : bloc de fiche', () => {
+  const periode = periodeAffichee('semaine', '2026-10-07T10:00:00.000Z', FZ);
+  const longue = fiche('a', '2026-10-05T10:00:00.000Z', {
+    accroche: 'A'.repeat(400), caption: 'première ligne\nseconde ligne\r\ntroisième', geotag: 'G'.repeat(300), hashtags: Array.from({ length: 40 }, (_, i) => `t${i}`),
+  });
+  const grande = fiche('b', '2026-10-05T10:00:00.000Z', { caption: 'C'.repeat(3000) });
+  const c = contenuDossier({
+    profil, periode, code: 'D-abc123', toutesLesFiches: [longue, grande],
+    entrees: [{ ref: 'F01', fiche: longue, etat: etatVisuel(longue, null) }, { ref: 'F02', fiche: grande, etat: etatVisuel(grande, null) }],
+  });
+  const lignes = c.fiches[0].lignes;
+  it('ne met aucun saut de ligne dans un élément et garde les lignes de caption', () => {
+    expect(lignes.every(l => !l.includes('\n'))).toBe(true);
+    expect(lignes.at(-1)).toBe('</fiche>');
+    const i = lignes.indexOf('caption : première ligne');
+    expect(i).toBeGreaterThan(-1);
+    expect(lignes.slice(i + 1, i + 3)).toEqual(['seconde ligne', 'troisième']);
+    expect(lignes[i + 3]).toMatch(/^hashtags : /);
+  });
+  it('applique les mêmes limites que le prompt existant', () => {
+    expect(lignes).toContain(`accroche : ${'A'.repeat(300)}`);
+    expect(lignes).toContain(`géotag : ${'G'.repeat(200)}`);
+    expect(lignes.find(l => l.startsWith('hashtags : ')).split(', ')).toHaveLength(30);
+    expect(c.fiches[1].lignes).toContain(`caption : ${'C'.repeat(2200)}`);
   });
 });

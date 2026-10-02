@@ -7,6 +7,8 @@ import { extraireProfilDetaille } from '../claude/evaluation.js';
 export const FICHES_MAX = 30;
 export const MESSAGE_A_COLLER = 'Voici le dossier d’analyse de mes contenus. Lis-le en entier, regarde chaque visuel, puis réponds en suivant exactement la consigne qui se trouve à la fin du dossier.';
 const ROLES = ['engagement', 'cta', 'deadpan'];
+const LIBELLES_REGLES = { cta: "Appels vers l'offre", roles: `Rôles des captions (${ROLES.join('/')})` };
+const LEGENDE_REGLES = 'Pour chaque semaine : compté/objectif, puis l’état par rapport à l’objectif de la semaine (vert, orange ou rouge). Ces états concernent la cadence, pas la conformité d’un contenu.';
 const ALPHABET = 'abcdefghjkmnpqrstuvwxyz23456789';
 const JOURS_COURTS = ['lun.', 'mar.', 'mer.', 'jeu.', 'ven.', 'sam.', 'dim.'];
 const deux = n => String(n).padStart(2, '0');
@@ -20,9 +22,13 @@ export function periodeAffichee(vue, ancre, fuseau) {
   }
   const debut = debutSemaine(ancre, fuseau);
   const dernier = ajouterJours(debut, 6, fuseau);
+  const a = partiesLocales(debut, fuseau);
+  const b = partiesLocales(dernier, fuseau);
+  const options = a.annee !== b.annee ? { day: 'numeric', month: 'long', year: 'numeric' }
+    : a.mois !== b.mois ? { day: 'numeric', month: 'long' } : { day: 'numeric' };
   return {
     type: 'semaine', cle: cleSemaineIso(debut, fuseau), debut, fin: ajouterJours(debut, 7, fuseau),
-    libelle: `semaine du ${date(debut, fuseau, { day: 'numeric' })} au ${date(dernier, fuseau, { day: 'numeric', month: 'long', year: 'numeric' })}`,
+    libelle: `semaine du ${date(debut, fuseau, options)} au ${date(dernier, fuseau, { day: 'numeric', month: 'long', year: 'numeric' })}`,
   };
 }
 
@@ -58,9 +64,13 @@ export function etatVisuel(fiche, carte) {
 
 const TYPO = { '’': "'", '‘': "'", '“': '"', '”': '"', '…': '...', '–': '-', '—': '-', 'œ': 'oe', 'Œ': 'OE', '€': 'EUR', ' ': ' ', ' ': ' ', ' ': ' ', '•': '-' };
 
+Object.assign(TYPO, {
+  '‑': '-', '−': '-', '​': '', '„': '"', '‹': '<', '›': '>', '™': '(TM)', 'ﬁ': 'fi', 'ﬂ': 'fl',
+});
+
 export function versLatin1(texte) {
   let sortie = '';
-  for (const c of String(texte ?? '')) {
+  for (const c of String(texte ?? '').normalize('NFC').replace(/\r\n?/g, '\n')) {
     const code = c.codePointAt(0);
     if (TYPO[c] !== undefined) sortie += TYPO[c];
     else if (code === 0xFE0F || code === 0x200D) continue;
@@ -83,19 +93,36 @@ function scalaire(x) {
   return String(x);
 }
 
+const estVide = x => (Array.isArray(x) ? x.length === 0 : Object.keys(x).length === 0);
+
+// Un texte (éventuellement sur plusieurs lignes) après un préfixe ; les lignes suivantes sont en retrait.
+function ligneTexte(prefixe, etiquetteCle, x) {
+  const texte = typeof x === 'string' ? (x.trim() === '' ? 'non renseigné' : x) : scalaire(x);
+  const [premiere, ...suite] = texte.split(/\r?\n/);
+  return [`${prefixe}${etiquetteCle}${premiere}`, ...suite.map(l => `${' '.repeat(prefixe.length + 2)}${l}`)];
+}
+
+function entree(cle, x, prefixe, niveauEnfant) {
+  const nom = titreSection(cle);
+  if (!estObjet(x)) return ligneTexte(prefixe, `${nom} : `, x);
+  if (estVide(x)) return [`${prefixe}${nom} : aucun`];
+  return [`${prefixe}${nom} :`, ...enListes(x, niveauEnfant)];
+}
+
 export function enListes(valeur, niveau = 0) {
   const retrait = '  '.repeat(niveau);
   if (Array.isArray(valeur)) {
-    return valeur.flatMap(x => (estObjet(x)
-      ? enListes(x, niveau + 1).map((l, i) => (i === 0 ? `${retrait}- ${l.trimStart().replace(/^- /, '')}` : l))
-      : [`${retrait}- ${scalaire(x)}`]));
+    return valeur.flatMap(x => {
+      if (!estObjet(x)) return ligneTexte(`${retrait}- `, '', x);
+      if (estVide(x)) return [`${retrait}- aucun`];
+      if (Array.isArray(x)) return [`${retrait}- liste :`, ...enListes(x, niveau + 1)];
+      return Object.entries(x).flatMap(([k, v], i) => entree(k, v, i === 0 ? `${retrait}- ` : `${retrait}  `, niveau + 2));
+    });
   }
   if (estObjet(valeur)) {
-    return Object.entries(valeur).flatMap(([k, x]) => (estObjet(x)
-      ? [`${retrait}- ${titreSection(k)} :`, ...enListes(x, niveau + 1)]
-      : [`${retrait}- ${titreSection(k)} : ${scalaire(x)}`]));
+    return Object.entries(valeur).flatMap(([k, x]) => entree(k, x, `${retrait}- `, niveau + 1));
   }
-  return [`${retrait}${scalaire(valeur)}`];
+  return ligneTexte(retrait, '', valeur);
 }
 
 function semainesDeLaPeriode(periode, fuseau) {
@@ -118,15 +145,15 @@ function blocFiche({ ref, fiche, etat }, profil) {
     `rôle de caption : ${fiche.role_caption ?? 'non choisi'}`,
     `appel vers l'offre : ${fiche.cta ? 'oui' : 'non'}`,
     `mène à la porte : ${fiche.porte ? 'oui' : 'non'}`,
-    `accroche : ${fiche.accroche ?? ''}`,
-    `caption : ${fiche.caption ?? ''}`,
-    `hashtags : ${liste(fiche.hashtags ?? [], 'aucun').replace(/ ; /g, ', ')}`,
-    `géotag : ${fiche.geotag || 'aucun'}`,
+    `accroche : ${(fiche.accroche ?? '').slice(0, 300)}`,
+    `caption : ${(fiche.caption ?? '').slice(0, 2200)}`,
+    `hashtags : ${liste((fiche.hashtags ?? []).slice(0, 30), 'aucun').replace(/ ; /g, ', ')}`,
+    `géotag : ${(fiche.geotag ?? '').slice(0, 200) || 'aucun'}`,
     `visuel : ${etat.mention}`,
     `alertes calculées : ${liste(v.alertes.map(a => a.texte), 'aucune')}`,
     `blocages calculés : ${liste(v.conformite.causes, 'aucun')}`,
     '</fiche>',
-  ].map(versLatin1);
+  ].flatMap(l => versLatin1(l).split('\n'));
 }
 
 function etiquette(ref, fiche, fz) {
@@ -153,17 +180,19 @@ function consigne(entrees, code) {
   };
   return [
     'Tu es une éditrice exigeante. Analyse ces contenus Instagram au regard de la stratégie donnée plus haut.',
-    'Chaque fiche a une référence, écrite en gros sur le bandeau noir de son visuel. Regarde le visuel et le texte ensemble.',
+    'Chaque fiche a une référence, indiquée dans son bloc, et écrite en gros sur le bandeau noir de son visuel quand un visuel est joint. Regarde le visuel et le texte ensemble.',
     'Tu notes chaque contenu sans le modifier ; tes captions et tes accroches sont des variantes à part, dans la voix du profil. N’invente aucune donnée.',
     '',
     'Ce que tu notes, de 0 à 10, pour chaque fiche :',
     '- accroche : force de l’accroche (lisible en moins d’une seconde, paradoxe ou question), potentiel d’envoi et de sauvegarde, visage face caméra si le visuel est joint ;',
-    '- voix : test de voix et vocabulaire du profil, esthétique du visuel, cohérence avec le pilier ;',
+    '- voix : test de voix et vocabulaire du profil, esthétique si le visuel est joint, cohérence avec le pilier ;',
     '- mecanique : première ligne qui provoque avant « …plus », une seule micro-action, structure attendue pour ce format.',
+    "Quand le visuel n'est pas joint, juge le texte seul et dis-le dans la phrase du critère.",
     'Conformité : "rouge" si la surface n’est pas SFW, si un groupe ou une identité est visé, si l’âge adulte est ambigu ou si un boost payant est suggéré ; "orange" si un risque mérite attention ; sinon "vert". Causes courtes et précises.',
     'Les alertes et blocages calculés par le studio font autorité : tu ne peux pas lever un blocage.',
     "Le champ « appel vers l'offre » ne concerne que le renvoi vers l'offre : une simple question au public n'est pas un appel vers l'offre.",
     'Les caractères que ce document ne sait pas écrire (émojis) sont notés par leur code entre crochets, par exemple [U+1F525].',
+    'Dans tes captions et tes accroches, écris de vrais émojis si tu en utilises, jamais leur code entre crochets.',
     '',
     'Ta réponse a deux parties.',
     `1. D’abord ton analyse en français courant, fiche par fiche, puis sur l’ensemble de la période.${courte}`,
@@ -171,7 +200,7 @@ function consigne(entrees, code) {
     '',
     JSON.stringify(exemple, null, 2),
     '',
-    `Contraintes du bloc : une entrée par fiche, dans l’ordre, avec les références recopiées telles quelles (${refs[0]} à ${refs.at(-1)}) ; une phrase par critère ; exactement 2 captions de rôles différents parmi engagement, cta, deadpan ; 2 ou 3 accroches ; hashtags sans # ; exactement 3 recommandations concrètes, chacune avec un pourquoi court qui cite ce que tu as observé ; "ordre_conseille" ne contient que des références du dossier ; tout en français ; aucun texte après le bloc.`,
+    `Contraintes du bloc : une entrée par fiche, dans l’ordre, avec les références recopiées telles quelles (${refs.length > 1 ? `${refs[0]} à ${refs.at(-1)}` : refs[0]}) ; une phrase par critère ; exactement 2 captions de rôles différents parmi ${ROLES.join(', ')} ; 2 ou 3 accroches ; hashtags sans # ; exactement 3 recommandations concrètes, chacune avec un pourquoi court qui cite ce que tu as observé ; "ordre_conseille" ne contient que des références du dossier ; tout en français ; aucun texte après le bloc.`,
   ].flatMap(l => l.split('\n')).map(versLatin1);
 }
 
@@ -180,13 +209,13 @@ export function contenuDossier({ profil, entrees, periode, code, toutesLesFiches
   const detail = extraireProfilDetaille(profil);
   const extrait = JSON.parse(detail.texte);
   const strategie = detail.sections.map(cle => ({ titre: versLatin1(titreSection(cle)), lignes: enListes(extrait[cle]).map(versLatin1) }));
-  const regles = semainesDeLaPeriode(periode, fz).flatMap(debut => [
+  const regles = [LEGENDE_REGLES, ...semainesDeLaPeriode(periode, fz).flatMap(debut => [
     `Semaine ${cleSemaineIso(debut, fz)} :`,
-    ...controlerSemaine(toutesLesFiches, profil.regles_studio, debut).map(p => `- ${p.libelle} : ${p.valeur} (${p.etat})`),
-  ]).map(versLatin1);
+    ...controlerSemaine(toutesLesFiches, profil.regles_studio, debut).map(p => `- ${LIBELLES_REGLES[p.cle] ?? p.libelle} : ${p.valeur} (${p.etat})`),
+  ])].map(versLatin1);
   return {
     titre: versLatin1(`Dossier d'analyse : ${periode.libelle}`),
-    intro: versLatin1(`Dossier ${code}. Ce document contient la stratégie du compte, les règles de la période, puis une page par contenu avec son visuel. Chaque contenu a une référence (F01, F02…) écrite en gros sur le bandeau noir de son visuel. La consigne et la forme de la réponse sont à la fin.`),
+    intro: versLatin1(`Dossier ${code}. Ce document contient la stratégie du compte, les règles de la période, puis une page par contenu avec son visuel. Chaque contenu a une référence (F01, F02…) écrite dans son bloc, et en gros sur le bandeau noir de son visuel quand un visuel est joint. La consigne et la forme de la réponse sont à la fin.`),
     strategie,
     sectionsProfil: detail.sections,
     regles,
