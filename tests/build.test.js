@@ -30,6 +30,16 @@ describe('construireDossier', () => {
     expect(js).toContain('preparerCartes');
     expect(js).toContain('assemblerPdf');
     expect(js.length).toBeGreaterThan(100000);
+    expect(js.length).toBeLessThan(500 * 1024);
+    expect(js).toMatch(/export\s*\{[^}]*assemblerPdf/);
+    expect(js).toMatch(/export\s*\{[^}]*preparerCartes/);
+  }, 30000);
+  it('n’embarque pas les dépendances optionnelles de jsPDF (html2canvas, canvg, dompurify)', async () => {
+    const js = await construireDossier();
+    for (const lib of ['html2canvas', 'canvg', 'dompurify']) {
+      expect(js).not.toMatch(new RegExp(`import\\(["']${lib}["']\\)`));
+      expect(js).not.toContain(`from"${lib}"`);
+    }
   }, 30000);
   it('laisse la page principale sans la bibliothèque PDF', async () => {
     const html = await construire({ SUPABASE_URL: 'https://projet.test', SUPABASE_ANON_KEY: 'cle-publique' });

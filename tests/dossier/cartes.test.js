@@ -96,6 +96,66 @@ describe('preparerCartes avec des outils injectés', () => {
   });
 });
 
+describe('libération de la mémoire par preparerCartes', () => {
+  const demande2 = (ref, type = null) => ({ ref, etiquette: `${ref} · lun.`, visuel: `v-${ref}`, type });
+  it('libère les sources après un dessin réussi (close pour un bitmap, taille nulle pour un canvas)', async () => {
+    const bitmap = { width: 8, height: 8, close: vi.fn() };
+    const toile = { width: 400, height: 300 };
+    const dessiner = async () => ({ carte: new Blob(['x']), largeur: 1, hauteur: 1 });
+    await preparerCartes([demande2('F01'), demande2('F02', 'video')], async () => new Blob(['x']), {
+      versImage: async () => bitmap, versImagesVideo: async () => [toile], dessiner,
+    });
+    expect(bitmap.close).toHaveBeenCalledTimes(1);
+    expect(toile).toMatchObject({ width: 0, height: 0 });
+  });
+  it('libère les sources même quand le dessin échoue', async () => {
+    const bitmap = { width: 8, height: 8, close: vi.fn() };
+    const toiles = [{ width: 400, height: 300 }, { width: 400, height: 300 }];
+    const dessiner = async () => { throw new Error('toile'); };
+    const cartes = await preparerCartes([demande2('F01'), demande2('F02', 'video')], async () => new Blob(['x']), {
+      versImage: async () => bitmap, versImagesVideo: async () => toiles, dessiner,
+    });
+    expect(cartes.get('F01')).toEqual({ ok: false });
+    expect(cartes.get('F02')).toEqual({ ok: false });
+    expect(bitmap.close).toHaveBeenCalledTimes(1);
+    for (const t of toiles) expect(t).toMatchObject({ width: 0, height: 0 });
+  });
+  it('libère une image qui arrive après le délai de décodage', async () => {
+    const bitmap = { width: 8, height: 8, close: vi.fn() };
+    const dessiner = vi.fn();
+    const cartes = await preparerCartes([demande2('F01')], async () => new Blob(['x']), {
+      versImage: () => new Promise(ok => setTimeout(() => ok(bitmap), 60)), dessiner, delaiImageMs: 10,
+    });
+    expect(cartes.get('F01')).toEqual({ ok: false });
+    expect(dessiner).not.toHaveBeenCalled();
+    await new Promise(ok => setTimeout(ok, 100));
+    expect(bitmap.close).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('délai de décodage d’une photo', () => {
+  it('donne ok:false sans bloquer la suite quand versImage ne rend jamais la main', async () => {
+    const dessiner = async () => ({ carte: new Blob(['x']), largeur: 1, hauteur: 1 });
+    let appels = 0;
+    const versImage = () => (appels++ === 0 ? new Promise(() => {}) : Promise.resolve({ width: 1, height: 1 }));
+    const cartes = await preparerCartes([demande('F01'), demande('F02')], async () => new Blob(['x']), { versImage, dessiner, delaiImageMs: 20 });
+    expect(cartes.get('F01')).toEqual({ ok: false });
+    expect(cartes.get('F02').ok).toBe(true);
+  });
+  it('utilise 8 secondes par défaut', async () => {
+    vi.useFakeTimers();
+    try {
+      const p = preparerCartes([demande('F01')], async () => new Blob(['x']), { versImage: () => new Promise(() => {}), dessiner: vi.fn() });
+      let fini = false;
+      p.then(() => { fini = true; });
+      await vi.advanceTimersByTimeAsync(7999);
+      expect(fini).toBe(false);
+      await vi.advanceTimersByTimeAsync(2);
+      expect((await p).get('F01')).toEqual({ ok: false });
+    } finally { vi.useRealTimers(); }
+  });
+});
+
 describe('imageDepuisBlob', () => {
   const blob = new Blob(['x']);
   const fauxURL = () => ({ createObjectURL: vi.fn(() => 'blob:x'), revokeObjectURL: vi.fn() });
@@ -107,6 +167,21 @@ describe('imageDepuisBlob', () => {
     const createImageBitmap = vi.fn(async () => image);
     expect(await imageDepuisBlob(blob, { createImageBitmap })).toBe(image);
     expect(createImageBitmap).toHaveBeenCalledWith(blob, { imageOrientation: 'from-image' });
+  });
+  it('réduit une grande photo à la taille de sa case et libère l’original', async () => {
+    const original = { width: 4000, height: 3000, close: vi.fn() };
+    const reduite = { width: 1568, height: 1176 };
+    const createImageBitmap = vi.fn(async src => (src === blob ? original : reduite));
+    expect(await imageDepuisBlob(blob, { createImageBitmap })).toBe(reduite);
+    expect(createImageBitmap).toHaveBeenNthCalledWith(1, blob, { imageOrientation: 'from-image' });
+    expect(createImageBitmap).toHaveBeenNthCalledWith(2, original, expect.objectContaining({ resizeWidth: 1568, resizeHeight: 1176 }));
+    expect(original.close).toHaveBeenCalledTimes(1);
+  });
+  it('garde l’original quand la réduction est refusée', async () => {
+    const original = { width: 4000, height: 3000, close: vi.fn() };
+    const createImageBitmap = vi.fn(async src => { if (src === blob) return original; throw new Error('option refusée'); });
+    expect(await imageDepuisBlob(blob, { createImageBitmap })).toBe(original);
+    expect(original.close).not.toHaveBeenCalled();
   });
   it('se replie sur un élément Image sans createImageBitmap, puis révoque l’URL', async () => {
     const URL = fauxURL();
@@ -133,8 +208,9 @@ describe('imagesDepuisVideo', () => {
   function fausseVideo({ frameCallback = true, playRejette = false } = {}) {
     const journal = [];
     const v = {
-      journal, duration: 6, videoWidth: 4, videoHeight: 3, readyState: 0,
-      removeAttribute() {},
+      journal, duration: 6, videoWidth: 1080, videoHeight: 1920, readyState: 0, delaiSeek: 0,
+      removeAttribute(n) { journal.push(`remove ${n}`); },
+      load() { journal.push('load'); },
       play() {
         journal.push('play');
         if (playRejette) return Promise.reject(new Error('refus'));
@@ -143,13 +219,18 @@ describe('imagesDepuisVideo', () => {
       },
       pause() { journal.push('pause'); },
       set src(x) { setTimeout(() => v.onloadedmetadata?.(), 0); },
-      set currentTime(t) { journal.push(`seek ${t}`); setTimeout(() => v.onseeked?.(), 0); },
+      set currentTime(t) { journal.push(`seek ${t}`); setTimeout(() => v.onseeked?.(), v.delaiSeek); },
     };
     if (frameCallback) v.requestVideoFrameCallback = f => { v._frame = f; };
     return v;
   }
-  const document = video => ({
-    createElement: nom => (nom === 'video' ? video : { width: 0, height: 0, getContext: () => ({ drawImage: () => {} }) }),
+  const document = (video, toiles = []) => ({
+    createElement: nom => {
+      if (nom === 'video') return video;
+      const toile = { width: 0, height: 0, getContext: () => ({ drawImage: () => {} }) };
+      toiles.push(toile);
+      return toile;
+    },
   });
   const faux = () => ({ createObjectURL: () => 'blob:v', revokeObjectURL: vi.fn() });
 
@@ -161,7 +242,8 @@ describe('imagesDepuisVideo', () => {
     expect(video.muted).toBe(true);
     expect(video.playsInline).toBe(true);
     expect(video.journal.slice(0, 3)).toEqual(['play', 'image', 'pause']);
-    expect(video.journal.slice(3, 6)).toEqual(['seek 1', 'seek 3', 'seek 5']);
+    // Couverture (instant 0), puis le tiers et les deux tiers de la durée.
+    expect(video.journal.slice(3, 6)).toEqual(['seek 0', 'seek 2', 'seek 4']);
     expect(u.revokeObjectURL).toHaveBeenCalledWith('blob:v');
   });
   it('échoue quand la lecture est refusée', async () => {
@@ -173,6 +255,51 @@ describe('imagesDepuisVideo', () => {
     const video = fausseVideo();
     video.play = () => Promise.resolve();
     await expect(imagesDepuisVideo(new Blob(['v']), document(video), { URL: faux(), delaiMs: 30 })).rejects.toThrow();
+  });
+  it('dessine les images directement à 760 px de haut au plus, proportions gardées', async () => {
+    const toiles = [];
+    const images = await imagesDepuisVideo(new Blob(['v']), document(fausseVideo(), toiles), { URL: faux() });
+    expect(toiles).toHaveLength(3);
+    expect(images).toEqual(toiles);
+    for (const t of toiles) {
+      expect(t.height).toBe(760);
+      expect(t.width).toBe(Math.round(1080 * 760 / 1920));
+    }
+  });
+  it('garde une petite vidéo à sa taille', async () => {
+    const video = fausseVideo();
+    video.videoWidth = 320; video.videoHeight = 240;
+    const toiles = [];
+    await imagesDepuisVideo(new Blob(['v']), document(video, toiles), { URL: faux() });
+    expect(toiles.every(t => t.width === 320 && t.height === 240)).toBe(true);
+  });
+  it('nettoie la vidéo : pause, retrait de la source, load, URL révoquée une seule fois', async () => {
+    const video = fausseVideo();
+    const u = faux();
+    await imagesDepuisVideo(new Blob(['v']), document(video), { URL: u });
+    expect(video.journal.slice(-3)).toEqual(['pause', 'remove src', 'load']);
+    expect(u.revokeObjectURL).toHaveBeenCalledTimes(1);
+  });
+  it('ne prend que la couverture quand la durée est inconnue', async () => {
+    const video = fausseVideo();
+    video.duration = NaN;
+    const images = await imagesDepuisVideo(new Blob(['v']), document(video), { URL: faux() });
+    expect(images).toHaveLength(1);
+    expect(video.journal.filter(j => j.startsWith('seek'))).toEqual(['seek 0']);
+  });
+  it('n’ajoute aucune image après l’expiration du délai', async () => {
+    const video = fausseVideo();
+    // La couverture arrive vite ; le déplacement suivant dépasse le délai de la vidéo.
+    Object.defineProperty(video, 'currentTime', { set(t) { setTimeout(() => video.onseeked?.(), t === 0 ? 0 : 150); } });
+    const toiles = [];
+    const u = faux();
+    const images = await imagesDepuisVideo(new Blob(['v']), document(video, toiles), { URL: u, delaiMs: 60 });
+    const auRendu = images.length;
+    expect(auRendu).toBe(1);
+    await new Promise(ok => setTimeout(ok, 300));
+    expect(images).toHaveLength(auRendu);
+    expect(toiles).toHaveLength(auRendu);
+    expect(u.revokeObjectURL).toHaveBeenCalledTimes(1);
   });
   it('échoue sur une erreur de vidéo', async () => {
     const video = fausseVideo();

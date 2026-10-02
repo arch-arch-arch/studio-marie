@@ -69,7 +69,10 @@ describe('assemblerPdf', () => {
   });
   it('ne note pas « visuel illisible » quand l’image est bonne', async () => {
     const cartes = new Map([['F01', { ok: true, carte: new Blob([JPEG], { type: 'image/jpeg' }), largeur: 1, hauteur: 1 }]]);
-    expect(await brut(await assemblerPdf(contenu(1), cartes, { jsPDF, compress: false }))).not.toContain('\(visuel illisible\)');
+    const texte = await brut(await assemblerPdf(contenu(1), cartes, { jsPDF, compress: false }));
+    expect(texte).toContain('/Subtype /Image');
+    expect(texte).toContain('accroche : Test [U+1F525]');
+    expect(texte).not.toContain(String.raw`\(visuel illisible\)`);
   });
   it('coupe une ligne sans espace plus large que la page', async () => {
     const adresse = `https://exemple.test/${'a'.repeat(400)}`;

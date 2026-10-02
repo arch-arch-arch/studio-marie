@@ -23,10 +23,21 @@ export async function construire(env = process.env) {
   return gabarit.replace('/*STYLES*/', () => styles).replace('/*SCRIPT*/', () => script);
 }
 
+// jsPDF charge ces bibliothèques seulement pour pdf.html() et l'import de SVG, que le studio n'appelle jamais.
+const OPTIONNELLES_JSPDF = /^(html2canvas|canvg|dompurify)$/;
+const sansOptionnelles = {
+  name: 'sans-optionnelles-jspdf',
+  setup(b) {
+    b.onResolve({ filter: OPTIONNELLES_JSPDF }, a => ({ path: a.path, namespace: 'vide-jspdf' }));
+    b.onLoad({ filter: /.*/, namespace: 'vide-jspdf' }, () => ({ contents: 'export default null;', loader: 'js' }));
+  },
+};
+
 export async function construireDossier() {
   const resultat = await build({
     entryPoints: [path.join(racine, 'src/dossier/fabrique.js')],
     bundle: true, format: 'esm', write: false, minify: true, target: 'es2020',
+    plugins: [sansOptionnelles],
   });
   return resultat.outputFiles[0].text;
 }
