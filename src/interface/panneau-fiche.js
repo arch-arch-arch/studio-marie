@@ -272,7 +272,7 @@ export function panneauFiche(fiche, profil, actions, capacites, releves = []) {
   const sectionTexte = () => h('div', { class: 'textes' },
     champ('Accroche', h('textarea', { name: 'accroche', rows: 2, value: brouillon.accroche, oninput: e => changer({ accroche: e.target.value }) })),
     champ('Caption', h('textarea', { name: 'caption', rows: 6, value: brouillon.caption, oninput: e => changer({ caption: e.target.value }) })),
-    champ('Hashtags', h('input', { type: 'text', name: 'hashtags', placeholder: '#mot #autre', value: formaterHashtags(brouillon.hashtags), onchange: e => changer({ hashtags: analyserHashtags(e.target.value) }) })),
+    champ('Hashtags', h('input', { type: 'text', name: 'hashtags', placeholder: '#mot #autre', value: formaterHashtags(brouillon.hashtags), oninput: e => changer({ hashtags: analyserHashtags(e.target.value) }), onchange: e => changer({ hashtags: analyserHashtags(e.target.value) }) })),
     champ('Géotag (ville)', h('input', { type: 'text', name: 'geotag', maxlength: 200, value: brouillon.geotag, oninput: e => changer({ geotag: e.target.value }) })),
     h('button', { type: 'button', class: 'bouton-principal', onclick: copier }, 'Copier la caption et les hashtags'));
 

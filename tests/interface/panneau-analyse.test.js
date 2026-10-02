@@ -261,3 +261,48 @@ describe('sectionAvis : date, fuseau, état ouvert', () => {
     expect(sectionAvis([{ ...doc('2026-10-05T10:00:00.000Z'), periode: { type: 'semaine', cle: '2026-W42' } }], { type: 'semaine', cle: '2026-W42' }, [], 'UTC', ouverts).open).toBe(false);
   });
 });
+
+describe('passe finale D1 : écartées, remarques, préparation', () => {
+  const avec = r => {
+    const a = actions({ enregistrerRetour: vi.fn(async () => r) });
+    const el = panneauAnalyse(pret, a, {});
+    el.querySelector('textarea.retour').value = 'x';
+    bouton(el, 'Enregistrer le retour').click();
+    return el;
+  };
+  const CONSEIL = 'Pour les fiches non notées : demande à l’assistant de redonner seulement le bloc en corrigeant ces points, puis recolle-le ici.';
+  it('conseille de redemander le bloc quand des fiches sont écartées, sinon rien', async () => {
+    const el = avec({ ok: true, appliquees: 1, avisRecu: true, ecartees: [{ ref: 'F02', raison: 'réponse incomplète' }] });
+    await vi.waitFor(() => expect(el.textContent).toContain(CONSEIL));
+    const liste = el.querySelector('ul.ecartees');
+    expect(liste.nextElementSibling.textContent).toBe(CONSEIL);
+    const propre = avec({ ok: true, appliquees: 2, avisRecu: true, ecartees: [] });
+    await vi.waitFor(() => expect(propre.textContent).toContain('2 fiches mises à jour.'));
+    expect(propre.textContent).not.toContain('Pour les fiches non notées');
+  });
+  it('affiche les remarques dans une liste distincte, sous le compte', async () => {
+    const remarques = [{ ref: 'F02', texte: 'variante de caption écartée : rôle inconnu envoi' }];
+    const el = avec({ ok: true, appliquees: 2, avisRecu: true, ecartees: [], remarques });
+    await vi.waitFor(() => expect(el.querySelector('ul.remarques')).toBeTruthy());
+    expect([...el.querySelectorAll('ul.remarques li')].map(li => li.textContent)).toEqual(['F02 : variante de caption écartée : rôle inconnu envoi']);
+    expect(el.querySelector('ul.ecartees')).toBeNull();
+    expect(el.textContent).not.toContain('Pour les fiches non notées');
+    const sans = avec({ ok: true, appliquees: 2, avisRecu: true, ecartees: [] });
+    await vi.waitFor(() => expect(sans.textContent).toContain('2 fiches mises à jour.'));
+    expect(sans.querySelector('ul.remarques')).toBeNull();
+  });
+  it('prévient que la préparation peut durer avec des vidéos', () => {
+    const el = panneauAnalyse({ etape: 'preparation' }, actions(), {});
+    expect(el.querySelector('[role="status"]').textContent).toBe('Préparation du dossier… Avec des vidéos, cela peut prendre une minute ou deux.');
+  });
+});
+
+describe('passe finale D4 : régions d’état vides', () => {
+  it('ne masque aucune région vide en display: none (elles restent annoncées une fois remplies)', async () => {
+    const { readFileSync } = await import('node:fs');
+    const css = readFileSync('src/interface/styles.css', 'utf8');
+    const regle = css.split('}').map(r => r.trim()).filter(r => /:empty/.test(r) && /panneau-analyse/.test(r));
+    expect(regle.length).toBeGreaterThan(0);
+    for (const r of regle) expect(r).not.toMatch(/display:\s*none/);
+  });
+});

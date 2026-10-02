@@ -3,6 +3,8 @@ const BANDEAU = 130;
 const ECART = 12;
 const DELAI_VIDEO_MS = 8000;
 const DELAI_CHARGEMENT_MS = 8000;
+const DELAI_CHARGEMENT_VIDEO_MS = 30000;
+const DELAI_BLOB_MS = 8000;
 const HAUTEUR_IMAGE_VIDEO = 760;
 
 // Pose les images d'une carte (1 photo, ou 3 images de vidéo) sous un bandeau.
@@ -90,18 +92,15 @@ export function imagesDepuisVideo(blob, doc, { nombre = 3, delaiMs = DELAI_VIDEO
     const aller = t => new Promise(ok => { video.onseeked = () => { video.onseeked = null; ok(); }; video.currentTime = t; });
     const parcourir = async () => {
       const duree = Number.isFinite(video.duration) && video.duration > 0 ? video.duration : 0;
-      // Couverture d'abord (instant 0), puis vers le tiers et les deux tiers de la durée.
+      // Couverture d'abord (instant 0, sans déplacement), puis vers le tiers et les deux tiers de la durée.
       const instants = Array.from({ length: nombre }, (_, i) => (duree && i ? Math.min(duree - 0.05, (duree * i) / nombre) : 0)).filter((t, i, xs) => i === 0 || t !== xs[i - 1]);
       video.muted = true; video.playsInline = true;
       const attente = premiereImage();
       await video.play();
       await attente;
       if (fini) return;
-      video.pause();
-      for (const t of instants) {
-        await aller(t);
-        if (fini) return;
-        // Image dessinée directement à taille réduite, jamais à la taille native.
+      // Image dessinée directement à taille réduite, jamais à la taille native.
+      const capturer = () => {
         const echelle = Math.min(1, hauteurMax / (video.videoHeight || hauteurMax));
         const toile = doc.createElement('canvas');
         toile.width = Math.max(1, Math.round(video.videoWidth * echelle));
@@ -110,6 +109,14 @@ export function imagesDepuisVideo(blob, doc, { nombre = 3, delaiMs = DELAI_VIDEO
           toile.getContext('2d').drawImage(video, 0, 0, toile.width, toile.height);
           images.push(toile);
         } catch { liberer(toile); }
+      };
+      // La couverture est la première image livrée par la lecture : aucun retour à l'instant 0 (le seeked y est incertain sur iOS).
+      capturer();
+      video.pause();
+      for (const t of instants.slice(1)) {
+        await aller(t);
+        if (fini) return;
+        capturer();
       }
       if (fini) return;
       if (images.length) fin(true, images); else fin(false, new Error('aucune image'));
@@ -121,13 +128,13 @@ export function imagesDepuisVideo(blob, doc, { nombre = 3, delaiMs = DELAI_VIDEO
   });
 }
 
-function dessiner(doc, etiquette, sources) {
+function dessiner(doc, etiquette, sources, delaiBlobMs) {
   const toile = doc.createElement('canvas');
   // La toile de la carte est libérée après toBlob, ou tout de suite si le dessin échoue.
-  try { return peindre(toile, etiquette, sources); } catch (e) { liberer(toile); throw e; }
+  try { return peindre(toile, etiquette, sources, delaiBlobMs); } catch (e) { liberer(toile); throw e; }
 }
 
-function peindre(toile, etiquette, sources) {
+function peindre(toile, etiquette, sources, delaiBlobMs) {
   const d = dimensionsCarte({ largeurs: sources.map(s => s.width), hauteurs: sources.map(s => s.height) });
   toile.width = d.largeur; toile.height = d.hauteur;
   const c = toile.getContext('2d');
@@ -141,10 +148,21 @@ function peindre(toile, etiquette, sources) {
   c.font = '38px Arial, Helvetica, sans-serif';
   c.fillText(reste.join(' · '), decalage, d.bandeau / 2 + 4, Math.max(50, d.largeur - decalage - 20));
   d.cases.forEach((k, i) => c.drawImage(sources[i], k.x, k.y, k.largeur, k.hauteur));
-  return new Promise((resoudre, rejeter) => toile.toBlob(b => {
-    liberer(toile);
-    return b ? resoudre({ carte: b, largeur: d.largeur, hauteur: d.hauteur }) : rejeter(new Error('carte'));
-  }, 'image/jpeg', 0.85));
+  // toBlob peut lever ou ne jamais rappeler (iOS sous pression mémoire) : la toile est libérée dans tous les cas.
+  return new Promise((resoudre, rejeter) => {
+    const minuteur = setTimeout(() => { liberer(toile); rejeter(new Error('délai de la carte')); }, delaiBlobMs);
+    try {
+      toile.toBlob(b => {
+        clearTimeout(minuteur);
+        liberer(toile);
+        return b ? resoudre({ carte: b, largeur: d.largeur, hauteur: d.hauteur }) : rejeter(new Error('carte'));
+      }, 'image/jpeg', 0.85);
+    } catch (e) {
+      clearTimeout(minuteur);
+      liberer(toile);
+      rejeter(e);
+    }
+  });
 }
 
 function avecDelai(promesse, ms, surRetard) {
@@ -160,14 +178,16 @@ export async function preparerCartes(demandes, chargerVisuel, outils = {}) {
   const doc = outils.document ?? globalThis.document;
   const versImage = outils.versImage ?? (blob => imageDepuisBlob(blob));
   const versImagesVideo = outils.versImagesVideo ?? (blob => imagesDepuisVideo(blob, doc));
-  const dessin = outils.dessiner ?? ((etiquette, sources) => dessiner(doc, etiquette, sources));
-  const delai = outils.delaiChargementMs ?? DELAI_CHARGEMENT_MS;
+  const dessin = outils.dessiner ?? ((etiquette, sources) => dessiner(doc, etiquette, sources, outils.delaiBlobMs ?? DELAI_BLOB_MS));
+  // Un Reel de 15 à 20 Mo ne se télécharge pas en 8 secondes sur réseau mobile : 30 secondes pour une vidéo.
+  const delaiImageChargee = outils.delaiChargementMs ?? DELAI_CHARGEMENT_MS;
+  const delaiVideoChargee = outils.delaiChargementVideoMs ?? DELAI_CHARGEMENT_VIDEO_MS;
   const delaiImage = outils.delaiImageMs ?? DELAI_CHARGEMENT_MS;
   const cartes = new Map();
   for (const d of demandes) {
     let sources = [];
     try {
-      const blob = await avecDelai(Promise.resolve().then(() => chargerVisuel(d.visuel)), delai);
+      const blob = await avecDelai(Promise.resolve().then(() => chargerVisuel(d.visuel)), d.type === 'video' ? delaiVideoChargee : delaiImageChargee);
       sources = d.type === 'video' ? await versImagesVideo(blob) : [await avecDelai(Promise.resolve().then(() => versImage(blob)), delaiImage, liberer)];
       cartes.set(d.ref, { ok: true, ...(await dessin(d.etiquette, sources)) });
     } catch {

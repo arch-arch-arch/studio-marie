@@ -675,7 +675,7 @@ describe('analyse par dossier : correctifs du premier round', () => {
       expect(document.activeElement).toBe(racine.querySelector('.zone-analyse h2'));
       document.body.focus();
       rendre({ ...base, analyse: pret });
-      expect(document.activeElement).not.toBe(racine.querySelector('.zone-analyse h2'));
+      expect(document.activeElement).toBe(racine.querySelector('.zone-analyse h2'));
       rendre({ ...base, analyse: null });
       const champ = document.createElement('textarea');
       document.body.append(champ);
@@ -686,6 +686,54 @@ describe('analyse par dossier : correctifs du premier round', () => {
     } finally { racine.remove(); }
   });
 
+  it('passe finale D3 : repose le focus sur le nouveau titre quand la préparation se termine', () => {
+    const racine = document.createElement('div');
+    document.body.append(racine);
+    const { rendre } = monter(racine);
+    try {
+      rendre({ ...base });
+      rendre({ ...base, analyse: { etape: 'preparation' } });
+      rendre({ ...base, analyse: pret });
+      expect(document.activeElement).toBe(racine.querySelector('.zone-analyse h2'));
+      rendre({ ...base, analyse: null });
+      rendre({ ...base, analyse: { etape: 'preparation' } });
+      document.activeElement.blur();
+      expect(document.activeElement).toBe(document.body);
+      rendre({ ...base, analyse: { etape: 'erreur', message: 'Raté.' } });
+      expect(document.activeElement).toBe(racine.querySelector('.zone-analyse h2'));
+    } finally { racine.remove(); }
+  });
+
+  it('passe finale D3 : ne vole jamais le focus d’un champ de saisie hors du panneau', () => {
+    const racine = document.createElement('div');
+    document.body.append(racine);
+    const { rendre } = monter(racine);
+    const champ = document.createElement('textarea');
+    document.body.append(champ);
+    try {
+      rendre({ ...base });
+      rendre({ ...base, analyse: { etape: 'preparation' } });
+      champ.focus();
+      rendre({ ...base, analyse: pret });
+      expect(document.activeElement).toBe(champ);
+    } finally { champ.remove(); racine.remove(); }
+  });
+
+  it('passe finale D3 : à la fermeture, le focus revient au bouton qui a ouvert le panneau', () => {
+    const racine = document.createElement('div');
+    document.body.append(racine);
+    const { rendre } = monter(racine);
+    const bouton = texte => [...racine.querySelectorAll('.analyse-periode button')].find(b => b.textContent === texte);
+    try {
+      rendre({ ...base });
+      rendre({ ...base, analyse: { etape: 'retour' } });
+      rendre({ ...base, analyse: null });
+      expect(document.activeElement).toBe(bouton('Coller un retour'));
+      rendre({ ...base, analyse: { etape: 'preparation' } });
+      rendre({ ...base, analyse: null });
+      expect(document.activeElement).toBe(bouton('Analyser la semaine'));
+    } finally { racine.remove(); }
+  });
   it('assemblé : « Coller un retour » ouvre la zone, un retour au dossier connu met les fiches à jour', async () => {
     const db = creerFausseBase();
     const dossier = {

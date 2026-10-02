@@ -7,10 +7,16 @@ import { extraireProfilDetaille } from '../claude/evaluation.js';
 export const FICHES_MAX = 30;
 export const MESSAGE_A_COLLER = 'Voici le dossier d’analyse de mes contenus. Lis-le en entier, regarde chaque visuel, puis réponds en suivant exactement la consigne qui se trouve à la fin du dossier.';
 const ROLES = ['engagement', 'cta', 'deadpan'];
-const LIBELLES_REGLES = { cta: "Appels vers l'offre", roles: `Rôles des captions (${ROLES.join('/')})` };
-const LEGENDE_REGLES = 'Pour chaque semaine : compté/objectif, puis l’état par rapport à l’objectif de la semaine (vert, orange ou rouge). Ces états concernent la cadence, pas la conformité d’un contenu.';
+const LEGENDE_REGLES = 'Pour chaque semaine, l’état (vert, orange ou rouge) dit si la cadence prévue est tenue. Ces états ne concernent pas la conformité d’un contenu.';
 const ALPHABET = 'abcdefghjkmnpqrstuvwxyz23456789';
 const JOURS_COURTS = ['lun.', 'mar.', 'mer.', 'jeu.', 'ven.', 'sam.', 'dim.'];
+// Coupe à n unités UTF-16 sans laisser la moitié haute d'une paire de substitution.
+export const couper = (texte, n) => {
+  const t = String(texte ?? '').slice(0, n);
+  const dernier = t.charCodeAt(t.length - 1);
+  return dernier >= 0xD800 && dernier <= 0xDBFF ? t.slice(0, -1) : t;
+};
+const enRetrait = texte => texte.replace(/\r\n?|\n/g, '\n  ');
 const deux = n => String(n).padStart(2, '0');
 const date = (iso, fz, options) => new Intl.DateTimeFormat('fr-FR', { timeZone: fz, ...options }).format(new Date(iso));
 
@@ -125,6 +131,26 @@ export function enListes(valeur, niveau = 0) {
   return ligneTexte(retrait, '', valeur);
 }
 
+// Une ligne exacte par pastille de controlerSemaine : ce que chacune compte, et par rapport à quoi.
+export function ligneRegle(p, regles) {
+  const [n, total] = String(p.valeur).split('/');
+  const fin = `(${p.etat})`;
+  switch (p.cle) {
+    case 'reels': case 'carrousels': return `${p.libelle} : ${n} sur ${total} attendus ${fin}`;
+    case 'stories': return `${p.libelle} : ${n} sur 7 ${fin}`;
+    case 'cta': return `Appels vers l'offre : ${n} sur ${total} contenus du fil, maximum ${Math.round(regles.cta_ratio_max * 100)} % ${fin}`;
+    case 'roles': {
+      const [e, c, d] = String(p.valeur).split('/');
+      const o = regles.roles_caption;
+      return `Rôles des captions : engagement ${e}, cta ${c}, deadpan ${d} ; objectifs ${o.engagement}, ${o.cta}, ${o.deadpan} ${fin}`;
+    }
+    case 'ragebait': return `${p.libelle} : ${n}, maximum ${total} ${fin}`;
+    case 'porte': return `${p.libelle} : ${p.valeur}, objectif ${regles.stories_porte.min} à ${regles.stories_porte.max} ${fin}`;
+    case 'piliers': return `Piliers présents : ${n} sur ${total} ${fin}`;
+    default: return `${p.libelle} : ${p.valeur} ${fin}`;
+  }
+}
+
 function semainesDeLaPeriode(periode, fuseau) {
   const debuts = [];
   for (let d = debutSemaine(periode.debut, fuseau); d < periode.fin; d = ajouterJours(d, 7, fuseau)) debuts.push(d);
@@ -145,10 +171,10 @@ function blocFiche({ ref, fiche, etat }, profil) {
     `rôle de caption : ${fiche.role_caption ?? 'non choisi'}`,
     `appel vers l'offre : ${fiche.cta ? 'oui' : 'non'}`,
     `mène à la porte : ${fiche.porte ? 'oui' : 'non'}`,
-    `accroche : ${(fiche.accroche ?? '').slice(0, 300)}`,
-    `caption : ${(fiche.caption ?? '').slice(0, 2200)}`,
+    `accroche : ${enRetrait(couper(fiche.accroche, 300))}`,
+    `caption : ${enRetrait(couper(fiche.caption, 2200))}`,
     `hashtags : ${liste((fiche.hashtags ?? []).slice(0, 30), 'aucun').replace(/ ; /g, ', ')}`,
-    `géotag : ${(fiche.geotag ?? '').slice(0, 200) || 'aucun'}`,
+    `géotag : ${couper(fiche.geotag, 200) || 'aucun'}`,
     `visuel : ${etat.mention}`,
     `alertes calculées : ${liste(v.alertes.map(a => a.texte), 'aucune')}`,
     `blocages calculés : ${liste(v.conformite.causes, 'aucun')}`,
@@ -211,7 +237,7 @@ export function contenuDossier({ profil, entrees, periode, code, toutesLesFiches
   const strategie = detail.sections.map(cle => ({ titre: versLatin1(titreSection(cle)), lignes: enListes(extrait[cle]).map(versLatin1) }));
   const regles = [LEGENDE_REGLES, ...semainesDeLaPeriode(periode, fz).flatMap(debut => [
     `Semaine ${cleSemaineIso(debut, fz)} :`,
-    ...controlerSemaine(toutesLesFiches, profil.regles_studio, debut).map(p => `- ${LIBELLES_REGLES[p.cle] ?? p.libelle} : ${p.valeur} (${p.etat})`),
+    ...controlerSemaine(toutesLesFiches, profil.regles_studio, debut).map(p => `- ${ligneRegle(p, profil.regles_studio)}`),
   ])].map(versLatin1);
   return {
     titre: versLatin1(`Dossier d'analyse : ${periode.libelle}`),

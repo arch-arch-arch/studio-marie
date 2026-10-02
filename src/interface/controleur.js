@@ -342,6 +342,8 @@ export function creerControleur({ etat, depot, enregistreur, assets, horloge, id
   }
 
   const ANALYSE_INDISPONIBLE = 'L’analyse par dossier n’est pas disponible dans cette vue.';
+  const SESSION_EXPIREE = { ok: false, raison: 'Ta session a expiré : recharge la page pour te reconnecter.' };
+  const ABANDON = Symbol('lecture abandonnée');
 
   let generationAnalyse = 0;
 
@@ -382,7 +384,7 @@ export function creerControleur({ etat, depot, enregistreur, assets, horloge, id
         try {
           const frais = await depot.lireAnalyse(candidat.id);
           if (memeDossier(frais, periode, refs, versionProfil)) existant = { id: candidat.id, assistant: frais.assistant };
-        } catch { existant = null; }
+        } catch (e) { if (e?.code === 'revoked') throw e; existant = null; }
       }
       const code = existant ? existant.id : codeDossier(aleatoire);
       const fabrique = await dossier.fabrique();
@@ -413,8 +415,9 @@ export function creerControleur({ etat, depot, enregistreur, assets, horloge, id
         etape: 'pret', code, periode, nombre: entrees.length, fichier, nom: `analyse-${periode.cle}.pdf`, retour: null,
         sansVisuel: entrees.filter(e => e.etat.visuel === 'non_joint').map(e => e.ref),
       } });
-    } catch {
-      if (jeton === generationAnalyse) etat.modifier({ analyse: { etape: 'erreur', message: 'Le dossier n’a pas pu être préparé : réessaie.' } });
+    } catch (e) {
+      const message = e?.code === 'revoked' ? SESSION_EXPIREE.raison : 'Le dossier n’a pas pu être préparé : réessaie.';
+      if (jeton === generationAnalyse) etat.modifier({ analyse: { etape: 'erreur', message } });
     }
   }
 
@@ -458,20 +461,19 @@ export function creerControleur({ etat, depot, enregistreur, assets, horloge, id
       const a = analysePrete();
       if (!a || !['claude', 'chatgpt'].includes(nom)) return;
       await enFile(a.code, async () => {
-        let abandonne = false;
+        // Seule la lecture est bornée dans le temps : une écriture lancée est attendue par la file,
+        // pour qu'une écriture abandonnée ne puisse pas effacer plus tard un retour collé entre-temps.
         let minuterie;
-        const limite = new Promise(resolve => { minuterie = setTimeout(() => { abandonne = true; resolve(); }, delaiAssistantMs); });
-        const operation = (async () => {
-          const doc = await depot.lireAnalyse(a.code);
-          if (doc && !abandonne) await depot.enregistrerAnalyse(a.code, { ...doc, assistant: nom });
-        })();
-        operation.catch(() => {});
-        try { await Promise.race([operation, limite]); } finally { clearTimeout(minuterie); }
+        const lecture = depot.lireAnalyse(a.code);
+        lecture.catch(() => {});
+        const limite = new Promise(resolve => { minuterie = setTimeout(() => resolve(ABANDON), delaiAssistantMs); });
+        let doc;
+        try { doc = await Promise.race([lecture, limite]); } finally { clearTimeout(minuterie); }
+        if (doc && doc !== ABANDON) await depot.enregistrerAnalyse(a.code, { ...doc, assistant: nom });
       });
     } catch { /* l'assistant noté n'est qu'une indication : rien à signaler */ }
   }
 
-  const SESSION_EXPIREE = { ok: false, raison: 'Ta session a expiré : recharge la page pour te reconnecter.' };
   const interruption = (n, m) => ({ ok: false, raison: `L’enregistrement a été interrompu après ${n} fiche${n > 1 ? 's' : ''} sur ${m} : réessaie, les fiches déjà notées seront simplement réécrites.` });
   const AVIS_VIDE = { avis: '', points_forts: [], risques: [], ordre_conseille: [] };
 
@@ -506,6 +508,7 @@ export function creerControleur({ etat, depot, enregistreur, assets, horloge, id
       aNoter.push({ item });
     }
     const appliquees = [];
+    const remarques = [];
     let ecarteesEnEcriture = 0;
     const ecarter = (item, raison) => { ecartees.push({ ref: item.ref, raison }); ecarteesEnEcriture += 1; };
     for (const { item } of aNoter) {
@@ -538,15 +541,17 @@ export function creerControleur({ etat, depot, enregistreur, assets, horloge, id
       await ecrireMaintenant(g);
       if (enregistreur.enEchec().includes(g.id)) return interruption(appliquees.length, aNoter.length - ecarteesEnEcriture);
       appliquees.push(item.id);
+      if (item.remarque) remarques.push({ ref: item.ref, texte: item.remarque });
     }
     const toutes = [...v.ecartees, ...ecartees].sort((a, b) => a.ref.localeCompare(b.ref));
-    const resultat = { ok: true, appliquees: appliquees.length, ecartees: toutes, avisRecu: !!v.periode };
+    const avecRemarques = remarques.length ? { remarques } : {};
+    const resultat = { ok: true, appliquees: appliquees.length, ecartees: toutes, avisRecu: !!v.periode, ...avecRemarques };
     try {
       const frais = (await depot.lireAnalyse(lu.dossier)) ?? analyse;
       const avis = v.periode ?? (frais.retour?.avis ? {
         avis: frais.retour.avis, points_forts: frais.retour.points_forts ?? [], risques: frais.retour.risques ?? [], ordre_conseille: frais.retour.ordre_conseille ?? [],
       } : AVIS_VIDE);
-      await depot.enregistrerAnalyse(lu.dossier, { ...frais, retour: { recu_le: horloge(), ...avis, appliquees, ecartees: toutes } });
+      await depot.enregistrerAnalyse(lu.dossier, { ...frais, retour: { recu_le: horloge(), ...avis, appliquees, ecartees: toutes, ...avecRemarques } });
     } catch (e) {
       if (e?.code === 'revoked') return SESSION_EXPIREE;
       return { ok: false, raison: 'Les fiches sont notées, mais l’avis d’ensemble n’a pas pu être enregistré : réessaie.' };

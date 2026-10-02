@@ -46,9 +46,12 @@ function blocRetour(actions) {
       if (!r.ok) { statutRetour.textContent = ''; erreurRetour.textContent = r.raison; return; }
       statutRetour.textContent = `${r.appliquees} fiche${s(r.appliquees)} mise${s(r.appliquees)} à jour.`;
       const ecartees = r.ecartees ?? [];
+      const remarques = r.remarques ?? [];
       detailRetour.replaceChildren(...[
         r.avisRecu ? null : h('p', { class: 'aide' }, 'L’avis d’ensemble manquait dans la réponse.'),
+        remarques.length ? h('ul', { class: 'remarques' }, remarques.map(x => h('li', {}, `${x.ref} : ${x.texte}`))) : null,
         ecartees.length ? h('ul', { class: 'ecartees' }, ecartees.map(e => h('li', {}, `${e.ref} : ${e.raison}${e.detail ? ` (${e.detail})` : ''}`))) : null,
+        ecartees.length ? h('p', { class: 'aide' }, 'Pour les fiches non notées : demande à l’assistant de redonner seulement le bloc en corrigeant ces points, puis recolle-le ici.') : null,
       ].filter(Boolean));
     },
   }, 'Enregistrer le retour');
@@ -64,7 +67,7 @@ export function panneauAnalyse(analyse, actions, capacites = {}) {
   const fermer = h('button', { type: 'button', class: 'bouton-secondaire', onclick: () => actions.fermerAnalyse() }, 'Fermer');
   const titre = h('h2', { tabindex: '-1' }, 'Analyse par Claude ou ChatGPT');
   if (analyse.etape === 'preparation') {
-    return h('section', { class: 'panneau-analyse' }, titre, h('p', { class: 'aide', role: 'status' }, 'Préparation du dossier…'), fermer);
+    return h('section', { class: 'panneau-analyse' }, titre, h('p', { class: 'aide', role: 'status' }, 'Préparation du dossier… Avec des vidéos, cela peut prendre une minute ou deux.'), fermer);
   }
   if (analyse.etape === 'retour') {
     return h('section', { class: 'panneau-analyse' }, titre, h('p', {}, 'Colle ici la réponse de ton assistant. Le studio retrouve le dossier grâce à son code.'), ...blocRetour(actions), fermer);

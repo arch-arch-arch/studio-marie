@@ -68,6 +68,7 @@ export function creerRendu(racine, actions, capacites, horloge) {
   // État ouvert de « Avis sur la période », par période : la vue est reconstruite à chaque frappe dans une fiche.
   const avisOuverts = new Map();
   let elementVue = null;
+  let boutonOuvreur = 0;
 
   return function rendre(e) {
     zoneErreur.replaceChildren(e.erreur
@@ -86,7 +87,7 @@ export function creerRendu(racine, actions, capacites, horloge) {
     // mettreAJour?.() ne fait rien et l'écran reste bloqué sur le message de chargement.
     const sortDuChargementTableau = estVueTableau
       && (memo.stats === undefined || memo.relevesCompte === undefined) && e.stats !== undefined && e.relevesCompte !== undefined;
-    const preparation = e.analyse != null;
+    const panneauOuvert = e.analyse != null;
     let reconstructionRequise;
     if (estVueProfil) {
       reconstructionRequise = memo.profil !== e.profil || memo.vue !== e.vue || memo.ancre !== e.ancre;
@@ -97,7 +98,7 @@ export function creerRendu(racine, actions, capacites, horloge) {
       reconstructionRequise = memo.profil !== e.profil || memo.fiches !== e.fiches || memo.vue !== e.vue || memo.ancre !== e.ancre || memo.bulletin !== e.bulletin || memo.configVeille !== e.configVeille || memo.veille !== e.veille
         || (e.vue === 'semaine' && memo.stats !== e.stats)
         // Le bouton d'analyse et l'avis de la période n'existent qu'en Semaine et en Mois ; le panneau d'analyse, lui, n'en dépend pas.
-        || ((e.vue === 'semaine' || e.vue === 'mois') && (memo.analyses !== e.analyses || memo.preparation !== preparation));
+        || ((e.vue === 'semaine' || e.vue === 'mois') && (memo.analyses !== e.analyses || memo.panneauOuvert !== panneauOuvert));
     }
     if (reconstructionRequise) {
       elementVue = contenuVue(e2, actions, capacites, { sauvegarde: sauvegarde() });
@@ -111,15 +112,23 @@ export function creerRendu(racine, actions, capacites, horloge) {
     const cleAnalyse = e.analyse ? [e.analyse.etape, e.analyse.code ?? '', e.analyse.message ?? ''].join('|') : null;
     if (cleAnalyse !== memo.cleAnalyse) {
       const ouvertureAnalyse = !memo.cleAnalyse;
+      // La préparation qui se termine remplace le panneau : le focus qu'il portait (ou personne) passe au nouveau titre.
+      const prepareeTerminee = memo.etapeAnalyse === 'preparation' && ['pret', 'erreur'].includes(e.analyse?.etape);
+      const actif = typeof document !== 'undefined' ? document.activeElement : null;
+      const focusAuPanneau = !actif || actif === document.body || zoneAnalyse.contains(actif);
       const elementAnalyse = e.analyse ? panneauAnalyse(e.analyse, actions, { partage: e.analyse.etape === 'pret' && !!actions.peutPartagerDossier?.() }) : null;
       zoneAnalyse.replaceChildren(...(elementAnalyse ? [elementAnalyse] : []));
       if (elementAnalyse) {
         if (ouvertureAnalyse) {
+          // « Coller un retour » est le second bouton de la rangée, « Analyser… » le premier.
+          boutonOuvreur = e.analyse.etape === 'retour' ? 1 : 0;
           if (!champActif()) elementAnalyse.querySelector('h2')?.focus({ preventScroll: true });
           if (typeof elementAnalyse.scrollIntoView === 'function') elementAnalyse.scrollIntoView({ block: 'nearest' });
+        } else if (prepareeTerminee && focusAuPanneau) {
+          elementAnalyse.querySelector('h2')?.focus({ preventScroll: true });
         }
       } else {
-        vue.querySelector('.analyse-periode button')?.focus();
+        vue.querySelectorAll('.analyse-periode button')[boutonOuvreur]?.focus();
       }
     }
     const ouverte = e.profil && e.ficheOuverte ? e.fiches.find(f => f.id === e.ficheOuverte) : null;
@@ -128,7 +137,7 @@ export function creerRendu(racine, actions, capacites, horloge) {
     racine.classList.toggle('avec-panneau', !!ouverte);
     memo = {
       profil: e.profil, fiches: e.fiches, vue: e.vue, ancre: e.ancre, ficheOuverte: e.ficheOuverte, panneauAffiche: !!ouverte,
-      cleAnalyse, analyses: e.analyses, preparation,
+      cleAnalyse, etapeAnalyse: e.analyse?.etape ?? null, analyses: e.analyses, panneauOuvert,
       reference: e.reference, resultatReference: e.resultatReference, verificationReference: e.verificationReference,
       bulletin: e.bulletin, configVeille: e.configVeille, veille: e.veille,
       stats: e.stats, relevesCompte: e.relevesCompte, fichesRecentes: e.fichesRecentes,

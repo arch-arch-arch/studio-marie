@@ -1085,6 +1085,81 @@ describe('analyse par dossier', () => {
     expect(r).toMatchObject({ ok: true, appliquees: 2 });
     expect(db.lire(`analyses/${code}`).assistant).toBe('inconnu');
   });
+  const avecCaptions = (code, captions) => {
+    const o = JSON.parse(reponse(code, ['F01', 'F02']).replace(/^```json\n|\n```$/g, ''));
+    o.fiches[0].captions = captions;
+    return `\`\`\`json\n${JSON.stringify(o)}\n\`\`\``;
+  };
+
+  it('passe finale C1 : garde l’analyse quand une caption a un rôle inconnu, et rend la remarque', async () => {
+    const { actions, etat, db, a } = await avecDeuxFiches();
+    await actions.ouvrirAnalyse();
+    const { code } = etat.lire().analyse;
+    const r = await actions.enregistrerRetour(avecCaptions(code, [{ role: 'envoi', texte: 'x' }, { role: 'cta', texte: 'y' }]));
+    const remarques = [{ ref: 'F01', texte: 'variante de caption écartée : rôle inconnu envoi' }];
+    expect(r).toEqual({ ok: true, appliquees: 2, ecartees: [], avisRecu: true, remarques });
+    expect(db.lire(`fiches/${a.id}`).variantes).toEqual([{ role: 'cta', texte: 'y' }]);
+    expect(db.lire(`fiches/${a.id}`).score.total).toBeGreaterThan(0);
+    expect(db.lire(`analyses/${code}`).retour).toMatchObject({ appliquees: [a.id, expect.any(String)], remarques });
+    expect(etat.lire().analyse.retour).toEqual(r);
+  });
+
+  it('passe finale C1 : aucune variante quand les deux rôles sont inconnus', async () => {
+    const { actions, etat, db, a } = await avecDeuxFiches();
+    await actions.ouvrirAnalyse();
+    const { code } = etat.lire().analyse;
+    const r = await actions.enregistrerRetour(avecCaptions(code, [{ role: 'envoi', texte: 'x' }, { role: 'relance', texte: 'y' }]));
+    expect(r.appliquees).toBe(2);
+    expect(r.remarques).toEqual([{ ref: 'F01', texte: 'variante de caption écartée : rôle inconnu envoi, relance' }]);
+    expect(db.lire(`fiches/${a.id}`).variantes).toEqual([]);
+  });
+
+  it('passe finale C2 : une écriture lente de l’assistant est attendue, le retour collé ensuite est conservé', async () => {
+    const { actions, etat, db } = await avecDeuxFiches({ delaiAssistantMs: 30 });
+    await actions.ouvrirAnalyse();
+    const { code } = etat.lire().analyse;
+    const doc = db.doc;
+    let lent = true;
+    db.doc = chemin => {
+      const d = doc(chemin);
+      if (chemin !== `analyses/${code}`) return d;
+      return { ...d, set: async corps => { if (lent) { lent = false; await new Promise(r => setTimeout(r, 150)); } return d.set(corps); } };
+    };
+    const note = actions.noterAssistant('chatgpt');
+    const retour = actions.enregistrerRetour(reponse(code, ['F01', 'F02']));
+    await note;
+    const r = await retour;
+    expect(r).toMatchObject({ ok: true, appliquees: 2 });
+    await new Promise(res => setTimeout(res, 200));
+    expect(db.lire(`analyses/${code}`)).toMatchObject({ assistant: 'chatgpt', retour: { appliquees: expect.any(Array) } });
+  });
+
+  it('passe finale C3 : une session révoquée pendant la préparation ou l’écriture du dossier donne le message de session', async () => {
+    const revoque = Object.assign(new Error('révoquée'), { code: 'revoked' });
+    const m1 = await avecDeuxFiches();
+    m1.dossier.fabrique = async () => { throw revoque; };
+    await m1.actions.ouvrirAnalyse();
+    expect(m1.etat.lire().analyse).toEqual({ etape: 'erreur', message: 'Ta session a expiré : recharge la page pour te reconnecter.' });
+    const m2 = await avecDeuxFiches();
+    const doc = m2.db.doc;
+    m2.db.doc = chemin => { const d = doc(chemin); return chemin.startsWith('analyses/') ? { ...d, set: async () => { throw revoque; } } : d; };
+    await m2.actions.ouvrirAnalyse();
+    expect(m2.etat.lire().analyse).toEqual({ etape: 'erreur', message: 'Ta session a expiré : recharge la page pour te reconnecter.' });
+  });
+
+  it('passe finale C4 : interrompt quand une fiche sort de l’état avec une écriture en attente pendant l’écriture de la précédente', async () => {
+    const m = await avecDeuxFiches();
+    await m.actions.ouvrirAnalyse();
+    const { code } = m.etat.lire().analyse;
+    agirPendantEcriture(m, () => {
+      m.actions.modifierFiche(m.b.id, { caption: 'En attente' });
+      m.db.echouerEcritures(`fiches/${m.b.id}`);
+      m.etat.modifier({ fiches: m.etat.lire().fiches.filter(f => f.id !== m.b.id) });
+    });
+    const r = await m.actions.enregistrerRetour(reponse(code, ['F01', 'F02']));
+    expect(r).toEqual({ ok: false, raison: INTERROMPU(1) });
+    expect(m.db.lire(`analyses/${code}`).retour).toBeUndefined();
+  });
 
 });
 

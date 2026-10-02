@@ -245,4 +245,6 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .avis-periode h4 { margin: 8px 0 4px; }
 .ecartees { margin: 0; padding-left: 18px; }
 a.bouton-secondaire { text-decoration: none; color: inherit; }
-.panneau-analyse p:empty, .panneau-analyse .detail-retour:empty { display: none; }
+/* Une région d'état vide sort du flux sans être masquée : une région masquée puis remplie n'est pas annoncée de façon fiable. */
+.panneau-analyse { position: relative; }
+.panneau-analyse p:empty, .panneau-analyse .detail-retour:empty { position: absolute; width: 1px; height: 1px; margin: 0; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }

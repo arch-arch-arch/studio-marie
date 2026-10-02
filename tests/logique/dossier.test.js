@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import fictif from '../../exemples/profil-fictif.json';
 import { nouvelleFiche, empreinte } from '../../src/logique/fiche.js';
 import {
-  FICHES_MAX, MESSAGE_A_COLLER, enListes, periodeAffichee, choisirFiches, codeDossier, attribuerReferences, etatVisuel, versLatin1, contenuDossier,
+  FICHES_MAX, MESSAGE_A_COLLER, ligneRegle, enListes, periodeAffichee, choisirFiches, codeDossier, attribuerReferences, etatVisuel, versLatin1, contenuDossier,
 } from '../../src/logique/dossier.js';
 
 const FZ = 'Europe/Paris';
@@ -161,13 +161,63 @@ describe('correction 1 : règles de la période lisibles', () => {
   const periode = periodeAffichee('semaine', '2026-10-07T10:00:00.000Z', FZ);
   const f1 = fiche('a', '2026-10-05T10:00:00.000Z');
   const c = contenuDossier({ profil, entrees: [{ ref: 'F01', fiche: f1, etat: etatVisuel(f1, null) }], periode, code: 'D-abc123', toutesLesFiches: [f1] });
-  it('utilise des libellés propres au dossier et une légende', () => {
-    expect(c.regles[0]).toBe('Pour chaque semaine : compté/objectif, puis l’état par rapport à l’objectif de la semaine (vert, orange ou rouge). Ces états concernent la cadence, pas la conformité d’un contenu.'.replace(/’/g, "'"));
+  it('utilise une légende et des libellés propres au dossier', () => {
+    expect(c.regles[0]).toBe("Pour chaque semaine, l'état (vert, orange ou rouge) dit si la cadence prévue est tenue. Ces états ne concernent pas la conformité d'un contenu.");
     const texte = c.regles.join('\n');
     expect(texte).toContain("- Appels vers l'offre : ");
-    expect(texte).toContain('- Rôles des captions (engagement/cta/deadpan) : ');
-    expect(texte).toContain('- Reels : ');
     expect(JSON.stringify(c)).not.toContain("Appels à l'action");
+    expect(JSON.stringify(c)).not.toContain('compté/objectif');
+  });
+});
+
+describe('passe finale A : une ligne exacte par règle', () => {
+  const periode = periodeAffichee('semaine', '2026-10-07T10:00:00.000Z', FZ);
+  const p = profil.regles_studio.piliers.map(x => x.cle);
+  const fiches = [
+    fiche('r1', '2026-10-05T10:00:00.000Z', { format: 'reel', cta: true, role_caption: 'cta', pilier: p[0] }),
+    fiche('c1', '2026-10-06T10:00:00.000Z', { format: 'carrousel', role_caption: 'engagement', pilier: p[1] }),
+    fiche('p1', '2026-10-07T10:00:00.000Z', { format: 'post', role_caption: 'engagement', pilier: p[2], ragebait: true }),
+    fiche('s1', '2026-10-05T11:00:00.000Z', { format: 'story' }),
+    fiche('s2', '2026-10-06T11:00:00.000Z', { format: 'story' }),
+  ];
+  const e = fiches.map((f, i) => ({ ref: `F0${i + 1}`, fiche: f, etat: etatVisuel(f, null) }));
+  const lignes = contenuDossier({ profil, entrees: e, periode, code: 'D-abc123', toutesLesFiches: fiches }).regles;
+  it.each([
+    '- Reels : 1 sur 4 attendus (rouge)',
+    '- Carrousels : 1 sur 2 attendus (orange)',
+    '- Jours avec stories : 2 sur 7 (rouge)',
+    "- Appels vers l'offre : 1 sur 3 contenus du fil, maximum 25 % (orange)",
+    '- Rôles des captions : engagement 2, cta 1, deadpan 0 ; objectifs 2, 1, 1 (orange)',
+    '- Ragebait : 1, maximum 1 (vert)',
+    '- Stories vers la porte : 0, objectif 2 à 3 (rouge)',
+    '- Piliers présents : 3 sur 4 (orange)',
+  ])('écrit « %s »', attendue => {
+    expect(lignes).toContain(attendue);
+  });
+  it('garde « libellé : valeur (état) » pour une clé inconnue', () => {
+    expect(ligneRegle({ cle: 'autre', libelle: 'Autre', valeur: '3', etat: 'vert' }, profil.regles_studio)).toBe('Autre : 3 (vert)');
+  });
+});
+
+describe('passe finale A : retrait et troncature', () => {
+  const periode = periodeAffichee('semaine', '2026-10-07T10:00:00.000Z', FZ);
+  const bloc = plus => {
+    const f = fiche('a', '2026-10-05T10:00:00.000Z', plus);
+    return contenuDossier({ profil, periode, code: 'D-abc123', toutesLesFiches: [f], entrees: [{ ref: 'F01', fiche: f, etat: etatVisuel(f, null) }] }).fiches[0].lignes;
+  };
+  it('met en retrait les lignes de suite d’une caption ou d’une accroche', () => {
+    const l = bloc({ caption: 'une\nPS : deux\r\ntrois', accroche: 'haut\nbas' });
+    expect(l).toContain('caption : une');
+    expect(l).toContain('  PS : deux');
+    expect(l).toContain('  trois');
+    expect(l).toContain('accroche : haut');
+    expect(l).toContain('  bas');
+  });
+  it('ne laisse jamais une demi-paire de substitution après la coupe', () => {
+    const l = bloc({ accroche: `${'a'.repeat(299)}🔥`, caption: `${'b'.repeat(2199)}🔥`, geotag: `${'g'.repeat(199)}🔥` });
+    const texte = l.join('\n');
+    expect(texte).not.toMatch(/\[U\+D8/);
+    expect(texte).toContain(`accroche : ${'a'.repeat(299)}`);
   });
 });
 
@@ -244,7 +294,7 @@ describe('correction 1 : bloc de fiche', () => {
     expect(lignes.at(-1)).toBe('</fiche>');
     const i = lignes.indexOf('caption : première ligne');
     expect(i).toBeGreaterThan(-1);
-    expect(lignes.slice(i + 1, i + 3)).toEqual(['seconde ligne', 'troisième']);
+    expect(lignes.slice(i + 1, i + 3)).toEqual(['  seconde ligne', '  troisième']);
     expect(lignes[i + 3]).toMatch(/^hashtags : /);
   });
   it('applique les mêmes limites que le prompt existant', () => {

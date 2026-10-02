@@ -242,8 +242,9 @@ describe('imagesDepuisVideo', () => {
     expect(video.muted).toBe(true);
     expect(video.playsInline).toBe(true);
     expect(video.journal.slice(0, 3)).toEqual(['play', 'image', 'pause']);
-    // Couverture (instant 0), puis le tiers et les deux tiers de la durée.
-    expect(video.journal.slice(3, 6)).toEqual(['seek 0', 'seek 2', 'seek 4']);
+    // La couverture est la première image livrée (aucun retour à 0), puis le tiers et les deux tiers de la durée.
+    expect(video.journal.slice(3, 5)).toEqual(['seek 2', 'seek 4']);
+    expect(video.journal).not.toContain('seek 0');
     expect(u.revokeObjectURL).toHaveBeenCalledWith('blob:v');
   });
   it('échoue quand la lecture est refusée', async () => {
@@ -285,7 +286,7 @@ describe('imagesDepuisVideo', () => {
     video.duration = NaN;
     const images = await imagesDepuisVideo(new Blob(['v']), document(video), { URL: faux() });
     expect(images).toHaveLength(1);
-    expect(video.journal.filter(j => j.startsWith('seek'))).toEqual(['seek 0']);
+    expect(video.journal.filter(j => j.startsWith('seek'))).toEqual([]);
   });
   it('n’ajoute aucune image après l’expiration du délai', async () => {
     const video = fausseVideo();
@@ -305,5 +306,89 @@ describe('imagesDepuisVideo', () => {
     const video = fausseVideo();
     Object.defineProperty(video, 'src', { set() { setTimeout(() => video.onerror?.(), 0); } });
     await expect(imagesDepuisVideo(new Blob(['v']), document(video), { URL: faux() })).rejects.toThrow();
+  });
+});
+
+describe('passe finale E : délai de chargement, couverture, toBlob', () => {
+  it('laisse 30 secondes à une vidéo et 8 secondes à une image', async () => {
+    vi.useFakeTimers();
+    try {
+      const dessiner = vi.fn();
+      const video = preparerCartes([{ ...demande('F01'), type: 'video' }], () => new Promise(() => {}), { dessiner });
+      let fini = false;
+      video.then(() => { fini = true; });
+      await vi.advanceTimersByTimeAsync(29999);
+      expect(fini).toBe(false);
+      await vi.advanceTimersByTimeAsync(2);
+      expect((await video).get('F01')).toEqual({ ok: false });
+      const image = preparerCartes([demande('F02')], () => new Promise(() => {}), { dessiner });
+      let finie = false;
+      image.then(() => { finie = true; });
+      await vi.advanceTimersByTimeAsync(8001);
+      expect(finie).toBe(true);
+    } finally { vi.useRealTimers(); }
+  });
+  it('rend les délais injectables', async () => {
+    const dessiner = vi.fn();
+    const cartes = await preparerCartes([{ ...demande('F01'), type: 'video' }, demande('F02')], () => new Promise(() => {}), { dessiner, delaiChargementMs: 10, delaiChargementVideoMs: 20 });
+    expect(cartes.get('F01')).toEqual({ ok: false });
+    expect(cartes.get('F02')).toEqual({ ok: false });
+  });
+
+  it('prend la couverture même quand aucun seeked n’arrive pour l’instant 0', async () => {
+    const journal = [];
+    const video = {
+      journal, duration: 6, videoWidth: 1080, videoHeight: 1920, readyState: 0,
+      requestVideoFrameCallback(f) { video._frame = f; },
+      removeAttribute() {}, load() {}, pause() {},
+      play() { setTimeout(() => { video.readyState = 2; video._frame?.(); }, 0); return Promise.resolve(); },
+      set src(x) { setTimeout(() => video.onloadedmetadata?.(), 0); },
+      set currentTime(t) { journal.push(t); if (t !== 0) setTimeout(() => video.onseeked?.(), 0); },
+    };
+    const toiles = [];
+    const doc = { createElement: nom => { if (nom === 'video') return video; const t = { width: 0, height: 0, getContext: () => ({ drawImage: () => {} }) }; toiles.push(t); return t; } };
+    const images = await imagesDepuisVideo(new Blob(['v']), doc, { URL: { createObjectURL: () => 'blob:v', revokeObjectURL: vi.fn() }, delaiMs: 2000 });
+    expect(images).toHaveLength(3);
+    expect(journal).toEqual([2, 4]);
+  });
+
+  describe('toBlob', () => {
+    const contexte = () => ({ fillRect() {}, fillText() {}, drawImage() {}, measureText: () => ({ width: 10 }) });
+    const monterToile = toBlob => {
+      const toile = { width: 0, height: 0, getContext: contexte, toBlob };
+      return { toile, document: { createElement: () => toile } };
+    };
+    const lancer = (toBlob, extra = {}) => {
+      const { toile, document } = monterToile(toBlob);
+      return preparerCartes([demande('F01')], async () => new Blob(['x']), { document, versImage: async () => ({ width: 10, height: 10 }), ...extra }).then(c => ({ c, toile }));
+    };
+    it('donne ok:false et libère la toile quand toBlob lève de façon synchrone', async () => {
+      const { c, toile } = await lancer(() => { throw new Error('toBlob'); });
+      expect(c.get('F01')).toEqual({ ok: false });
+      expect(toile).toMatchObject({ width: 0, height: 0 });
+    });
+    it('donne ok:false et libère la toile quand toBlob ne rappelle jamais', async () => {
+      const { c, toile } = await lancer(() => {}, { delaiBlobMs: 20 });
+      expect(c.get('F01')).toEqual({ ok: false });
+      expect(toile).toMatchObject({ width: 0, height: 0 });
+    });
+    it('attend 8 secondes par défaut', async () => {
+      vi.useFakeTimers();
+      try {
+        const { toile, document } = monterToile(() => {});
+        const p = preparerCartes([demande('F01')], async () => new Blob(['x']), { document, versImage: async () => ({ width: 10, height: 10 }) });
+        let fini = false;
+        p.then(() => { fini = true; });
+        await vi.advanceTimersByTimeAsync(7999);
+        expect(fini).toBe(false);
+        await vi.advanceTimersByTimeAsync(2);
+        expect((await p).get('F01')).toEqual({ ok: false });
+        expect(toile.width).toBe(0);
+      } finally { vi.useRealTimers(); }
+    });
+    it('rend la carte quand toBlob rappelle', async () => {
+      const { c } = await lancer(cb => cb(new Blob(['j'], { type: 'image/jpeg' })));
+      expect(c.get('F01').ok).toBe(true);
+    });
   });
 });

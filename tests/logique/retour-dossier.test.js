@@ -94,11 +94,11 @@ describe('validerRetour', () => {
     expect(r.periode).toEqual({ avis: 'Bien.', points_forts: ['a'], risques: ['b'], ordre_conseille: ['F02', 'F01'] });
   });
   it('écarte les fiches invalides, inconnues ou en double et garde les autres', () => {
-    const mauvais = { ...objet, fiches: [jugement('F01'), jugement('F02', { captions: [{ role: 'envoi', texte: 'x' }, { role: 'deadpan', texte: 'y' }] }), jugement('F07'), jugement('F01'), { notes: {} }] };
+    const mauvais = { ...objet, fiches: [jugement('F01'), jugement('F02', { accroches: ['Une'] }), jugement('F07'), jugement('F01'), { notes: {} }] };
     const r = validerRetour(lireRetour(bloc(mauvais)), analyse);
     expect(r.valides.map(v => v.ref)).toEqual(['F01']);
     expect(r.ecartees).toEqual([
-      { ref: 'F02', raison: 'réponse incomplète (captions : exactement 2 captions de rôles différents.)', detail: 'rôle de caption inconnu : envoi' },
+      { ref: 'F02', raison: 'réponse incomplète (accroches : 2 ou 3 textes.)' },
       { ref: 'F07', raison: 'référence inconnue' },
       { ref: 'F01', raison: 'référence en double' },
       { ref: '?', raison: 'entrée sans référence' },
@@ -274,5 +274,72 @@ describe('période bornée (correction 8)', () => {
   });
   it('un avis sans lettre ni chiffre donne une période nulle', () => {
     expect(valides(bloc({ ...objet, periode: { ...objet.periode, avis: '…' } })).periode).toBeNull();
+  });
+});
+
+describe('passe finale B : variante de caption écartée, analyse gardée', () => {
+  const avec = captions => valides(bloc({ ...objet, fiches: [jugement('F01', { captions }), jugement('F02')] }));
+  it('garde la fiche et la caption valide quand l’autre a un rôle inconnu', () => {
+    const r = avec([{ role: 'envoi', texte: 'x' }, { role: 'cta', texte: 'y' }]);
+    expect(r.ecartees).toEqual([]);
+    expect(r.valides.map(v => v.ref)).toEqual(['F01', 'F02']);
+    expect(r.valides[0].jugement.captions).toEqual([{ role: 'cta', texte: 'y' }]);
+    expect(r.valides[0].jugement.notes).toEqual({ accroche: 7, voix: 8, mecanique: 6 });
+    expect(r.valides[0].remarque).toBe('variante de caption écartée : rôle inconnu envoi');
+    expect('remarque' in r.valides[1]).toBe(false);
+  });
+  it('garde la fiche sans caption quand les deux rôles sont inconnus', () => {
+    const r = avec([{ role: 'envoi', texte: 'x' }, { role: 'relance', texte: 'y' }]);
+    expect(r.valides[0].jugement.captions).toEqual([]);
+    expect(r.valides[0].remarque).toBe('variante de caption écartée : rôle inconnu envoi, relance');
+  });
+  it('signale un rôle manquant', () => {
+    const r = avec([{ texte: 'x' }, { role: 'deadpan', texte: 'y' }]);
+    expect(r.valides[0].jugement.captions).toEqual([{ role: 'deadpan', texte: 'y' }]);
+    expect(r.valides[0].remarque).toBe('variante de caption écartée : rôle manquant');
+  });
+  it('signale deux fois le même rôle', () => {
+    const r = avec([{ role: 'cta', texte: 'x' }, { role: 'cta', texte: 'y' }]);
+    expect(r.valides[0].jugement.captions).toEqual([{ role: 'cta', texte: 'x' }]);
+    expect(r.valides[0].remarque).toBe('variante de caption écartée : deux fois le même rôle');
+  });
+  it('écarte toujours la fiche pour une autre invalidité', () => {
+    const r = valides(bloc({ ...objet, fiches: [jugement('F01', { captions: [{ role: 'envoi', texte: 'x' }, { role: 'cta', texte: 'y' }], accroches: ['Une'] }), jugement('F02')] }));
+    expect(r.valides.map(v => v.ref)).toEqual(['F02']);
+    expect(r.ecartees).toEqual([{ ref: 'F01', raison: 'réponse incomplète (accroches : 2 ou 3 textes.)' }]);
+  });
+  it('ne change rien quand les deux captions sont valides', () => {
+    const r = avec([{ role: 'engagement', texte: 'a' }, { role: 'cta', texte: 'b' }]);
+    expect('remarque' in r.valides[0]).toBe(false);
+    expect(r.valides[0].jugement.captions).toHaveLength(2);
+  });
+});
+
+describe('passe finale B : textes', () => {
+  const un = plus => valides(bloc({ ...objet, fiches: [jugement('F01', plus)] }));
+  it('ne prend pas une accroche d’un seul émoji ou « ?! » pour un exemple recopié', () => {
+    expect(un({ accroches: ['🔥', '?!'] }).valides.map(v => v.ref)).toEqual(['F01']);
+    expect(un({ accroches: ['Une', ' . … '] }).ecartees[0]).toEqual({ ref: 'F01', raison: 'exemple recopié, pas une analyse' });
+  });
+  it('reconvertit un code [U+1F525] en caractère, pour les codes valides seulement', () => {
+    const j = un({
+      captions: [{ role: 'engagement', texte: 'Feu [U+1F525] [U+110000] [U+D83D]' }, { role: 'deadpan', texte: 'B.' }],
+      accroches: ['Une [U+1F525]', 'Deux'], recommandations: [{ texte: 'r [U+1F525]', pourquoi: 'p' }, { texte: 'r2', pourquoi: 'p' }, { texte: 'r3', pourquoi: 'p' }],
+    }).valides[0].jugement;
+    expect(j.captions[0].texte).toBe('Feu 🔥 [U+110000] [U+D83D]');
+    expect(j.accroches[0]).toBe('Une 🔥');
+    expect(j.recommandations[0].texte).toBe('r 🔥');
+    const avis = valides(bloc({ ...objet, periode: { ...objet.periode, avis: 'Bien [U+1F525]' } })).periode.avis;
+    expect(avis).toBe('Bien 🔥');
+  });
+  it('ne coupe pas une paire de substitution aux bornes de la période', () => {
+    const p = valides(bloc({ ...objet, periode: { avis: `${'a'.repeat(3999)}🔥`, points_forts: [`${'b'.repeat(499)}🔥`], risques: ['r'], ordre_conseille: [] } })).periode;
+    expect(p.avis).toBe('a'.repeat(3999));
+    expect(p.points_forts[0]).toBe('b'.repeat(499));
+  });
+  it('retire les éléments faits uniquement de points des points forts et des risques', () => {
+    const p = valides(bloc({ ...objet, periode: { avis: 'Ok.', points_forts: ['...', 'réel', '…'], risques: [' . ', 'autre'], ordre_conseille: [] } })).periode;
+    expect(p.points_forts).toEqual(['réel']);
+    expect(p.risques).toEqual(['autre']);
   });
 });

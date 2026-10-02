@@ -137,6 +137,25 @@ describe('évaluation dans le panneau', () => {
     };
   };
 
+  it('passe finale C1 : affiche 0 ou 1 variante sans planter', () => {
+    const sans = panneauFiche({ ...evaluee(), variantes: [] }, fictif, actionsFactices(), { assets: true, sample: true });
+    expect(sans.textContent).not.toContain('Captions proposées');
+    expect(sans.textContent).toContain('Acc 1');
+    const une = panneauFiche({ ...evaluee(), variantes: [{ role: 'cta', texte: 'Seule variante' }] }, fictif, actionsFactices(), { assets: true, sample: true });
+    expect([...une.querySelectorAll('.suggestion-role')].map(x => x.textContent)).toHaveLength(1);
+    expect(une.textContent).toContain('Seule variante');
+  });
+
+  it('passe finale D2 : le champ des hashtags enregistre à chaque frappe sans reformater le texte', () => {
+    const actions = actionsFactices();
+    const p = panneauFiche(fiche(), fictif, actions, { assets: true });
+    const champ = p.querySelector('input[name="hashtags"]');
+    saisir(champ, '#nuit so', 'input');
+    expect(actions.modifierFiche).toHaveBeenLastCalledWith('f1', { hashtags: ['nuit', 'so'] });
+    expect(champ.value).toBe('#nuit so');
+    saisir(champ, '#nuit socio', 'input');
+    expect(actions.modifierFiche).toHaveBeenLastCalledWith('f1', { hashtags: ['nuit', 'socio'] });
+  });
   it('masque « Évaluer » sans la capacité sample', () => {
     const p = panneauFiche(fiche(), fictif, actionsFactices(), { assets: true, sample: false });
     expect(bouton(p, 'Évaluer')).toBeUndefined();
