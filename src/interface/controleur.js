@@ -345,6 +345,16 @@ export function creerControleur({ etat, depot, enregistreur, assets, horloge, id
 
   let generationAnalyse = 0;
 
+  // Les opérations qui lisent puis écrivent un document analyses s'exécutent l'une après l'autre, par code de dossier.
+  const files = new Map();
+  function enFile(code, tache) {
+    const precedente = files.get(code) ?? Promise.resolve();
+    const suite = precedente.catch(() => {}).then(tache);
+    files.set(code, suite);
+    suite.catch(() => {}).then(() => { if (files.get(code) === suite) files.delete(code); });
+    return suite;
+  }
+
   function memeDossier(doc, periode, refs, versionProfil) {
     return doc && !doc.retour && doc.periode?.type === periode.type && doc.periode?.cle === periode.cle
       && (doc.version_profil ?? null) === versionProfil
@@ -364,7 +374,14 @@ export function creerControleur({ etat, depot, enregistreur, assets, horloge, id
     try {
       const refs = attribuerReferences(choix.fiches);
       const versionProfil = profil.version ?? null;
-      const existant = (etat.lire().analyses ?? []).find(d => memeDossier(d, periode, refs, versionProfil));
+      let existant = null;
+      const candidat = (etat.lire().analyses ?? []).find(d => memeDossier(d, periode, refs, versionProfil));
+      if (candidat) {
+        try {
+          const frais = await depot.lireAnalyse(candidat.id);
+          if (memeDossier(frais, periode, refs, versionProfil)) existant = { id: candidat.id, assistant: frais.assistant };
+        } catch { existant = null; }
+      }
       const code = existant ? existant.id : codeDossier(aleatoire);
       const fabrique = await dossier.fabrique();
       const provisoire = contenuDossier({ profil, entrees: choix.fiches.map((fiche, i) => ({ ref: refs[i].ref, fiche, etat: etatVisuel(fiche, null) })), periode, code, toutesLesFiches: fiches });
@@ -376,13 +393,17 @@ export function creerControleur({ etat, depot, enregistreur, assets, horloge, id
       const contenu = contenuDossier({ profil, entrees, periode, code, toutesLesFiches: fiches });
       const fichier = await fabrique.assemblerPdf(contenu, cartes);
       if (jeton !== generationAnalyse) return;
-      await depot.enregistrerAnalyse(code, {
-        periode: { type: periode.type, cle: periode.cle, debut: periode.debut, fin: periode.fin },
-        cree_le: horloge(),
-        assistant: existant?.assistant ?? 'inconnu',
-        version_profil: versionProfil,
-        sections_profil: contenu.sectionsProfil,
-        fiches: entrees.map((e, i) => ({ ...refs[i], visuel: e.etat.visuel, raison_visuel: e.etat.raison_visuel })),
+      await enFile(code, async () => {
+        const actuel = existant ? await depot.lireAnalyse(code) : null;
+        await depot.enregistrerAnalyse(code, {
+          periode: { type: periode.type, cle: periode.cle, debut: periode.debut, fin: periode.fin },
+          cree_le: horloge(),
+          assistant: actuel?.assistant ?? existant?.assistant ?? 'inconnu',
+          version_profil: versionProfil,
+          sections_profil: contenu.sectionsProfil,
+          fiches: entrees.map((e, i) => ({ ...refs[i], visuel: e.etat.visuel, raison_visuel: e.etat.raison_visuel })),
+          ...(actuel?.retour ? { retour: actuel.retour } : {}),
+        });
       });
       if (jeton !== generationAnalyse) return;
       etat.modifier({ analyse: {
@@ -424,8 +445,10 @@ export function creerControleur({ etat, depot, enregistreur, assets, horloge, id
     try {
       const a = analysePrete();
       if (!a || !['claude', 'chatgpt'].includes(nom)) return;
-      const doc = await depot.lireAnalyse(a.code);
-      if (doc) await depot.enregistrerAnalyse(a.code, { ...doc, assistant: nom });
+      await enFile(a.code, async () => {
+        const doc = await depot.lireAnalyse(a.code);
+        if (doc) await depot.enregistrerAnalyse(a.code, { ...doc, assistant: nom });
+      });
     } catch { /* l'assistant noté n'est qu'une indication : rien à signaler */ }
   }
 
@@ -433,9 +456,13 @@ export function creerControleur({ etat, depot, enregistreur, assets, horloge, id
   const interruption = (n, m) => ({ ok: false, raison: `L’enregistrement a été interrompu après ${n} fiche${n > 1 ? 's' : ''} sur ${m} : réessaie, les fiches déjà notées seront simplement réécrites.` });
   const AVIS_VIDE = { avis: '', points_forts: [], risques: [], ordre_conseille: [] };
 
-  async function enregistrerRetour(texte) {
+  function enregistrerRetour(texte) {
     const lu = lireRetour(texte);
-    if (!lu.ok) return lu;
+    if (!lu.ok) return Promise.resolve(lu);
+    return enFile(lu.dossier, () => appliquerRetour(lu));
+  }
+
+  async function appliquerRetour(lu) {
     let analyse;
     try { analyse = await depot.lireAnalyse(lu.dossier); }
     catch (e) { return e?.code === 'revoked' ? SESSION_EXPIREE : { ok: false, raison: 'Le studio n’a pas pu lire le dossier : réessaie dans un instant.' }; }
@@ -457,10 +484,17 @@ export function creerControleur({ etat, depot, enregistreur, assets, horloge, id
       if (!actuelle) { ecartees.push({ ref: item.ref, raison: 'fiche supprimée depuis le dossier' }); continue; }
       if (actuelle.statut === 'publie') { ecartees.push({ ref: item.ref, raison: 'fiche publiée depuis le dossier' }); continue; }
       if (empreinte(actuelle) !== item.empreinte) { ecartees.push({ ref: item.ref, raison: 'fiche modifiée depuis le dossier : refais une analyse' }); continue; }
-      aNoter.push({ item, actuelle });
+      aNoter.push({ item, lue: actuelle });
     }
     const appliquees = [];
-    for (const { item, actuelle } of aNoter) {
+    for (const { item, lue } of aNoter) {
+      // Aucun await entre cette reprise de la fiche courante et remplacer(g) : rien ne peut s'intercaler.
+      let actuelle = trouver(item.id);
+      if (!actuelle && !supprimeesPendantSession.has(item.id) && !enregistreur.estEnAttente(item.id)) actuelle = lue;
+      if (supprimeesPendantSession.has(item.id)) actuelle = null;
+      if (!actuelle) { ecartees.push({ ref: item.ref, raison: 'fiche supprimée depuis le dossier' }); continue; }
+      if (actuelle.statut === 'publie') { ecartees.push({ ref: item.ref, raison: 'fiche publiée depuis le dossier' }); continue; }
+      if (empreinte(actuelle) !== item.empreinte) { ecartees.push({ ref: item.ref, raison: 'fiche modifiée depuis le dossier : refais une analyse' }); continue; }
       const verification = verifierRegles(actuelle, profil.regles_studio);
       const duDossier = analyse.fiches.find(f => f.ref === item.ref);
       const examen = {

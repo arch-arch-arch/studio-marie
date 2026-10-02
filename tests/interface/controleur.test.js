@@ -815,12 +815,13 @@ describe('analyse par dossier', () => {
     const { code } = m.etat.lire().analyse;
     const vider = m.enregistreur.vider;
     let fait = false;
+    let note = null;
     m.enregistreur.vider = async id => {
-      const r = await vider(id);
-      if (!fait) { fait = true; await m.actions.noterAssistant('chatgpt'); }
-      return r;
+      if (!fait) { fait = true; note = m.actions.noterAssistant('chatgpt'); }
+      return vider(id);
     };
     await m.actions.enregistrerRetour(reponse(code, ['F01', 'F02']));
+    await note;
     expect(m.db.lire(`analyses/${code}`).assistant).toBe('chatgpt');
     expect(m.db.lire(`analyses/${code}`).retour.appliquees).toHaveLength(2);
   });
@@ -844,5 +845,97 @@ describe('analyse par dossier', () => {
     const r = await actions.enregistrerRetour(reponse(code, ['F01', 'F02'], { periode: 'rien' }));
     expect(r.avisRecu).toBe(false);
     expect(db.lire(`analyses/${code}`).retour).toMatchObject({ avis: 'Semaine correcte.', points_forts: ['x'], risques: ['y'], ordre_conseille: ['F01', 'F02'], appliquees: expect.any(Array) });
+  });
+
+  // Agit une seule fois, juste avant l'écriture de la première fiche notée.
+  const agirPendantEcriture = (m, action) => {
+    const vider = m.enregistreur.vider;
+    let fait = false;
+    m.enregistreur.vider = async id => {
+      if (!fait) { fait = true; await action(); }
+      return vider(id);
+    };
+  };
+
+  it('(A) garde la saisie faite sur une fiche pendant l’écriture de la précédente', async () => {
+    const m = await avecDeuxFiches();
+    await m.actions.ouvrirAnalyse();
+    const { code } = m.etat.lire().analyse;
+    agirPendantEcriture(m, () => m.actions.modifierFiche(m.b.id, { caption: 'Saisie tardive' }));
+    const r = await m.actions.enregistrerRetour(reponse(code, ['F01', 'F02']));
+    expect(r).toEqual({ ok: true, appliquees: 1, avisRecu: true, ecartees: [{ ref: 'F02', raison: 'fiche modifiée depuis le dossier : refais une analyse' }] });
+    expect(m.etat.lire().fiches.find(f => f.id === m.b.id).caption).toBe('Saisie tardive');
+    await m.enregistreur.vider(m.b.id);
+    expect(m.db.lire(`fiches/${m.b.id}`).caption).toBe('Saisie tardive');
+    expect(m.db.lire(`fiches/${m.b.id}`).score ?? null).toBeNull();
+  });
+
+  it('(B) ne réécrit pas une fiche supprimée pendant l’écriture de la précédente', async () => {
+    const m = await avecDeuxFiches();
+    await m.actions.ouvrirAnalyse();
+    const { code } = m.etat.lire().analyse;
+    agirPendantEcriture(m, () => m.actions.supprimerFiche(m.b.id));
+    const r = await m.actions.enregistrerRetour(reponse(code, ['F01', 'F02']));
+    expect(r).toEqual({ ok: true, appliquees: 1, avisRecu: true, ecartees: [{ ref: 'F02', raison: 'fiche supprimée depuis le dossier' }] });
+    await m.enregistreur.viderTout();
+    expect(m.db.lire(`fiches/${m.b.id}`)).toBeUndefined();
+  });
+
+  it('(C) garde la nouvelle date d’une fiche déplacée pendant l’écriture de la précédente', async () => {
+    const m = await avecDeuxFiches();
+    await m.actions.ouvrirAnalyse();
+    const { code } = m.etat.lire().analyse;
+    agirPendantEcriture(m, () => m.actions.deplacerFiche(m.b.id, '2026-10-01T10:00:00.000Z'));
+    const r = await m.actions.enregistrerRetour(reponse(code, ['F01', 'F02']));
+    expect(r).toEqual({ ok: true, appliquees: 2, avisRecu: true, ecartees: [] });
+    const enBase = m.db.lire(`fiches/${m.b.id}`);
+    expect(enBase.date_heure.startsWith('2026-10-01')).toBe(true);
+    expect(enBase.score.total).toBeGreaterThan(0);
+  });
+
+  it('écarte une fiche publiée pendant l’écriture de la précédente', async () => {
+    const m = await avecDeuxFiches();
+    await m.actions.ouvrirAnalyse();
+    const { code } = m.etat.lire().analyse;
+    agirPendantEcriture(m, () => m.etat.modifier({ fiches: m.etat.lire().fiches.map(f => (f.id === m.b.id ? { ...f, statut: 'publie' } : f)) }));
+    const r = await m.actions.enregistrerRetour(reponse(code, ['F01', 'F02']));
+    expect(r.ecartees).toEqual([{ ref: 'F02', raison: 'fiche publiée depuis le dossier' }]);
+  });
+
+  it('ne réutilise pas un dossier dont le retour est arrivé en base après l’état', async () => {
+    const { actions, etat, db } = await avecDeuxFiches();
+    await actions.ouvrirAnalyse();
+    const premier = etat.lire().analyse.code;
+    synchroniserAnalyses(etat, db);
+    await actions.enregistrerRetour(reponse(premier, ['F01', 'F02']));
+    const retour = db.lire(`analyses/${premier}`).retour;
+    expect(retour).toBeDefined();
+    // l'état est en retard : il montre toujours le dossier sans retour
+    etat.modifier({ analyses: etat.lire().analyses.map(a => ({ ...a, retour: undefined })) });
+    await actions.ouvrirAnalyse();
+    expect(etat.lire().analyse.code).not.toBe(premier);
+    expect(db.lire(`analyses/${premier}`).retour).toEqual(retour);
+  });
+
+  it('prend un nouveau code quand la relecture du dossier à réutiliser échoue', async () => {
+    const { actions, etat, db } = await avecDeuxFiches();
+    await actions.ouvrirAnalyse();
+    const premier = etat.lire().analyse.code;
+    synchroniserAnalyses(etat, db);
+    db.echouerLectures(`analyses/${premier}`);
+    await actions.ouvrirAnalyse();
+    expect(etat.lire().analyse.code).not.toBe(premier);
+  });
+
+  it('applique un assistant noté sans attendre avant le retour', async () => {
+    const { actions, etat, db, a } = await avecDeuxFiches();
+    await actions.ouvrirAnalyse();
+    const { code } = etat.lire().analyse;
+    const note = actions.noterAssistant('chatgpt');
+    const r = await actions.enregistrerRetour(reponse(code, ['F01', 'F02']));
+    await note;
+    expect(r.ok).toBe(true);
+    expect(db.lire(`analyses/${code}`)).toMatchObject({ assistant: 'chatgpt', retour: { appliquees: expect.any(Array) } });
+    expect(db.lire(`fiches/${a.id}`).score.examen.assistant).toBe('chatgpt');
   });
 });
