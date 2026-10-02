@@ -98,10 +98,10 @@ describe('validerRetour', () => {
     const r = validerRetour(lireRetour(bloc(mauvais)), analyse);
     expect(r.valides.map(v => v.ref)).toEqual(['F01']);
     expect(r.ecartees).toEqual([
-      { ref: 'F02', raison: 'réponse incomplète (captions : exactement 2 captions de rôles différents.)' },
+      { ref: 'F02', raison: 'réponse incomplète (captions : exactement 2 captions de rôles différents.)', detail: 'rôle de caption inconnu : envoi' },
       { ref: 'F07', raison: 'référence inconnue' },
       { ref: 'F01', raison: 'référence en double' },
-      { ref: '?', raison: 'référence inconnue' },
+      { ref: '?', raison: 'entrée sans référence' },
     ]);
   });
   it('signale les fiches du dossier absentes de la réponse', () => {
@@ -118,10 +118,10 @@ describe('validerRetour', () => {
     const r = validerRetour(lireRetour(bloc({ ...objet, fiches: [jugement('F01'), null, 'F02', 7, [jugement('F02')], jugement('F02')] })), analyse);
     expect(r.valides.map(v => v.ref)).toEqual(['F01', 'F02']);
     expect(r.ecartees).toEqual([
-      { ref: '?', raison: 'référence inconnue' },
-      { ref: '?', raison: 'référence inconnue' },
-      { ref: '?', raison: 'référence inconnue' },
-      { ref: '?', raison: 'référence inconnue' },
+      { ref: '?', raison: 'entrée sans référence' },
+      { ref: '?', raison: 'entrée sans référence' },
+      { ref: '?', raison: 'entrée sans référence' },
+      { ref: '?', raison: 'entrée sans référence' },
     ]);
   });
   it('ne lève jamais, quelle que soit l’entrée', () => {
@@ -131,7 +131,148 @@ describe('validerRetour', () => {
       expect(r.valides).toEqual([]);
       expect(r.periode).toBeNull();
     }
+    expect(validerRetour(null, analyse).ecartees).toEqual([{ ref: '?', raison: 'retour illisible' }]);
+    const piege = { get fiches() { throw new Error('boum'); } };
+    expect(validerRetour(lireRetour(bloc(objet)), piege)).toEqual({ valides: [], ecartees: [{ ref: '?', raison: 'retour illisible' }], periode: null });
     const lu = lireRetour(bloc(objet));
     for (const a of [null, undefined, 42, {}, { fiches: null }]) expect(() => validerRetour(lu, a)).not.toThrow();
+  });
+});
+
+const exemple = (vide, code = 'D-abc123', refs = ['F01', 'F02']) => ({
+  dossier: code,
+  fiches: [{
+    id: refs[0],
+    notes: { accroche: 7, voix: 8, mecanique: 6 },
+    phrases: { accroche: vide, voix: vide, mecanique: vide },
+    conformite: { etat: 'vert', causes: [] },
+    captions: [{ role: 'engagement', texte: vide }, { role: 'deadpan', texte: vide }],
+    accroches: [vide, vide],
+    hashtags: ['mot'],
+    recommandations: [{ texte: vide, pourquoi: vide }, { texte: vide, pourquoi: vide }, { texte: vide, pourquoi: vide }],
+  }],
+  periode: { avis: vide, points_forts: [vide], risques: [vide], ordre_conseille: refs.slice(0, 2) },
+});
+const consigne = vide => `Tu es une éditrice exigeante.\nmecanique : première ligne qui provoque avant « …plus ».\n\nBloc à coller dans le studio : de cette forme exacte :\n\n${JSON.stringify(exemple(vide), null, 2)}\n\nContraintes du bloc : une entrée par fiche (F01 à F02) ; aucun texte après le bloc.`;
+const valides = texte => validerRetour(lireRetour(texte), analyse);
+
+describe('exemple de la consigne (correction 1)', () => {
+  for (const vide of ['…', '...']) {
+    it(`A : exemple (${vide}) puis vraie réponse coupée : aucune fiche valide`, () => {
+      const texte = `${bloc(exemple(vide))}\n\nBloc à coller dans le studio :\n\`\`\`json\n${JSON.stringify(objet, null, 2).slice(0, 400)}`;
+      const r = valides(texte);
+      expect(r.valides).toEqual([]);
+      expect(r.periode).toBeNull();
+      expect(r.ecartees[0]).toEqual({ ref: 'F01', raison: 'exemple recopié, pas une analyse' });
+    });
+    it(`B : consigne (${vide}) collée seule : aucune fiche valide`, () => {
+      const r = valides(consigne(vide));
+      expect(r.valides).toEqual([]);
+      expect(r.periode).toBeNull();
+    });
+    it(`C : vraie réponse complète après l’exemple (${vide}) : lue`, () => {
+      const r = valides(`${bloc(exemple(vide))}\nPuis :\n${bloc(objet)}`);
+      expect(r.valides.map(v => v.ref)).toEqual(['F01', 'F02']);
+      expect(r.periode.avis).toBe('Bien.');
+    });
+  }
+  it('écarte une fiche dont un seul texte est vide de sens', () => {
+    const r = valides(bloc({ ...objet, fiches: [jugement('F01', { accroches: ['Une', '...'] })] }));
+    expect(r.ecartees[0]).toEqual({ ref: 'F01', raison: 'exemple recopié, pas une analyse' });
+  });
+});
+
+describe('marqueurs de citation réels (corrections 2 et 3)', () => {
+  const avis = texte => lireRetour(bloc({ ...objet, periode: { ...objet.periode, avis: texte } })).periode.avis;
+  it('retire fileciteturn0file0', () => { expect(avis('Bien fileciteturn0file0.')).toBe('Bien .'); });
+  it('retire citeturn0search0turn1view2', () => { expect(avis('Bien citeturn0search0turn1view2.')).toBe('Bien .'); });
+  it('retire le segment U+E200 à U+E201', () => {
+    expect(avis('Bien \uE200cite\uE202turn0search0\uE201.')).toBe('Bien .');
+    expect(avis('Bien \uE200filecite\uE202turn0file0\uE202turn0file1\uE201.')).toBe('Bien .');
+  });
+  it('retire un caractère privé isolé', () => {
+    expect(avis('Bien\uE200 fin.')).toBe('Bien fin.');
+    expect(avis('Bien fin\uE201.')).toBe('Bien fin.');
+  });
+  it('retire :contentReference[oaicite:2]{index=2}', () => { expect(avis('Bien :contentReference[oaicite:2]{index=2}.')).toBe('Bien .'); });
+  it('retire toujours les formes déjà couvertes', () => {
+    expect(avis('A :codex-file-citation{path="x"} B 【4†source】 C [oaicite:2] D')).toBe('A B C D');
+  });
+  it('garde « citeturn » seul et les mots légitimes', () => {
+    expect(avis('Mot citeturn seul.')).toBe('Mot citeturn seul.');
+    expect(avis('La Faciliteturn reste.')).toBe('La Faciliteturn reste.');
+  });
+  it('lit un bloc dont une valeur contient le marqueur brut non échappé', () => {
+    const brut = JSON.stringify({ ...objet, periode: { ...objet.periode, avis: 'XX' } }, null, 2)
+      .replace('XX', 'Bien. :codex-file-citation{path="x.pdf" purpose="source"} Fin.');
+    expect(() => JSON.parse(brut)).toThrow();
+    const r = lireRetour(`\`\`\`json\n${brut}\n\`\`\``);
+    expect(r.ok).toBe(true);
+    expect(r.periode.avis).toBe('Bien. Fin.');
+  });
+});
+
+describe('détection de coupure (correction 4)', () => {
+  it('petit bloc lisible sans rapport puis vraie réponse coupée : COUPE', () => {
+    const coupe = `\`\`\`json\n${JSON.stringify(objet, null, 2).slice(0, 300)}`;
+    expect(lireRetour(`\`\`\`json\n{"exemple": true}\n\`\`\`\n${coupe}`)).toEqual({ ok: false, raison: MESSAGE_COUPE });
+    expect(lireRetour(`\`\`\`json\n42\n\`\`\`\n${coupe}`)).toEqual({ ok: false, raison: MESSAGE_COUPE });
+  });
+  it('un objet complet avec dossier mais sans fiches valides : SANS_BLOC', () => {
+    expect(lireRetour(bloc({ dossier: 'D-abc123', fiches: 'non' }))).toEqual({ ok: false, raison: MESSAGE_SANS_BLOC });
+  });
+});
+
+describe('références tolérantes (correction 5)', () => {
+  it('accepte f01, " F1 " et un id numérique, pour id et ordre_conseille', () => {
+    const o = { ...objet, fiches: [jugement('f01'), jugement(' F2 ')], periode: { ...objet.periode, ordre_conseille: ['f2', ' F1 ', 'F01', 2] } };
+    const r = valides(bloc(o));
+    expect(r.valides.map(v => [v.ref, v.id])).toEqual([['F01', 'a'], ['F02', 'b']]);
+    expect(r.periode.ordre_conseille).toEqual(['F02', 'F01']);
+    expect(valides(bloc({ ...objet, fiches: [jugement(1)] })).valides.map(v => v.ref)).toEqual(['F01']);
+    expect(valides(bloc({ ...objet, fiches: [jugement('F001')] })).valides.map(v => v.ref)).toEqual(['F01']);
+  });
+});
+
+describe('doublons (correction 6)', () => {
+  it('garde la valide quand la première est invalide', () => {
+    const mauvais = jugement('F01', { accroches: ['Une'] });
+    const r = valides(bloc({ ...objet, fiches: [mauvais, jugement('F01'), jugement('F02')] }));
+    expect(r.valides.map(v => v.ref)).toEqual(['F01', 'F02']);
+    expect(r.ecartees).toEqual([{ ref: 'F01', raison: 'réponse incomplète (accroches : 2 ou 3 textes.)' }]);
+  });
+  it('garde la première de deux valides', () => {
+    const r = valides(bloc({ ...objet, fiches: [jugement('F01', { hashtags: ['premier'] }), jugement('F01', { hashtags: ['second'] }), jugement('F02')] }));
+    expect(r.valides[0].jugement.hashtags).toEqual(['premier']);
+    expect(r.ecartees).toEqual([{ ref: 'F01', raison: 'référence en double' }]);
+  });
+});
+
+describe('raisons lisibles (correction 7)', () => {
+  it('liste toutes les erreurs, séparées par « ; »', () => {
+    const r = valides(bloc({ ...objet, fiches: [jugement('F01', { accroches: ['Une'], hashtags: 'x' }), jugement('F02')] }));
+    expect(r.ecartees).toEqual([{ ref: 'F01', raison: 'réponse incomplète (accroches : 2 ou 3 textes. ; hashtags : liste de textes.)' }]);
+  });
+  it('distingue une entrée sans référence d’une référence inconnue', () => {
+    const r = valides(bloc({ ...objet, fiches: [jugement('F01'), jugement('F02'), jugement('F09'), { ...jugement('F01'), id: undefined }, jugement(null)] }));
+    expect(r.ecartees).toEqual([
+      { ref: 'F09', raison: 'référence inconnue' },
+      { ref: '?', raison: 'entrée sans référence' },
+      { ref: '?', raison: 'entrée sans référence' },
+    ]);
+  });
+});
+
+describe('période bornée (correction 8)', () => {
+  it('retire les doublons et borne les longueurs', () => {
+    const periode = { avis: 'a'.repeat(5000), points_forts: Array.from({ length: 20 }, (_, i) => `p${i}${'x'.repeat(600)}`), risques: ['r'], ordre_conseille: ['F02', 'F02', 'F01', 'f02'] };
+    const p = valides(bloc({ ...objet, periode })).periode;
+    expect(p.avis).toHaveLength(4000);
+    expect(p.points_forts).toHaveLength(12);
+    expect(p.points_forts.every(t => t.length === 500)).toBe(true);
+    expect(p.ordre_conseille).toEqual(['F02', 'F01']);
+  });
+  it('un avis sans lettre ni chiffre donne une période nulle', () => {
+    expect(valides(bloc({ ...objet, periode: { ...objet.periode, avis: '…' } })).periode).toBeNull();
   });
 });
