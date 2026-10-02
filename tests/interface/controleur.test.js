@@ -11,13 +11,13 @@ import { construireExport, COLLECTIONS_EXPORT } from '../../src/logique/sauvegar
 const T = '2026-09-28T08:00:00.000Z';
 const FZ = 'Europe/Paris';
 
-function monter({ assets = null, dossier = null } = {}) {
+function monter({ assets = null, dossier = null, delaiAssistantMs } = {}) {
   const db = creerFausseBase();
   const depot = creerDepot(db);
   const enregistreur = creerEnregistreur(f => depot.enregistrerFiche(f), 600);
   const etat = creerEtat({ profil: { ...fictif, version: 1 }, fiches: [], vue: 'semaine', ancre: T, ficheOuverte: null, erreur: null, sauvegarde: 'ok' });
   let n = 0;
-  const actions = creerControleur({ etat, depot, enregistreur, assets, dossier, horloge: () => T, idAleatoire: () => `f${++n}` });
+  const actions = creerControleur({ etat, depot, enregistreur, assets, dossier, delaiAssistantMs, horloge: () => T, idAleatoire: () => `f${++n}` });
   return { db, etat, actions, enregistreur };
 }
 
@@ -519,7 +519,7 @@ const reponse = (code, refs, plus = {}) => '```json\n' + JSON.stringify({
 describe('analyse par dossier', () => {
   async function avecDeuxFiches(options) {
     const dossier = fauxDossier(options);
-    const m = monter({ dossier, assets: { upload: vi.fn(), telecharger: vi.fn(async () => new Blob(['i'], { type: 'image/png' })) } });
+    const m = monter({ dossier, delaiAssistantMs: options?.delaiAssistantMs, assets: { upload: vi.fn(), telecharger: vi.fn(async () => new Blob(['i'], { type: 'image/png' })) } });
     await m.actions.creerFiche({ format: 'reel', date_heure: '2026-09-29T10:00:00.000Z' });
     await m.actions.creerFiche({ format: 'story', date_heure: '2026-09-30T10:00:00.000Z' });
     const [a, b] = m.etat.lire().fiches;
@@ -938,6 +938,154 @@ describe('analyse par dossier', () => {
     expect(db.lire(`analyses/${code}`)).toMatchObject({ assistant: 'chatgpt', retour: { appliquees: expect.any(Array) } });
     expect(db.lire(`fiches/${a.id}`).score.examen.assistant).toBe('chatgpt');
   });
+  // Écoute des fiches branchée comme dans app.js : une fiche qui sort de la plage affichée sort de l'état.
+  function brancherEcoute(m) {
+    const depot = creerDepot(m.db);
+    let cle = '';
+    let arret = null;
+    const maj = e => {
+      const [debut, fin] = plageDeVue(e.vue, e.ancre, FZ);
+      if (`${debut}|${fin}` === cle) return;
+      cle = `${debut}|${fin}`;
+      arret?.();
+      arret = depot.ecouterFiches(debut, fin, recues => m.etat.modifier({ fiches: fusionnerInstantane(recues, m.etat.lire().fiches, m.enregistreur.estEnAttente) }), () => {});
+    };
+    m.etat.abonner(maj);
+    maj(m.etat.lire());
+  }
+  const dansEtat = (m, id) => m.etat.lire().fiches.some(f => f.id === id);
+
+  it('(D) note à sa nouvelle date une fiche déplacée vers une autre semaine pendant l’écriture', async () => {
+    const m = await avecDeuxFiches();
+    brancherEcoute(m);
+    await m.actions.ouvrirAnalyse();
+    const { code } = m.etat.lire().analyse;
+    agirPendantEcriture(m, () => m.actions.deplacerFiche(m.b.id, '2026-10-06T10:00:00.000Z'));
+    const r = await m.actions.enregistrerRetour(reponse(code, ['F01', 'F02']));
+    expect(dansEtat(m, m.b.id)).toBe(false);
+    expect(r).toEqual({ ok: true, appliquees: 2, avisRecu: true, ecartees: [] });
+    const enBase = m.db.lire(`fiches/${m.b.id}`);
+    expect(enBase.date_heure.startsWith('2026-10-06')).toBe(true);
+    expect(enBase.score.total).toBeGreaterThan(0);
+  });
+
+  it('(E) garde la saisie d’une fiche sortie de l’état par un changement de semaine', async () => {
+    const m = await avecDeuxFiches();
+    brancherEcoute(m);
+    await m.actions.ouvrirAnalyse();
+    const { code } = m.etat.lire().analyse;
+    agirPendantEcriture(m, async () => {
+      m.actions.modifierFiche(m.b.id, { caption: 'Saisie avant changement de semaine' });
+      await m.enregistreur.vider(m.b.id);
+      await m.actions.naviguer(1);
+    });
+    const r = await m.actions.enregistrerRetour(reponse(code, ['F01', 'F02']));
+    expect(dansEtat(m, m.b.id)).toBe(false);
+    expect(r.ecartees).toEqual([{ ref: 'F02', raison: 'fiche modifiée depuis le dossier : refais une analyse' }]);
+    await m.enregistreur.viderTout();
+    expect(m.db.lire(`fiches/${m.b.id}`).caption).toBe('Saisie avant changement de semaine');
+    expect(m.db.lire(`fiches/${m.b.id}`).score ?? null).toBeNull();
+  });
+
+  it('(F) ne ressuscite pas une fiche supprimée depuis un autre appareil', async () => {
+    const m = await avecDeuxFiches();
+    brancherEcoute(m);
+    await m.actions.ouvrirAnalyse();
+    const { code } = m.etat.lire().analyse;
+    agirPendantEcriture(m, () => m.db.doc(`fiches/${m.b.id}`).delete());
+    const r = await m.actions.enregistrerRetour(reponse(code, ['F01', 'F02']));
+    expect(dansEtat(m, m.b.id)).toBe(false);
+    expect(r).toEqual({ ok: true, appliquees: 1, avisRecu: true, ecartees: [{ ref: 'F02', raison: 'fiche supprimée depuis le dossier' }] });
+    await m.enregistreur.viderTout();
+    expect(m.db.lire(`fiches/${m.b.id}`)).toBeUndefined();
+  });
+
+  it('interrompt (sans écarter à tort) une fiche sortie de l’état dont l’écriture reste en attente', async () => {
+    const m = await avecDeuxFiches();
+    await m.actions.ouvrirAnalyse();
+    const { code } = m.etat.lire().analyse;
+    m.actions.modifierFiche(m.a.id, { caption: 'En attente' });
+    m.db.echouerEcritures(`fiches/${m.a.id}`);
+    m.etat.modifier({ fiches: m.etat.lire().fiches.filter(f => f.id !== m.a.id) });
+    const r = await m.actions.enregistrerRetour(reponse(code, ['F01', 'F02']));
+    expect(r.ok).toBe(false);
+    expect(r.raison).toMatch(/interrompu/);
+  });
+
+  it('retire du total du message d’interruption les fiches écartées pendant l’écriture', async () => {
+    const m = await avecDeuxFiches();
+    await m.actions.creerFiche({ format: 'post', date_heure: '2026-10-01T10:00:00.000Z' });
+    const c = m.etat.lire().fiches.at(-1);
+    m.actions.modifierFiche(c.id, { accroche: 'Troisième', caption: 'T' });
+    await m.actions.fermerPanneau();
+    await m.actions.ouvrirAnalyse();
+    const { code } = m.etat.lire().analyse;
+    agirPendantEcriture(m, () => m.actions.modifierFiche(m.b.id, { caption: 'Autre saisie' }));
+    m.db.echouerEcritures(`fiches/${c.id}`);
+    const r = await m.actions.enregistrerRetour(reponse(code, ['F01', 'F02', 'F03']));
+    expect(r).toEqual({ ok: false, raison: 'L’enregistrement a été interrompu après 1 fiche sur 2 : réessaie, les fiches déjà notées seront simplement réécrites.' });
+  });
+
+  it('n’écrit pas le dossier si le panneau est fermé pendant l’attente dans la file', async () => {
+    const m = await avecDeuxFiches();
+    await m.actions.ouvrirAnalyse();
+    const { code } = m.etat.lire().analyse;
+    synchroniserAnalyses(m.etat, m.db);
+    let liberer;
+    const porte = new Promise(r => { liberer = r; });
+    agirPendantEcriture(m, () => porte);
+    const retour = m.actions.enregistrerRetour(reponse(code, ['F01', 'F02']));
+    const ouverture = m.actions.ouvrirAnalyse();
+    await new Promise(r => setTimeout(r, 30));
+    m.actions.fermerAnalyse();
+    liberer();
+    await Promise.all([retour, ouverture]);
+    expect(m.db.ecritures.filter(c => c === `analyses/${code}`)).toHaveLength(2);
+    expect(m.etat.lire().analyse).toBeNull();
+  });
+
+  it('garde le retour arrivé pendant que l’ouverture attend d’écrire le dossier', async () => {
+    const m = await avecDeuxFiches();
+    await m.actions.ouvrirAnalyse();
+    const { code } = m.etat.lire().analyse;
+    synchroniserAnalyses(m.etat, m.db);
+    let liberer;
+    const porte = new Promise(r => { liberer = r; });
+    agirPendantEcriture(m, () => porte);
+    const retour = m.actions.enregistrerRetour(reponse(code, ['F01', 'F02']));
+    const ouverture = m.actions.ouvrirAnalyse();
+    await new Promise(r => setTimeout(r, 30));
+    liberer();
+    await Promise.all([retour, ouverture]);
+    expect(m.etat.lire().analyse.code).toBe(code);
+    expect(m.db.lire(`analyses/${code}`).retour).toMatchObject({ appliquees: expect.any(Array) });
+    expect(m.db.lire(`analyses/${code}`).retour.appliquees).toHaveLength(2);
+  });
+
+  it('accepte deux collages lancés ensemble, sans doublon', async () => {
+    const { actions, etat, db } = await avecDeuxFiches();
+    await actions.ouvrirAnalyse();
+    const texte = reponse(etat.lire().analyse.code, ['F01', 'F02']);
+    const [r1, r2] = await Promise.all([actions.enregistrerRetour(texte), actions.enregistrerRetour(texte)]);
+    expect(r1).toEqual({ ok: true, appliquees: 2, ecartees: [], avisRecu: true });
+    expect(r2).toEqual(r1);
+    expect(db.lister('fiches')).toHaveLength(2);
+  });
+
+  it('noterAssistant suspendu ne bloque pas indéfiniment la file du dossier', async () => {
+    const { actions, etat, db } = await avecDeuxFiches({ delaiAssistantMs: 40 });
+    await actions.ouvrirAnalyse();
+    const { code } = etat.lire().analyse;
+    const liberer = db.bloquerLectures(`analyses/${code}`);
+    const note = actions.noterAssistant('claude');
+    const retour = actions.enregistrerRetour(reponse(code, ['F01', 'F02']));
+    await expect(note).resolves.toBeUndefined();
+    liberer();
+    const r = await retour;
+    expect(r).toMatchObject({ ok: true, appliquees: 2 });
+    expect(db.lire(`analyses/${code}`).assistant).toBe('inconnu');
+  });
+
 });
 
 describe('analyse par dossier : interface', () => {

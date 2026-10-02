@@ -17,18 +17,25 @@ export function creerFausseBase() {
   });
 
   let cheminEnEchec; // chemin dont les écritures (set) échouent, undefined si aucun
+  let blocage = null; // { chemin, promesse } : la lecture (get) de ce chemin attend bloquerLectures()
   let lectureEnEchec = null; // { chemin, code } : la lecture (get) de ce chemin échoue
   const base = {
     ecritures: [],
     _docs: docs,
     lire: chemin => (docs.has(chemin) ? structuredClone(docs.get(chemin)) : undefined),
     lister: collection => [...docs.keys()].filter(c => c.startsWith(`${collection}/`) && c.split('/').length === collection.split('/').length + 1).sort(),
+    bloquerLectures: chemin => {
+      let liberer;
+      blocage = { chemin, promesse: new Promise(r => { liberer = r; }) };
+      return () => { blocage = null; liberer(); };
+    },
     echouerLectures: (chemin, code = 'unavailable') => { lectureEnEchec = chemin ? { chemin, code } : null; },
     echouerEcritures: chemin => { cheminEnEchec = chemin ?? undefined; },
     doc: chemin => ({
       id: chemin.split('/').pop(),
       path: chemin,
       async get() {
+        if (blocage?.chemin === chemin) await blocage.promesse;
         if (lectureEnEchec?.chemin === chemin) throw Object.assign(new Error('lecture refusée'), { code: lectureEnEchec.code });
         return instantane(chemin);
       },

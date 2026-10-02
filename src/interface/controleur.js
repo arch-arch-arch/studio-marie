@@ -49,7 +49,7 @@ async function chargerImageParDefaut(id) {
 
 const INDISPONIBLE = { ok: false, raison: 'L’évaluation par Claude n’est pas disponible dans cette vue.', indisponible: true };
 
-export function creerControleur({ etat, depot, enregistreur, assets, horloge, idAleatoire = nouvelId, sample = null, chargerImage = chargerImageParDefaut, downloads = null, connexion = null, veille = null, dossier = null, aleatoire = Math.random }) {
+export function creerControleur({ etat, depot, enregistreur, assets, horloge, idAleatoire = nouvelId, sample = null, chargerImage = chargerImageParDefaut, downloads = null, connexion = null, veille = null, dossier = null, aleatoire = Math.random, delaiAssistantMs = 10000 }) {
   const trouver = id => etat.lire().fiches.find(f => f.id === id);
   const fuseau = () => etat.lire().profil.regles_studio.fuseau;
   const remplacer = f => etat.modifier({ fiches: etat.lire().fiches.map(x => (x.id === f.id ? f : x)) });
@@ -396,6 +396,7 @@ export function creerControleur({ etat, depot, enregistreur, assets, horloge, id
       const fichier = await fabrique.assemblerPdf(contenu, cartes);
       if (jeton !== generationAnalyse) return;
       await enFile(code, async () => {
+        if (jeton !== generationAnalyse) return;
         const actuel = existant ? await depot.lireAnalyse(code) : null;
         await depot.enregistrerAnalyse(code, {
           periode: { type: periode.type, cle: periode.cle, debut: periode.debut, fin: periode.fin },
@@ -450,8 +451,15 @@ export function creerControleur({ etat, depot, enregistreur, assets, horloge, id
       const a = analysePrete();
       if (!a || !['claude', 'chatgpt'].includes(nom)) return;
       await enFile(a.code, async () => {
-        const doc = await depot.lireAnalyse(a.code);
-        if (doc) await depot.enregistrerAnalyse(a.code, { ...doc, assistant: nom });
+        let abandonne = false;
+        let minuterie;
+        const limite = new Promise(resolve => { minuterie = setTimeout(() => { abandonne = true; resolve(); }, delaiAssistantMs); });
+        const operation = (async () => {
+          const doc = await depot.lireAnalyse(a.code);
+          if (doc && !abandonne) await depot.enregistrerAnalyse(a.code, { ...doc, assistant: nom });
+        })();
+        operation.catch(() => {});
+        try { await Promise.race([operation, limite]); } finally { clearTimeout(minuterie); }
       });
     } catch { /* l'assistant noté n'est qu'une indication : rien à signaler */ }
   }
@@ -488,17 +496,25 @@ export function creerControleur({ etat, depot, enregistreur, assets, horloge, id
       if (!actuelle) { ecartees.push({ ref: item.ref, raison: 'fiche supprimée depuis le dossier' }); continue; }
       if (actuelle.statut === 'publie') { ecartees.push({ ref: item.ref, raison: 'fiche publiée depuis le dossier' }); continue; }
       if (empreinte(actuelle) !== item.empreinte) { ecartees.push({ ref: item.ref, raison: 'fiche modifiée depuis le dossier : refais une analyse' }); continue; }
-      aNoter.push({ item, lue: actuelle });
+      aNoter.push({ item });
     }
     const appliquees = [];
-    for (const { item, lue } of aNoter) {
+    let ecarteesEnEcriture = 0;
+    const ecarter = (item, raison) => { ecartees.push({ ref: item.ref, raison }); ecarteesEnEcriture += 1; };
+    for (const { item } of aNoter) {
+      // Une fiche sortie de l'état est relue en base (écritures en attente vidées d'abord) : jamais la capture du calcul.
+      let relue = null;
+      if (!trouver(item.id) && !supprimeesPendantSession.has(item.id)) {
+        await enregistreur.vider(item.id);
+        if (enregistreur.estEnAttente(item.id) || enregistreur.enEchec().includes(item.id)) return interruption(appliquees.length, aNoter.length - ecarteesEnEcriture);
+        try { relue = await depot.lireFiche(item.id); }
+        catch (e) { return e?.code === 'revoked' ? SESSION_EXPIREE : interruption(appliquees.length, aNoter.length - ecarteesEnEcriture); }
+      }
       // Aucun await entre cette reprise de la fiche courante et remplacer(g) : rien ne peut s'intercaler.
-      let actuelle = trouver(item.id);
-      if (!actuelle && !supprimeesPendantSession.has(item.id) && !enregistreur.estEnAttente(item.id)) actuelle = lue;
-      if (supprimeesPendantSession.has(item.id)) actuelle = null;
-      if (!actuelle) { ecartees.push({ ref: item.ref, raison: 'fiche supprimée depuis le dossier' }); continue; }
-      if (actuelle.statut === 'publie') { ecartees.push({ ref: item.ref, raison: 'fiche publiée depuis le dossier' }); continue; }
-      if (empreinte(actuelle) !== item.empreinte) { ecartees.push({ ref: item.ref, raison: 'fiche modifiée depuis le dossier : refais une analyse' }); continue; }
+      const actuelle = supprimeesPendantSession.has(item.id) ? null : (trouver(item.id) ?? relue);
+      if (!actuelle) { ecarter(item, 'fiche supprimée depuis le dossier'); continue; }
+      if (actuelle.statut === 'publie') { ecarter(item, 'fiche publiée depuis le dossier'); continue; }
+      if (empreinte(actuelle) !== item.empreinte) { ecarter(item, 'fiche modifiée depuis le dossier : refais une analyse'); continue; }
       const verification = verifierRegles(actuelle, profil.regles_studio);
       const duDossier = analyse.fiches.find(f => f.ref === item.ref);
       const examen = {
@@ -513,7 +529,7 @@ export function creerControleur({ etat, depot, enregistreur, assets, horloge, id
       }, horloge()));
       remplacer(g);
       await ecrireMaintenant(g);
-      if (enregistreur.enEchec().includes(g.id)) return interruption(appliquees.length, aNoter.length);
+      if (enregistreur.enEchec().includes(g.id)) return interruption(appliquees.length, aNoter.length - ecarteesEnEcriture);
       appliquees.push(item.id);
     }
     const toutes = [...v.ecartees, ...ecartees].sort((a, b) => a.ref.localeCompare(b.ref));
