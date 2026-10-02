@@ -506,7 +506,7 @@ import { validerReponse } from '../claude/evaluation.js';
 export const MESSAGE_SANS_BLOC = 'Je ne trouve pas le bloc à coller dans cette réponse. Copie toute la réponse de l’assistant, puis recolle-la.';
 export const MESSAGE_COUPE = `${MESSAGE_SANS_BLOC} Si la réponse a été coupée, demande à l’assistant de redonner seulement le bloc.`;
 
-const CITATIONS = [/:codex-file-citation\{[^}]*\}/g, /【[^】]*】/g, /\[oaicite:[^\]]*\]/g, /?cite[^\s.]*?/g, /\bciteturn\S*/g];
+const CITATIONS = [/:codex-file-citation\{[^}]*\}/g, /【[^】]*】/g, /\[oaicite:[^\]]*\]/g, /\bciteturn[\w-]*/g];
 const estObjet = v => v !== null && typeof v === 'object' && !Array.isArray(v);
 const estTexte = v => typeof v === 'string' && v.trim().length > 0;
 
@@ -569,7 +569,7 @@ export function validerRetour(retour, analyse) {
 }
 ```
 
-Simplifie `nettoyer` si besoin : le seul comportement exigé est celui du test (marqueurs retirés, espaces doubles réduits, espace avant un point supprimé). Le test attend `'Bien. Source : . Fin .'` : l'espace avant « : » est gardé, les espaces avant « . » sont retirés.
+`nettoyer` retire les marqueurs puis réduit les espaces doubles ; il ne touche pas à la ponctuation. Le test attend `'Bien. Source : . Fin .'`.
 
 - [ ] **Step 4: Run the tests**
 
