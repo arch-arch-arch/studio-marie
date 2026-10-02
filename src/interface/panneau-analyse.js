@@ -6,9 +6,12 @@ const MO = 1024 * 1024;
 const POIDS_LOURD = 25 * MO;
 const LONGUEUR_MAX_RETOUR = 400000;
 
+// Les boutons sont inactifs tant qu'un panneau est ouvert : un second toucher n'efface pas un texte collé.
 export function rangeeAnalyse(libelle, analyse, actions) {
+  const occupe = analyse != null;
   return h('div', { class: 'rangee analyse-periode' },
-    h('button', { type: 'button', class: 'bouton-secondaire', disabled: analyse?.etape === 'preparation', onclick: () => actions.ouvrirAnalyse() }, libelle));
+    h('button', { type: 'button', class: 'bouton-secondaire', disabled: occupe, onclick: () => actions.ouvrirAnalyse() }, libelle),
+    h('button', { type: 'button', class: 'bouton-secondaire', disabled: occupe, onclick: () => actions.ouvrirRetour() }, 'Coller un retour'));
 }
 
 function lignePoids(fichier) {
@@ -20,28 +23,8 @@ function lignePoids(fichier) {
   return h('p', { class: 'aide' }, `Dossier prêt (${(octets / MO).toFixed(1).replace('.', ',')} Mo).`);
 }
 
-export function panneauAnalyse(analyse, actions, capacites = {}) {
-  const fermer = h('button', { type: 'button', class: 'bouton-secondaire', onclick: () => actions.fermerAnalyse() }, 'Fermer');
-  const titre = h('h2', { tabindex: '-1' }, 'Analyse par Claude ou ChatGPT');
-  if (analyse.etape === 'preparation') {
-    return h('section', { class: 'panneau-analyse' }, titre, h('p', { class: 'aide', role: 'status' }, 'Préparation du dossier…'), fermer);
-  }
-  if (analyse.etape === 'erreur') {
-    return h('section', { class: 'panneau-analyse' }, titre, h('p', { class: 'erreur', role: 'alert' }, analyse.message), fermer);
-  }
-  const etat = h('p', { class: 'aide etat-action', role: 'status' });
-  const zoneMessage = h('div', {});
-  const agir = action => async () => {
-    let r;
-    try { r = await action(); } catch { r = { ok: false, message: 'L’action a échoué : réessaie.' }; }
-    etat.textContent = r.message;
-    if (!r.ok && action === actions.copierMessage) {
-      etat.textContent = '';
-      zoneMessage.replaceChildren(h('p', { class: 'aide' }, 'Copie ce message à la main :'), h('textarea', { class: 'message-a-copier', readonly: true, rows: 3 }, r.message));
-    } else if (r.ok) zoneMessage.replaceChildren();
-  };
-  const lien = (libelle, href, nom) => h('a', { href, target: '_blank', rel: 'noopener noreferrer', class: 'bouton-secondaire', onclick: () => actions.noterAssistant(nom) }, libelle);
-
+// Zone de collage de la réponse de l'assistant : la même pour les étapes prêt, retour et erreur.
+function blocRetour(actions) {
   const retour = h('textarea', { class: 'retour', rows: 6, placeholder: 'Colle ici toute la réponse de l’assistant' });
   const statutRetour = h('p', { role: 'status' });
   const erreurRetour = h('p', { class: 'erreur', role: 'alert' });
@@ -70,6 +53,38 @@ export function panneauAnalyse(analyse, actions, capacites = {}) {
     },
   }, 'Enregistrer le retour');
 
+  return [
+    retour,
+    h('div', { class: 'rangee' }, enregistrer),
+    statutRetour, erreurRetour, detailRetour,
+  ];
+}
+
+export function panneauAnalyse(analyse, actions, capacites = {}) {
+  const fermer = h('button', { type: 'button', class: 'bouton-secondaire', onclick: () => actions.fermerAnalyse() }, 'Fermer');
+  const titre = h('h2', { tabindex: '-1' }, 'Analyse par Claude ou ChatGPT');
+  if (analyse.etape === 'preparation') {
+    return h('section', { class: 'panneau-analyse' }, titre, h('p', { class: 'aide', role: 'status' }, 'Préparation du dossier…'), fermer);
+  }
+  if (analyse.etape === 'retour') {
+    return h('section', { class: 'panneau-analyse' }, titre, h('p', {}, 'Colle ici la réponse de ton assistant. Le studio retrouve le dossier grâce à son code.'), ...blocRetour(actions), fermer);
+  }
+  if (analyse.etape === 'erreur') {
+    return h('section', { class: 'panneau-analyse' }, titre, h('p', { class: 'erreur', role: 'alert' }, analyse.message), h('h3', {}, 'Tu as déjà une réponse ?'), ...blocRetour(actions), fermer);
+  }
+  const etat = h('p', { class: 'aide etat-action', role: 'status' });
+  const zoneMessage = h('div', {});
+  const agir = action => async () => {
+    let r;
+    try { r = await action(); } catch { r = { ok: false, message: 'L’action a échoué : réessaie.' }; }
+    etat.textContent = r.message;
+    if (!r.ok && action === actions.copierMessage) {
+      etat.textContent = '';
+      zoneMessage.replaceChildren(h('p', { class: 'aide' }, 'Copie ce message à la main :'), h('textarea', { class: 'message-a-copier', readonly: true, rows: 3 }, r.message));
+    }
+  };
+  const lien = (libelle, href, nom) => h('a', { href, target: '_blank', rel: 'noopener noreferrer', class: 'bouton-secondaire', onclick: () => actions.noterAssistant(nom) }, libelle);
+
   return h('section', { class: 'panneau-analyse' },
     titre,
     h('p', {}, `${analyse.nombre} fiche${s(analyse.nombre)}, ${analyse.periode.libelle}.`),
@@ -84,26 +99,29 @@ export function panneauAnalyse(analyse, actions, capacites = {}) {
     etat, zoneMessage,
     h('p', { class: 'aide' }, 'Dans le chat : joins le dossier, colle le message, envoie. Tu peux discuter de l’analyse avant de revenir ici.'),
     h('h3', {}, '2. Colle sa réponse'),
-    retour,
-    h('div', { class: 'rangee' }, enregistrer),
-    statutRetour, erreurRetour, detailRetour,
+    ...blocRetour(actions),
+    h('p', { class: 'aide' }, 'Le retour d’un dossier précédent est accepté aussi.'),
     fermer);
 }
 
-export function sectionAvis(analyses, periode, fiches) {
+export function sectionAvis(analyses, periode, fiches, fuseau, avisOuverts) {
   const dernier = (analyses ?? [])
     .filter(a => a.periode?.type === periode.type && a.periode?.cle === periode.cle && a.retour?.avis)
     .sort((x, y) => String(y.retour.recu_le).localeCompare(String(x.retour.recu_le)))[0];
   if (!dernier) return null;
   const r = dernier.retour;
   const parRef = new Map((dernier.fiches ?? []).map(f => [f.ref, (fiches ?? []).find(x => x.id === f.id)]));
-  const libelle = ref => { const f = parRef.get(ref); return f ? `${ref} · ${f.accroche || 'sans accroche'}` : ref; };
-  const date = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'long' }).format(new Date(r.recu_le));
+  const libelle = ref => { const f = parRef.get(ref); return f ? `${ref} · ${f.accroche || 'sans accroche'}` : `${ref} · fiche absente de cette vue`; };
+  const date = (() => {
+    if (Number.isNaN(Date.parse(r.recu_le))) return null;
+    try { return new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'long', ...(fuseau ? { timeZone: fuseau } : {}) }).format(new Date(r.recu_le)); } catch { return null; }
+  })();
+  const cle = `${periode.type}|${periode.cle}`;
   const liste = (titre, xs) => (xs?.length ? [h('h4', {}, titre), h('ul', {}, xs.map(x => h('li', {}, x)))] : null);
   const nonNotees = r.ecartees?.length ?? 0;
-  return h('details', { class: 'avis-periode' },
+  return h('details', { class: 'avis-periode', open: avisOuverts?.get(cle) === true, ontoggle: ev => avisOuverts?.set(cle, ev.target.open) },
     h('summary', {}, periode.type === 'mois' ? 'Avis sur le mois' : 'Avis sur la semaine'),
-    h('p', { class: 'aide' }, `Avis de ${nomAssistant({ source: 'dossier', assistant: dernier.assistant })}, reçu le ${date}. Avis d’expert, pas une prédiction de performance.`),
+    h('p', { class: 'aide' }, `Avis de ${nomAssistant({ source: 'dossier', assistant: dernier.assistant })}${date ? `, reçu le ${date}` : ''}. Avis d’expert, pas une prédiction de performance.`),
     h('p', {}, r.avis),
     nonNotees ? h('p', { class: 'aide' }, `${nonNotees} fiche${s(nonNotees)} non notée${s(nonNotees)} lors de ce retour.`) : null,
     liste('Points forts', r.points_forts), liste('Risques', r.risques),

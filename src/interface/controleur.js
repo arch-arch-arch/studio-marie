@@ -418,6 +418,13 @@ export function creerControleur({ etat, depot, enregistreur, assets, horloge, id
     }
   }
 
+  // Retour collé sans dossier prêt (onglet rechargé) : enregistrerRetour retrouve le dossier par son code.
+  function ouvrirRetour() {
+    fermerPanneau().catch(() => {});
+    generationAnalyse += 1;
+    etat.modifier({ analyse: { etape: 'retour' } });
+  }
+
   function fermerAnalyse() {
     generationAnalyse += 1;
     etat.modifier({ analyse: null });
@@ -565,6 +572,7 @@ export function creerControleur({ etat, depot, enregistreur, assets, horloge, id
     },
     reverifierFiches,
     ouvrirAnalyse,
+    ouvrirRetour,
     fermerAnalyse,
     partagerDossier,
     peutPartagerDossier,

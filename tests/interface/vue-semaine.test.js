@@ -133,6 +133,7 @@ describe('parcours dans la semaine', () => {
 describe('analyse par dossier', () => {
   const etat = (plus = {}) => ({ profil: fictif, fiches: [], ancre: ANCRE, ...plus });
   const bouton = el => [...el.querySelectorAll('button')].find(x => x.textContent === 'Analyser la semaine');
+  const boutonRetour = el => [...el.querySelectorAll('button')].find(x => x.textContent === 'Coller un retour');
   it('propose le bouton quand la capacité existe', () => {
     const a = { ...actionsFactices(), ouvrirAnalyse: vi.fn() };
     bouton(vueSemaine(etat(), a, { dossier: true })).click();
@@ -140,10 +141,12 @@ describe('analyse par dossier', () => {
     expect(bouton(vueSemaine(etat(), a, {}))).toBeUndefined();
     expect(bouton(vueSemaine(etat(), a))).toBeUndefined();
   });
-  it('désactive le bouton pendant la préparation', () => {
+  it('désactive les boutons tant qu’un panneau d’analyse est ouvert', () => {
     const a = { ...actionsFactices(), ouvrirAnalyse: vi.fn() };
     expect(bouton(vueSemaine(etat({ analyse: { etape: 'preparation' } }), a, { dossier: true })).disabled).toBe(true);
-    expect(bouton(vueSemaine(etat({ analyse: { etape: 'pret' } }), a, { dossier: true })).disabled).toBe(false);
+    expect(bouton(vueSemaine(etat({ analyse: { etape: 'pret' } }), a, { dossier: true })).disabled).toBe(true);
+    expect(bouton(vueSemaine(etat({ analyse: { etape: 'retour' } }), a, { dossier: true })).disabled).toBe(true);
+    expect(boutonRetour(vueSemaine(etat({ analyse: { etape: 'pret' } }), a, { dossier: true })).disabled).toBe(true);
     expect(bouton(vueSemaine(etat({ analyse: null }), a, { dossier: true })).disabled).toBe(false);
   });
   it('affiche l’avis de la période', () => {
@@ -152,5 +155,17 @@ describe('analyse par dossier', () => {
     const el = vueSemaine(etat({ analyses }), actionsFactices(), { dossier: true });
     expect(el.querySelector('details.avis-periode').textContent).toContain('Bonne semaine');
     expect(vueSemaine(etat({ analyses: [] }), actionsFactices(), { dossier: true }).querySelector('.avis-periode')).toBeNull();
+  });
+});
+
+describe('coller un retour (Semaine)', () => {
+  it('propose « Coller un retour » avec la capacité, sans elle non', () => {
+    const a = { ...actionsFactices(), ouvrirAnalyse: vi.fn(), ouvrirRetour: vi.fn() };
+    const trouver = el => [...el.querySelectorAll('button')].find(x => x.textContent === 'Coller un retour');
+    const b = trouver(vueSemaine({ profil: fictif, fiches: [], ancre: ANCRE }, a, { dossier: true }));
+    expect(b.className).toBe('bouton-secondaire');
+    b.click();
+    expect(a.ouvrirRetour).toHaveBeenCalled();
+    expect(trouver(vueSemaine({ profil: fictif, fiches: [], ancre: ANCRE }, a, {}))).toBeUndefined();
   });
 });

@@ -1113,3 +1113,54 @@ describe('analyse par dossier : interface', () => {
     expect(etat.lire().analyse.etape).toBe('pret');
   });
 });
+
+describe('analyse par dossier : retour sans dossier prêt et saisie récente', () => {
+  async function avecFiche(options) {
+    const dossier = fauxDossier(options);
+    const m = monter({ dossier });
+    await m.actions.creerFiche({ format: 'reel', date_heure: '2026-09-29T10:00:00.000Z' });
+    return { ...m, dossier };
+  }
+  it('ouvrirRetour ferme la fiche ouverte et passe à l’étape retour', async () => {
+    const { actions, etat } = await avecFiche();
+    expect(etat.lire().ficheOuverte).toBeTruthy();
+    actions.ouvrirRetour();
+    expect(etat.lire().ficheOuverte).toBeNull();
+    expect(etat.lire().analyse).toEqual({ etape: 'retour' });
+  });
+  it('ouvrirRetour annule une préparation en cours', async () => {
+    let libere;
+    const attente = new Promise(r => { libere = r; });
+    const { actions, etat, db } = await avecFiche({ attente });
+    actions.modifierFiche(etat.lire().fiches[0].id, { accroche: 'A', caption: 'B' });
+    const p = actions.ouvrirAnalyse();
+    actions.ouvrirRetour();
+    libere();
+    await p;
+    expect(etat.lire().analyse).toEqual({ etape: 'retour' });
+    expect(db.lister('analyses')).toEqual([]);
+  });
+  it('retrouve le dossier par son code après ouvrirRetour', async () => {
+    const { actions, etat, db } = await avecFiche();
+    actions.modifierFiche(etat.lire().fiches[0].id, { accroche: 'A', caption: 'B' });
+    await actions.ouvrirAnalyse();
+    const { code } = etat.lire().analyse;
+    actions.ouvrirRetour();
+    const r = await actions.enregistrerRetour(reponse(code, ['F01']));
+    expect(r).toMatchObject({ ok: true, appliquees: 1 });
+    expect(etat.lire().analyse).toEqual({ etape: 'retour' });
+    expect(db.lire(`analyses/${code}`).retour.avis).toBe('Semaine correcte.');
+  });
+  it('prépare le dossier avec la saisie faite dans la fiche ouverte', async () => {
+    const { actions, etat, db, dossier } = await avecFiche();
+    const id = etat.lire().fiches[0].id;
+    actions.modifierFiche(id, { accroche: 'Saisie toute fraîche', caption: 'Texte saisi' });
+    expect(etat.lire().ficheOuverte).toBe(id);
+    await actions.ouvrirAnalyse();
+    expect(etat.lire().ficheOuverte).toBeNull();
+    const { code } = etat.lire().analyse;
+    expect(db.lire(`analyses/${code}`).fiches[0].empreinte).toBe(empreinte(etat.lire().fiches[0]));
+    expect(etat.lire().fiches[0].accroche).toBe('Saisie toute fraîche');
+    expect(JSON.stringify(dossier.appels.contenu)).toContain('Saisie toute fraîche');
+  });
+});

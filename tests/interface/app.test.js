@@ -520,7 +520,7 @@ describe('panneau d’analyse par dossier dans le rendu', () => {
     expect(racine.querySelector('.zone-analyse [role="alert"]').textContent).toBe('Second.');
   });
 
-  it('désactive les boutons Semaine et Mois pendant la préparation', () => {
+  it('désactive les boutons Semaine et Mois tant qu’un panneau d’analyse est ouvert', () => {
     const { racine, rendre } = monter();
     rendre({ ...base });
     expect(boutonAnalyse(racine).disabled).toBe(false);
@@ -529,7 +529,11 @@ describe('panneau d’analyse par dossier dans le rendu', () => {
     rendre({ ...base, vue: 'mois', analyse: { etape: 'preparation' } });
     expect(boutonAnalyse(racine, 'Analyser le mois').disabled).toBe(true);
     rendre({ ...base, vue: 'mois', analyse: pret });
+    expect(boutonAnalyse(racine, 'Analyser le mois').disabled).toBe(true);
+    expect(boutonAnalyse(racine, 'Coller un retour').disabled).toBe(true);
+    rendre({ ...base, vue: 'mois', analyse: null });
     expect(boutonAnalyse(racine, 'Analyser le mois').disabled).toBe(false);
+    expect(boutonAnalyse(racine, 'Coller un retour').disabled).toBe(false);
   });
 
   it('propose l’analyse seulement en Semaine et en Mois, et garde le panneau en changeant de vue', () => {
@@ -612,6 +616,111 @@ describe('panneau d’analyse par dossier dans le rendu', () => {
     app.etat.modifier({ fiches: [...app.etat.lire().fiches] });
     expect(racine.querySelector('textarea.retour')).toBe(zone);
     expect(zone.value).toBe('texte en cours');
-    expect(boutonAnalyse(racine).disabled).toBe(false);
+    expect(boutonAnalyse(racine).disabled).toBe(true);
+  });
+});
+
+describe('analyse par dossier : correctifs du premier round', () => {
+  const periode = { type: 'semaine', cle: '2026-W40', libelle: 'semaine du 28 septembre au 4 octobre 2026' };
+  const base = {
+    profil: fictif, fiches: [], vue: 'semaine', ancre: T, ficheOuverte: null, erreur: null, sauvegarde: 'ok',
+    reference: [], resultatReference: null, verificationReference: null, bulletin: null, configVeille: null,
+    stats: [], relevesCompte: [], fichesRecentes: [], analyse: null, analyses: [],
+  };
+  const pret = { etape: 'pret', code: 'D-aaa111', periode, nombre: 2, sansVisuel: [], fichier: new Blob(['%PDF']), nom: 'analyse-2026-W40.pdf', retour: null };
+  const avisDe = cle => ({ id: `D-${cle}`, periode: { type: 'semaine', cle }, assistant: 'claude', fiches: [], retour: { recu_le: '2026-09-29T10:00:00.000Z', avis: `Avis ${cle}`, points_forts: [], risques: [], ordre_conseille: [] } });
+  const monter = (racine = document.createElement('div')) => {
+    const actions = {
+      changerVue: vi.fn(), naviguer: vi.fn(), allerAujourdhui: vi.fn(), ouvrirFiche: vi.fn(), creerFiche: vi.fn(), deplacerFiche: vi.fn(),
+      ouvrirAnalyse: vi.fn(), ouvrirRetour: vi.fn(), fermerAnalyse: vi.fn(), partagerDossier: vi.fn(), telechargerDossier: vi.fn(), copierMessage: vi.fn(),
+      noterAssistant: vi.fn(), enregistrerRetour: vi.fn(), peutPartagerDossier: () => true,
+    };
+    return { racine, actions, rendre: creerRendu(racine, actions, { dossier: true }, () => T) };
+  };
+
+  it('garde l’avis de la période ouvert quand la vue est reconstruite, pas celui d’une autre semaine', () => {
+    const { racine, rendre } = monter();
+    const analyses = [avisDe('2026-W40'), avisDe('2026-W41')];
+    rendre({ ...base, analyses });
+    const avis = racine.querySelector('details.avis-periode');
+    avis.open = true;
+    avis.dispatchEvent(new Event('toggle'));
+    rendre({ ...base, analyses, fiches: [nouvelleFiche({ id: 'z', format: 'reel', date_heure: '2026-09-29T10:00:00.000Z', pilier: 'socio', maintenant: T })] });
+    const apres = racine.querySelector('details.avis-periode');
+    expect(apres).not.toBe(avis);
+    expect(apres.open).toBe(true);
+    rendre({ ...base, analyses, ancre: '2026-10-07T10:00:00.000Z' });
+    expect(racine.querySelector('details.avis-periode').textContent).toContain('Avis 2026-W41');
+    expect(racine.querySelector('details.avis-periode').open).toBe(false);
+  });
+
+  it('garde le texte collé quand la sauvegarde ou l’erreur changent', () => {
+    const { racine, rendre } = monter();
+    rendre({ ...base, analyse: pret });
+    const zone = racine.querySelector('textarea.retour');
+    zone.value = 'à garder';
+    rendre({ ...base, analyse: pret, sauvegarde: 'en_cours' });
+    rendre({ ...base, analyse: pret, sauvegarde: 'erreur', erreur: 'Un souci passager.' });
+    expect(racine.querySelector('textarea.retour')).toBe(zone);
+    expect(zone.value).toBe('à garder');
+  });
+
+  it('pose le focus seulement à l’ouverture, jamais sur un champ de saisie', () => {
+    const racine = document.createElement('div');
+    document.body.append(racine);
+    const { rendre } = monter(racine);
+    try {
+      rendre({ ...base });
+      rendre({ ...base, analyse: { etape: 'preparation' } });
+      expect(document.activeElement).toBe(racine.querySelector('.zone-analyse h2'));
+      document.body.focus();
+      rendre({ ...base, analyse: pret });
+      expect(document.activeElement).not.toBe(racine.querySelector('.zone-analyse h2'));
+      rendre({ ...base, analyse: null });
+      const champ = document.createElement('textarea');
+      document.body.append(champ);
+      champ.focus();
+      rendre({ ...base, analyse: pret });
+      expect(document.activeElement).toBe(champ);
+      champ.remove();
+    } finally { racine.remove(); }
+  });
+
+  it('assemblé : « Coller un retour » ouvre la zone, un retour au dossier connu met les fiches à jour', async () => {
+    const db = creerFausseBase();
+    const dossier = {
+      fabrique: async () => ({ preparerCartes: async () => new Map(), assemblerPdf: async () => new Blob(['%PDF'], { type: 'application/pdf' }) }),
+      peutPartager: () => true, partager: vi.fn(), copier: vi.fn(),
+    };
+    const racine = document.createElement('div');
+    const app = await demarrer(racine, { use: async nom => (nom === 'db' ? db : nom === 'dossier' ? dossier : null) }, { horloge });
+    await app.actions.importerProfil(JSON.stringify(fictif));
+    await vi.waitFor(() => expect(app.etat.lire().vue).toBe('semaine'));
+    const f = await app.actions.creerFiche({ format: 'reel', date_heure: '2026-09-29T10:00:00.000Z' });
+    app.actions.modifierFiche(f.id, { accroche: 'Une accroche', caption: 'Un texte' });
+    const bouton = texte => [...racine.querySelectorAll('button')].find(b => b.textContent === texte);
+    await vi.waitFor(() => expect(bouton('Analyser la semaine')).toBeTruthy());
+    bouton('Analyser la semaine').click();
+    await vi.waitFor(() => expect(app.etat.lire().analyse?.etape).toBe('pret'));
+    const { code } = app.etat.lire().analyse;
+    app.actions.fermerAnalyse();
+    await vi.waitFor(() => expect(racine.querySelector('.zone-analyse').childElementCount).toBe(0));
+    bouton('Coller un retour').click();
+    await vi.waitFor(() => expect(racine.querySelector('.zone-analyse textarea.retour')).toBeTruthy());
+    expect(app.etat.lire().analyse).toEqual({ etape: 'retour' });
+    const reponse = '```json\n' + JSON.stringify({
+      dossier: code,
+      fiches: [{
+        id: 'F01', notes: { accroche: 7, voix: 8, mecanique: 6 }, phrases: { accroche: 'a', voix: 'b', mecanique: 'c' },
+        conformite: { etat: 'vert', causes: [] }, captions: [{ role: 'engagement', texte: 'A ?' }, { role: 'deadpan', texte: 'B.' }],
+        accroches: ['Une', 'Deux'], hashtags: ['nuit'],
+        recommandations: [{ texte: 'r1', pourquoi: 'p1' }, { texte: 'r2', pourquoi: 'p2' }, { texte: 'r3', pourquoi: 'p3' }],
+      }],
+      periode: { avis: 'Semaine correcte.', points_forts: ['x'], risques: ['y'], ordre_conseille: ['F01'] },
+    }) + '\n```';
+    racine.querySelector('textarea.retour').value = reponse;
+    bouton('Enregistrer le retour').click();
+    await vi.waitFor(() => expect(racine.querySelector('.zone-analyse').textContent).toContain('1 fiche mise à jour.'));
+    expect(app.etat.lire().fiches.find(x => x.id === f.id).score.examen.source).toBe('dossier');
   });
 });

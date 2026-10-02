@@ -245,3 +245,4 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .avis-periode h4 { margin: 8px 0 4px; }
 .ecartees { margin: 0; padding-left: 18px; }
 a.bouton-secondaire { text-decoration: none; color: inherit; }
+.panneau-analyse p:empty, .panneau-analyse .detail-retour:empty { display: none; }

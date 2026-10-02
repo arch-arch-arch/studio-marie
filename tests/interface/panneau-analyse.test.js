@@ -159,7 +159,7 @@ describe('sectionAvis', () => {
     expect(el.querySelector('summary').textContent).toBe('Avis sur la semaine');
     expect(el.textContent).toContain('Avis D-2');
     expect(el.textContent).toContain('ChatGPT');
-    expect([...el.querySelectorAll('ol li')].map(li => li.textContent)).toEqual(['F02 · sans accroche', 'F01 · Première', 'F03']);
+    expect([...el.querySelectorAll('ol li')].map(li => li.textContent)).toEqual(['F02 · sans accroche', 'F01 · Première', 'F03 · fiche absente de cette vue']);
     expect(el.textContent).toContain('fort');
     expect(el.textContent).toContain('risque');
   });
@@ -181,5 +181,83 @@ describe('sectionAvis', () => {
     expect(deux.textContent).toContain('2 fiches non notées lors de ce retour.');
     expect(sectionAvis([doc('D-1', '2026-10-05T10:00:00.000Z', { ecartees: [] })], periode, fiches).textContent).not.toContain('non notée');
     expect(sectionAvis([doc('D-1', '2026-10-05T10:00:00.000Z')], periode, fiches).textContent).not.toContain('non notée');
+  });
+});
+
+describe('panneauAnalyse : coller un retour sans dossier prêt', () => {
+  it('à l’étape retour : phrase, zone de collage, enregistrement, sans partage ni liens', async () => {
+    const a = actions();
+    const el = panneauAnalyse({ etape: 'retour' }, a, { partage: true });
+    expect(el.querySelector('h2').textContent).toBe('Analyse par Claude ou ChatGPT');
+    expect(el.textContent).toContain('Colle ici la réponse de ton assistant. Le studio retrouve le dossier grâce à son code.');
+    expect(el.querySelector('textarea.retour')).toBeTruthy();
+    expect(bouton(el, 'Fermer')).toBeTruthy();
+    expect(el.querySelector('a')).toBeNull();
+    for (const t of ['Partager le dossier', 'Télécharger le dossier', 'Copier le message']) expect(bouton(el, t)).toBeUndefined();
+    el.querySelector('textarea.retour').value = 'réponse';
+    bouton(el, 'Enregistrer le retour').click();
+    await vi.waitFor(() => expect(el.textContent).toContain('4 fiches mises à jour.'));
+    expect(a.enregistrerRetour).toHaveBeenCalledWith('réponse');
+    expect(el.textContent).toContain('F03 : fiche modifiée depuis le dossier');
+  });
+  it('à l’étape erreur : le message, puis la même zone de collage', async () => {
+    const a = actions();
+    const el = panneauAnalyse({ etape: 'erreur', message: 'Aucune fiche à analyser sur cette période.' }, a, {});
+    expect(el.querySelector('[role="alert"]').textContent).toBe('Aucune fiche à analyser sur cette période.');
+    expect([...el.querySelectorAll('h3')].map(x => x.textContent)).toContain('Tu as déjà une réponse ?');
+    el.querySelector('textarea.retour').value = 'x';
+    bouton(el, 'Enregistrer le retour').click();
+    await vi.waitFor(() => expect(a.enregistrerRetour).toHaveBeenCalledWith('x'));
+    await vi.waitFor(() => expect(el.textContent).toContain('4 fiches mises à jour.'));
+    el.querySelector('textarea.retour').value = '';
+    bouton(el, 'Enregistrer le retour').click();
+    expect(el.textContent).toContain('Colle d’abord la réponse de l’assistant.');
+  });
+  it('à l’étape prêt : précise qu’un retour précédent est accepté', () => {
+    expect(panneauAnalyse(pret, actions(), {}).textContent).toContain('Le retour d’un dossier précédent est accepté aussi.');
+  });
+  it('accorde « 0 fiche mise à jour. »', async () => {
+    const a = actions({ enregistrerRetour: vi.fn(async () => ({ ok: true, appliquees: 0, ecartees: [], avisRecu: true })) });
+    const el = panneauAnalyse(pret, a, {});
+    el.querySelector('textarea.retour').value = 'x';
+    bouton(el, 'Enregistrer le retour').click();
+    await vi.waitFor(() => expect(el.textContent).toContain('0 fiche mise à jour.'));
+  });
+  it('garde le message à copier à la main quand un partage réussit ensuite', async () => {
+    const a = actions({ copierMessage: vi.fn(async () => ({ ok: false, message: 'Le message du dossier.' })) });
+    const el = panneauAnalyse(pret, a, { partage: true });
+    bouton(el, 'Copier le message').click();
+    await vi.waitFor(() => expect(el.querySelector('textarea.message-a-copier')).toBeTruthy());
+    bouton(el, 'Partager le dossier').click();
+    await vi.waitFor(() => expect(el.querySelector('p.etat-action').textContent).toBe('Dossier partagé.'));
+    bouton(el, 'Télécharger le dossier').click();
+    await vi.waitFor(() => expect(el.querySelector('p.etat-action').textContent).toBe('Dossier téléchargé.'));
+    expect(el.querySelector('textarea.message-a-copier').value).toBe('Le message du dossier.');
+  });
+});
+
+describe('sectionAvis : date, fuseau, état ouvert', () => {
+  const periode = { type: 'semaine', cle: '2026-W41' };
+  const doc = (recu_le) => ({ id: 'D-1', periode, assistant: 'claude', fiches: [], retour: { recu_le, avis: 'Avis', points_forts: [], risques: [], ordre_conseille: [] } });
+  it('omet la date reçue quand elle est invalide, sans lever', () => {
+    const el = sectionAvis([doc('pas une date')], periode, []);
+    expect(el.textContent).toContain('Avis de Claude.');
+    expect(el.textContent).not.toContain('reçu le');
+    expect(sectionAvis([doc(undefined)], periode, []).textContent).toContain('Avis');
+  });
+  it('formate la date dans le fuseau du profil', () => {
+    const tard = '2026-10-05T23:30:00.000Z';
+    expect(sectionAvis([doc(tard)], periode, [], 'Europe/Paris').textContent).toContain('reçu le 6 octobre');
+    expect(sectionAvis([doc(tard)], periode, [], 'UTC').textContent).toContain('reçu le 5 octobre');
+  });
+  it('retrouve son état ouvert et le mémorise au basculement', () => {
+    const ouverts = new Map();
+    const el = sectionAvis([doc('2026-10-05T10:00:00.000Z')], periode, [], 'UTC', ouverts);
+    expect(el.open).toBe(false);
+    el.open = true;
+    el.dispatchEvent(new Event('toggle'));
+    expect(ouverts.get('semaine|2026-W41')).toBe(true);
+    expect(sectionAvis([doc('2026-10-05T10:00:00.000Z')], periode, [], 'UTC', ouverts).open).toBe(true);
+    expect(sectionAvis([{ ...doc('2026-10-05T10:00:00.000Z'), periode: { type: 'semaine', cle: '2026-W42' } }], { type: 'semaine', cle: '2026-W42' }, [], 'UTC', ouverts).open).toBe(false);
   });
 });

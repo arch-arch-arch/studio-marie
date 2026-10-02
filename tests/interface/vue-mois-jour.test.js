@@ -51,12 +51,26 @@ describe('analyse par dossier', () => {
     const jour = vueJour(etat(), a, { dossier: true });
     expect([...jour.querySelectorAll('button')].some(b => /Analyser/.test(b.textContent))).toBe(false);
   });
-  it('désactive le bouton pendant la préparation', () => {
+  it('désactive les boutons tant qu’un panneau d’analyse est ouvert', () => {
     expect(bouton(vueMois(etat({ analyse: { etape: 'preparation' } }), actionsFactices(), { dossier: true })).disabled).toBe(true);
+    expect(bouton(vueMois(etat({ analyse: { etape: 'pret' } }), actionsFactices(), { dossier: true })).disabled).toBe(true);
+    expect([...vueMois(etat({ analyse: { etape: 'retour' } }), actionsFactices(), { dossier: true }).querySelectorAll('button')].find(x => x.textContent === 'Coller un retour').disabled).toBe(true);
   });
   it('affiche l’avis du mois', () => {
     const analyses = [{ id: 'D-1', periode: { type: 'mois', cle: '2026-10' }, assistant: 'claude', fiches: [], retour: { recu_le: '2026-10-10T10:00:00.000Z', avis: 'Bon mois', points_forts: [], risques: [], ordre_conseille: [] } }];
     const el = vueMois(etat({ analyses }), actionsFactices(), { dossier: true });
     expect(el.querySelector('summary').textContent).toBe('Avis sur le mois');
+  });
+});
+
+describe('coller un retour (Mois)', () => {
+  it('propose « Coller un retour » avec la capacité, sans elle non', () => {
+    const a = { ...actionsFactices(), ouvrirAnalyse: vi.fn(), ouvrirRetour: vi.fn() };
+    const trouver = el => [...el.querySelectorAll('button')].find(x => x.textContent === 'Coller un retour');
+    const b = trouver(vueMois({ profil: fictif, fiches: [], ancre: '2026-10-15T10:00:00.000Z' }, a, { dossier: true }));
+    expect(b.className).toBe('bouton-secondaire');
+    b.click();
+    expect(a.ouvrirRetour).toHaveBeenCalled();
+    expect(trouver(vueMois({ profil: fictif, fiches: [], ancre: '2026-10-15T10:00:00.000Z' }, a, {}))).toBeUndefined();
   });
 });

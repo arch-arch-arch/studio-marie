@@ -20,6 +20,11 @@ function libellePeriode(vue, ancre, fz) {
   return `${f({ day: 'numeric', month: 'short' }).format(new Date(debut))} – ${f({ day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(fin))}`;
 }
 
+const champActif = () => {
+  const el = typeof document !== 'undefined' ? document.activeElement : null;
+  return !!el && (['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName) || el.isContentEditable === true);
+};
+
 function barre(e, actions) {
   const aProfil = !!e.profil;
   const onglet = (cle, libelle) => h('button', {
@@ -60,6 +65,8 @@ export function creerRendu(racine, actions, capacites, horloge) {
   let elementSauvegarde = null;
   const sauvegarde = () => (elementSauvegarde ??= sectionSauvegarde(actions, capacites));
   let memo = {};
+  // État ouvert de « Avis sur la période », par période : la vue est reconstruite à chaque frappe dans une fiche.
+  const avisOuverts = new Map();
   let elementVue = null;
 
   return function rendre(e) {
@@ -71,7 +78,7 @@ export function creerRendu(racine, actions, capacites, horloge) {
       return;
     }
     tete.replaceChildren(...barre(e, actions));
-    const e2 = { ...e, maintenant: horloge() };
+    const e2 = { ...e, maintenant: horloge(), avisOuverts };
     const estVueProfil = !e.profil || e.vue === 'profil';
     const estVueTableau = !estVueProfil && e.vue === 'tableau';
     // vueTableau affiche « Chargement du tableau de bord… » (sans mettreAJour) tant que stats ou
@@ -79,7 +86,7 @@ export function creerRendu(racine, actions, capacites, horloge) {
     // mettreAJour?.() ne fait rien et l'écran reste bloqué sur le message de chargement.
     const sortDuChargementTableau = estVueTableau
       && (memo.stats === undefined || memo.relevesCompte === undefined) && e.stats !== undefined && e.relevesCompte !== undefined;
-    const preparation = e.analyse?.etape === 'preparation';
+    const preparation = e.analyse != null;
     let reconstructionRequise;
     if (estVueProfil) {
       reconstructionRequise = memo.profil !== e.profil || memo.vue !== e.vue || memo.ancre !== e.ancre;
@@ -107,8 +114,10 @@ export function creerRendu(racine, actions, capacites, horloge) {
       const elementAnalyse = e.analyse ? panneauAnalyse(e.analyse, actions, { partage: e.analyse.etape === 'pret' && !!actions.peutPartagerDossier?.() }) : null;
       zoneAnalyse.replaceChildren(...(elementAnalyse ? [elementAnalyse] : []));
       if (elementAnalyse) {
-        elementAnalyse.querySelector('h2')?.focus({ preventScroll: true });
-        if (ouvertureAnalyse && typeof elementAnalyse.scrollIntoView === 'function') elementAnalyse.scrollIntoView({ block: 'nearest' });
+        if (ouvertureAnalyse) {
+          if (!champActif()) elementAnalyse.querySelector('h2')?.focus({ preventScroll: true });
+          if (typeof elementAnalyse.scrollIntoView === 'function') elementAnalyse.scrollIntoView({ block: 'nearest' });
+        }
       } else {
         vue.querySelector('.analyse-periode button')?.focus();
       }
