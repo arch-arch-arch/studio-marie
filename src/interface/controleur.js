@@ -343,8 +343,19 @@ export function creerControleur({ etat, depot, enregistreur, assets, horloge, id
 
   const ANALYSE_INDISPONIBLE = 'L’analyse par dossier n’est pas disponible dans cette vue.';
 
+  let generationAnalyse = 0;
+
+  function memeDossier(doc, periode, refs, versionProfil) {
+    return doc && !doc.retour && doc.periode?.type === periode.type && doc.periode?.cle === periode.cle
+      && (doc.version_profil ?? null) === versionProfil
+      && Array.isArray(doc.fiches) && doc.fiches.length === refs.length
+      && refs.every((r, k) => doc.fiches[k]?.ref === r.ref && doc.fiches[k]?.id === r.id && doc.fiches[k]?.empreinte === r.empreinte);
+  }
+
   async function ouvrirAnalyse() {
     if (!dossier) { etat.modifier({ analyse: { etape: 'erreur', message: ANALYSE_INDISPONIBLE } }); return; }
+    if (etat.lire().analyse?.etape === 'preparation') return;
+    const jeton = ++generationAnalyse;
     const { profil, fiches, vue, ancre } = etat.lire();
     const periode = periodeAffichee(vue, ancre, profil.regles_studio.fuseau);
     const choix = choisirFiches(fiches, periode);
@@ -352,7 +363,9 @@ export function creerControleur({ etat, depot, enregistreur, assets, horloge, id
     etat.modifier({ analyse: { etape: 'preparation' } });
     try {
       const refs = attribuerReferences(choix.fiches);
-      const code = codeDossier(aleatoire);
+      const versionProfil = profil.version ?? null;
+      const existant = (etat.lire().analyses ?? []).find(d => memeDossier(d, periode, refs, versionProfil));
+      const code = existant ? existant.id : codeDossier(aleatoire);
       const fabrique = await dossier.fabrique();
       const provisoire = contenuDossier({ profil, entrees: choix.fiches.map((fiche, i) => ({ ref: refs[i].ref, fiche, etat: etatVisuel(fiche, null) })), periode, code, toutesLesFiches: fiches });
       const demandes = choix.fiches
@@ -362,21 +375,28 @@ export function creerControleur({ etat, depot, enregistreur, assets, horloge, id
       const entrees = choix.fiches.map((fiche, i) => ({ ref: refs[i].ref, fiche, etat: etatVisuel(fiche, cartes.get(refs[i].ref) ?? null) }));
       const contenu = contenuDossier({ profil, entrees, periode, code, toutesLesFiches: fiches });
       const fichier = await fabrique.assemblerPdf(contenu, cartes);
+      if (jeton !== generationAnalyse) return;
       await depot.enregistrerAnalyse(code, {
         periode: { type: periode.type, cle: periode.cle, debut: periode.debut, fin: periode.fin },
         cree_le: horloge(),
-        assistant: 'inconnu',
-        version_profil: profil.version ?? null,
+        assistant: existant?.assistant ?? 'inconnu',
+        version_profil: versionProfil,
         sections_profil: contenu.sectionsProfil,
         fiches: entrees.map((e, i) => ({ ...refs[i], visuel: e.etat.visuel, raison_visuel: e.etat.raison_visuel })),
       });
+      if (jeton !== generationAnalyse) return;
       etat.modifier({ analyse: {
         etape: 'pret', code, periode, nombre: entrees.length, fichier, nom: `analyse-${periode.cle}.pdf`, retour: null,
         sansVisuel: entrees.filter(e => e.etat.visuel === 'non_joint').map(e => e.ref),
       } });
     } catch {
-      etat.modifier({ analyse: { etape: 'erreur', message: 'Le dossier n’a pas pu être préparé : réessaie.' } });
+      if (jeton === generationAnalyse) etat.modifier({ analyse: { etape: 'erreur', message: 'Le dossier n’a pas pu être préparé : réessaie.' } });
     }
+  }
+
+  function fermerAnalyse() {
+    generationAnalyse += 1;
+    etat.modifier({ analyse: null });
   }
 
   const analysePrete = () => (etat.lire().analyse?.etape === 'pret' ? etat.lire().analyse : null);
@@ -401,31 +421,46 @@ export function creerControleur({ etat, depot, enregistreur, assets, horloge, id
   }
 
   async function noterAssistant(nom) {
-    const a = analysePrete();
-    if (!a || !['claude', 'chatgpt'].includes(nom)) return;
-    const doc = await depot.lireAnalyse(a.code);
-    if (doc) await depot.enregistrerAnalyse(a.code, { ...doc, assistant: nom });
+    try {
+      const a = analysePrete();
+      if (!a || !['claude', 'chatgpt'].includes(nom)) return;
+      const doc = await depot.lireAnalyse(a.code);
+      if (doc) await depot.enregistrerAnalyse(a.code, { ...doc, assistant: nom });
+    } catch { /* l'assistant noté n'est qu'une indication : rien à signaler */ }
   }
+
+  const SESSION_EXPIREE = { ok: false, raison: 'Ta session a expiré : recharge la page pour te reconnecter.' };
+  const interruption = (n, m) => ({ ok: false, raison: `L’enregistrement a été interrompu après ${n} fiche${n > 1 ? 's' : ''} sur ${m} : réessaie, les fiches déjà notées seront simplement réécrites.` });
+  const AVIS_VIDE = { avis: '', points_forts: [], risques: [], ordre_conseille: [] };
 
   async function enregistrerRetour(texte) {
     const lu = lireRetour(texte);
     if (!lu.ok) return lu;
     let analyse;
     try { analyse = await depot.lireAnalyse(lu.dossier); }
-    catch { return { ok: false, raison: 'Le studio n’a pas pu lire le dossier : réessaie dans un instant.' }; }
+    catch (e) { return e?.code === 'revoked' ? SESSION_EXPIREE : { ok: false, raison: 'Le studio n’a pas pu lire le dossier : réessaie dans un instant.' }; }
     if (!analyse) return { ok: false, raison: 'Ce retour ne correspond à aucun dossier produit par le studio.' };
     const { profil } = etat.lire();
     const v = validerRetour(lu, analyse);
     const ecartees = [];
-    const appliquees = [];
+    const aNoter = [];
     for (const item of v.valides) {
       let actuelle = trouver(item.id);
       if (!actuelle && !supprimeesPendantSession.has(item.id)) {
         await enregistreur.vider(item.id);
-        actuelle = trouver(item.id) ?? await depot.lireFiche(item.id);
+        if (enregistreur.estEnAttente(item.id) || enregistreur.enEchec().includes(item.id)) return interruption(0, v.valides.length);
+        let relue;
+        try { relue = await depot.lireFiche(item.id); }
+        catch (e) { return e?.code === 'revoked' ? SESSION_EXPIREE : interruption(0, v.valides.length); }
+        actuelle = trouver(item.id) ?? (supprimeesPendantSession.has(item.id) ? null : relue);
       }
       if (!actuelle) { ecartees.push({ ref: item.ref, raison: 'fiche supprimée depuis le dossier' }); continue; }
+      if (actuelle.statut === 'publie') { ecartees.push({ ref: item.ref, raison: 'fiche publiée depuis le dossier' }); continue; }
       if (empreinte(actuelle) !== item.empreinte) { ecartees.push({ ref: item.ref, raison: 'fiche modifiée depuis le dossier : refais une analyse' }); continue; }
+      aNoter.push({ item, actuelle });
+    }
+    const appliquees = [];
+    for (const { item, actuelle } of aNoter) {
       const verification = verifierRegles(actuelle, profil.regles_studio);
       const duDossier = analyse.fiches.find(f => f.ref === item.ref);
       const examen = {
@@ -440,16 +475,19 @@ export function creerControleur({ etat, depot, enregistreur, assets, horloge, id
       }, horloge()));
       remplacer(g);
       await ecrireMaintenant(g);
-      if (enregistreur.enEchec().includes(g.id)) {
-        return { ok: false, raison: `L’enregistrement a été interrompu après ${appliquees.length} fiche${appliquees.length > 1 ? 's' : ''} sur ${v.valides.length} : réessaie, les fiches déjà notées seront simplement réécrites.` };
-      }
+      if (enregistreur.enEchec().includes(g.id)) return interruption(appliquees.length, aNoter.length);
       appliquees.push(item.id);
     }
     const toutes = [...v.ecartees, ...ecartees].sort((a, b) => a.ref.localeCompare(b.ref));
     const resultat = { ok: true, appliquees: appliquees.length, ecartees: toutes, avisRecu: !!v.periode };
     try {
-      await depot.enregistrerAnalyse(lu.dossier, { ...analyse, retour: { recu_le: horloge(), ...(v.periode ?? { avis: '', points_forts: [], risques: [], ordre_conseille: [] }), appliquees, ecartees: toutes } });
-    } catch {
+      const frais = (await depot.lireAnalyse(lu.dossier)) ?? analyse;
+      const avis = v.periode ?? (frais.retour?.avis ? {
+        avis: frais.retour.avis, points_forts: frais.retour.points_forts ?? [], risques: frais.retour.risques ?? [], ordre_conseille: frais.retour.ordre_conseille ?? [],
+      } : AVIS_VIDE);
+      await depot.enregistrerAnalyse(lu.dossier, { ...frais, retour: { recu_le: horloge(), ...avis, appliquees, ecartees: toutes } });
+    } catch (e) {
+      if (e?.code === 'revoked') return SESSION_EXPIREE;
       return { ok: false, raison: 'Les fiches sont notées, mais l’avis d’ensemble n’a pas pu être enregistré : réessaie.' };
     }
     if (etat.lire().analyse?.etape === 'pret') etat.modifier({ analyse: { ...etat.lire().analyse, retour: resultat } });
@@ -473,7 +511,7 @@ export function creerControleur({ etat, depot, enregistreur, assets, horloge, id
     },
     reverifierFiches,
     ouvrirAnalyse,
-    fermerAnalyse: () => etat.modifier({ analyse: null }),
+    fermerAnalyse,
     partagerDossier,
     telechargerDossier,
     copierMessage,

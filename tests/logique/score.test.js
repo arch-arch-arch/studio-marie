@@ -132,4 +132,11 @@ describe('analyse par dossier', () => {
     expect(lignesExamen({ ...base, source: 'dossier', assistant: 'inconnu' })[0]).toBe('Analyse par dossier.');
     expect(lignesExamen(base)[0]).toBe('Visuel examiné.');
   });
+  it('compare des contenus du dossier, pas de la semaine', () => {
+    const d = { ...base, source: 'dossier', assistant: 'claude' };
+    expect(lignesExamen({ ...d, contenus_semaine: 4 })[3]).toBe('4 autres contenus du dossier comparés.');
+    expect(lignesExamen({ ...d, contenus_semaine: 1 })[3]).toBe('1 autre contenu du dossier comparé.');
+    expect(lignesExamen({ ...d, contenus_semaine: 0 })[3]).toBe('Aucun autre contenu du dossier comparé.');
+    expect(lignesExamen({ ...base, contenus_semaine: 4 })[2]).toBe('4 autres contenus de la semaine comparés.');
+  });
 });

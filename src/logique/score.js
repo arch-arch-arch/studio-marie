@@ -74,7 +74,8 @@ export function lignesExamen(examen) {
   const visuel = examen.visuel === 'joint' ? 'Visuel examiné.' : examen.visuel === 'aucun' ? 'Pas de visuel.' : LIBELLES_VISUEL[examen.raison_visuel] ?? LIBELLES_VISUEL.indisponible;
   const sections = examen.sections_profil?.length ? ` : sections ${examen.sections_profil.join(', ')}` : '';
   const n = examen.contenus_semaine ?? 0;
-  const semaine = n === 0 ? 'Aucun autre contenu de la semaine comparé.' : `${n} autre${s(n)} contenu${s(n)} de la semaine comparé${s(n)}.`;
+  const lieu = examen.source === 'dossier' ? 'du dossier' : 'de la semaine';
+  const semaine = n === 0 ? `Aucun autre contenu ${lieu} comparé.` : `${n} autre${s(n)} contenu${s(n)} ${lieu} comparé${s(n)}.`;
   const a = examen.alertes_calculees ?? 0;
   const b = examen.blocages_calcules ?? 0;
   const lignes = [visuel, `Profil version ${examen.version_profil ?? '?'}${sections}.`, semaine, `${a} alerte${s(a)} et ${b} blocage${s(b)} calculés par le studio.`];

@@ -485,13 +485,14 @@ describe('relancerVeille', () => {
   });
 });
 
-function fauxDossier({ cartes = () => ({ ok: true, carte: new Blob(['c'], { type: 'image/jpeg' }) }), pdfEchoue = false, partage = true } = {}) {
+function fauxDossier({ cartes = () => ({ ok: true, carte: new Blob(['c'], { type: 'image/jpeg' }) }), pdfEchoue = false, partage = true, attente = null } = {}) {
   const appels = { demandes: null, contenu: null, partages: [], copies: [] };
   return {
     appels,
     fabrique: async () => ({
       preparerCartes: async demandes => { appels.demandes = demandes; return new Map(demandes.map(d => [d.ref, cartes(d)])); },
       assemblerPdf: async (contenu, lesCartes) => {
+        if (attente) await attente;
         if (pdfEchoue) throw new Error('pdf');
         appels.contenu = contenu; appels.cartes = lesCartes;
         return new Blob(['%PDF'], { type: 'application/pdf' });
@@ -632,6 +633,7 @@ describe('analyse par dossier', () => {
     db.echouerEcritures(`fiches/${b.id}`);
     const r1 = await actions.enregistrerRetour(reponse(code, ['F01', 'F02']));
     expect(r1).toEqual({ ok: false, raison: 'L’enregistrement a été interrompu après 1 fiche sur 2 : réessaie, les fiches déjà notées seront simplement réécrites.' });
+    expect(db.lire(`analyses/${code}`).retour).toBeUndefined();
     db.echouerEcritures(null);
     const r2 = await actions.enregistrerRetour(reponse(code, ['F01', 'F02']));
     expect(r2).toMatchObject({ ok: true, appliquees: 2 });
@@ -700,5 +702,147 @@ describe('analyse par dossier', () => {
     await actions.ouvrirAnalyse();
     await actions.enregistrerRetour(reponse(etat.lire().analyse.code, ['F01', 'F02']));
     expect(db.lire(`fiches/${a.id}`).statut).toBe('brouillon');
+  });
+
+  const INTERROMPU = n => `L’enregistrement a été interrompu après ${n} fiche${n > 1 ? 's' : ''} sur 2 : réessaie, les fiches déjà notées seront simplement réécrites.`;
+  const SESSION = { ok: false, raison: 'Ta session a expiré : recharge la page pour te reconnecter.' };
+  const synchroniserAnalyses = (etat, db) => etat.modifier({ analyses: db.lister('analyses').map(chemin => ({ id: chemin.split('/')[1], ...db.lire(chemin) })) });
+
+  it('protège la saisie en attente d’une fiche sortie de l’état', async () => {
+    const { actions, etat, db, enregistreur, a } = await avecDeuxFiches();
+    await actions.ouvrirAnalyse();
+    const { code } = etat.lire().analyse;
+    actions.modifierFiche(a.id, { caption: 'Nouvelle saisie' });
+    db.echouerEcritures(`fiches/${a.id}`);
+    etat.modifier({ fiches: etat.lire().fiches.filter(f => f.id !== a.id) });
+    const r = await actions.enregistrerRetour(reponse(code, ['F01', 'F02']));
+    expect(r.ok).toBe(false);
+    expect(r.raison).toMatch(/^L’enregistrement a été interrompu après 0 fiche sur /);
+    expect(db.lire(`fiches/${a.id}`).score ?? null).toBeNull();
+    db.echouerEcritures(null);
+    await enregistreur.vider(a.id);
+    expect(db.lire(`fiches/${a.id}`).caption).toBe('Nouvelle saisie');
+  });
+
+  it('rend un message quand la lecture d’une fiche ou du dossier échoue', async () => {
+    const { actions, etat, db, a } = await avecDeuxFiches();
+    await actions.ouvrirAnalyse();
+    const { code } = etat.lire().analyse;
+    etat.modifier({ fiches: [] });
+    db.echouerLectures(`fiches/${a.id}`);
+    const r = await actions.enregistrerRetour(reponse(code, ['F01', 'F02']));
+    expect(r.ok).toBe(false);
+    expect(r.raison).toMatch(/^L’enregistrement a été interrompu/);
+    db.echouerLectures(`fiches/${a.id}`, 'revoked');
+    expect(await actions.enregistrerRetour(reponse(code, ['F01', 'F02']))).toEqual(SESSION);
+    db.echouerLectures(`analyses/${code}`, 'revoked');
+    expect(await actions.enregistrerRetour(reponse(code, ['F01', 'F02']))).toEqual(SESSION);
+    db.echouerLectures(`analyses/${code}`);
+    expect((await actions.enregistrerRetour(reponse(code, ['F01', 'F02']))).raison).toMatch(/pas pu lire le dossier/);
+  });
+
+  it('écarte une fiche publiée depuis le dossier', async () => {
+    const { actions, etat, db, a } = await avecDeuxFiches();
+    await actions.ouvrirAnalyse();
+    const { code } = etat.lire().analyse;
+    etat.modifier({ fiches: etat.lire().fiches.map(f => (f.id === a.id ? { ...f, statut: 'publie' } : f)) });
+    const r = await actions.enregistrerRetour(reponse(code, ['F01', 'F02']));
+    expect(r).toEqual({ ok: true, appliquees: 1, avisRecu: true, ecartees: [{ ref: 'F01', raison: 'fiche publiée depuis le dossier' }] });
+    expect(db.lire(`fiches/${a.id}`)?.score ?? null).toBeNull();
+  });
+
+  it('compte dans le message d’échec les seules fiches à noter', async () => {
+    const { actions, etat, db, a, b } = await avecDeuxFiches();
+    await actions.ouvrirAnalyse();
+    const { code } = etat.lire().analyse;
+    actions.modifierFiche(a.id, { accroche: 'Autre accroche' });
+    db.echouerEcritures(`fiches/${b.id}`);
+    const r = await actions.enregistrerRetour(reponse(code, ['F01', 'F02']));
+    expect(r).toEqual({ ok: false, raison: 'L’enregistrement a été interrompu après 0 fiche sur 1 : réessaie, les fiches déjà notées seront simplement réécrites.' });
+  });
+
+  it('ignore une seconde ouverture pendant la préparation', async () => {
+    let libere;
+    const attente = new Promise(r => { libere = r; });
+    const { actions, db } = await avecDeuxFiches({ attente });
+    const p1 = actions.ouvrirAnalyse();
+    const p2 = actions.ouvrirAnalyse();
+    libere();
+    await Promise.all([p1, p2]);
+    expect(db.lister('analyses')).toHaveLength(1);
+  });
+
+  it('abandonne une préparation fermée en cours de route', async () => {
+    let libere;
+    const attente = new Promise(r => { libere = r; });
+    const { actions, etat, db } = await avecDeuxFiches({ attente });
+    const p = actions.ouvrirAnalyse();
+    actions.fermerAnalyse();
+    libere();
+    await p;
+    expect(etat.lire().analyse).toBeNull();
+    expect(db.lister('analyses')).toEqual([]);
+  });
+
+  it('réutilise le dossier identique sans retour, pas un dossier devenu périmé', async () => {
+    const { actions, etat, db, a } = await avecDeuxFiches();
+    await actions.ouvrirAnalyse();
+    const premier = etat.lire().analyse.code;
+    synchroniserAnalyses(etat, db);
+    await actions.ouvrirAnalyse();
+    expect(etat.lire().analyse.code).toBe(premier);
+    expect(db.lister('analyses')).toHaveLength(1);
+    actions.modifierFiche(a.id, { accroche: 'Changée' });
+    synchroniserAnalyses(etat, db);
+    await actions.ouvrirAnalyse();
+    expect(etat.lire().analyse.code).not.toBe(premier);
+    expect(db.lister('analyses')).toHaveLength(2);
+  });
+
+  it('ne réutilise pas un dossier qui a déjà reçu son retour', async () => {
+    const { actions, etat, db } = await avecDeuxFiches();
+    await actions.ouvrirAnalyse();
+    const premier = etat.lire().analyse.code;
+    await actions.enregistrerRetour(reponse(premier, ['F01', 'F02']));
+    synchroniserAnalyses(etat, db);
+    await actions.ouvrirAnalyse();
+    expect(etat.lire().analyse.code).not.toBe(premier);
+  });
+
+  it('ne perd pas un assistant noté pendant l’application du retour', async () => {
+    const m = await avecDeuxFiches();
+    await m.actions.ouvrirAnalyse();
+    const { code } = m.etat.lire().analyse;
+    const vider = m.enregistreur.vider;
+    let fait = false;
+    m.enregistreur.vider = async id => {
+      const r = await vider(id);
+      if (!fait) { fait = true; await m.actions.noterAssistant('chatgpt'); }
+      return r;
+    };
+    await m.actions.enregistrerRetour(reponse(code, ['F01', 'F02']));
+    expect(m.db.lire(`analyses/${code}`).assistant).toBe('chatgpt');
+    expect(m.db.lire(`analyses/${code}`).retour.appliquees).toHaveLength(2);
+  });
+
+  it('noterAssistant ne lève jamais', async () => {
+    const { actions, etat, db } = await avecDeuxFiches();
+    await actions.ouvrirAnalyse();
+    const { code } = etat.lire().analyse;
+    db.echouerLectures(`analyses/${code}`);
+    await expect(actions.noterAssistant('claude')).resolves.toBeUndefined();
+    db.echouerLectures(null);
+    db.echouerEcritures(`analyses/${code}`);
+    await expect(actions.noterAssistant('claude')).resolves.toBeUndefined();
+  });
+
+  it('garde l’avis déjà reçu quand un nouveau retour n’en a pas', async () => {
+    const { actions, etat, db } = await avecDeuxFiches();
+    await actions.ouvrirAnalyse();
+    const { code } = etat.lire().analyse;
+    await actions.enregistrerRetour(reponse(code, ['F01', 'F02']));
+    const r = await actions.enregistrerRetour(reponse(code, ['F01', 'F02'], { periode: 'rien' }));
+    expect(r.avisRecu).toBe(false);
+    expect(db.lire(`analyses/${code}`).retour).toMatchObject({ avis: 'Semaine correcte.', points_forts: ['x'], risques: ['y'], ordre_conseille: ['F01', 'F02'], appliquees: expect.any(Array) });
   });
 });
