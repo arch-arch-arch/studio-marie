@@ -38,3 +38,25 @@ describe('vueJour', () => {
     expect(actions.creerFiche).toHaveBeenCalledWith({ format: 'reel', date_heure: '2026-09-28T10:00:00.000Z' });
   });
 });
+
+describe('analyse par dossier', () => {
+  const etat = (plus = {}) => ({ profil: fictif, fiches: [], ancre: '2026-10-15T10:00:00.000Z', ...plus });
+  const bouton = el => [...el.querySelectorAll('button')].find(x => x.textContent === 'Analyser le mois');
+  it('propose le bouton quand la capacité existe (Mois seulement)', () => {
+    const a = { ...actionsFactices(), ouvrirAnalyse: vi.fn() };
+    bouton(vueMois(etat(), a, { dossier: true })).click();
+    expect(a.ouvrirAnalyse).toHaveBeenCalled();
+    expect(bouton(vueMois(etat(), a, {}))).toBeUndefined();
+    expect(bouton(vueMois(etat(), a))).toBeUndefined();
+    const jour = vueJour(etat(), a, { dossier: true });
+    expect([...jour.querySelectorAll('button')].some(b => /Analyser/.test(b.textContent))).toBe(false);
+  });
+  it('désactive le bouton pendant la préparation', () => {
+    expect(bouton(vueMois(etat({ analyse: { etape: 'preparation' } }), actionsFactices(), { dossier: true })).disabled).toBe(true);
+  });
+  it('affiche l’avis du mois', () => {
+    const analyses = [{ id: 'D-1', periode: { type: 'mois', cle: '2026-10' }, assistant: 'claude', fiches: [], retour: { recu_le: '2026-10-10T10:00:00.000Z', avis: 'Bon mois', points_forts: [], risques: [], ordre_conseille: [] } }];
+    const el = vueMois(etat({ analyses }), actionsFactices(), { dossier: true });
+    expect(el.querySelector('summary').textContent).toBe('Avis sur le mois');
+  });
+});

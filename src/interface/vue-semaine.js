@@ -5,8 +5,10 @@ import { creneauxLibres } from '../logique/creneaux.js';
 import { debutSemaine, joursDeLaSemaine, cleJour, heureLocale, libelleJour, depuisSaisieLocale } from '../logique/dates.js';
 import { LIBELLES_FORMAT } from '../logique/fiche.js';
 import { prochaineAction, ACTIONS_SANS_SUITE } from '../logique/parcours.js';
+import { periodeAffichee } from '../logique/dossier.js';
+import { rangeeAnalyse, sectionAvis } from './panneau-analyse.js';
 
-export function vueSemaine({ profil, fiches, ancre, maintenant, bulletin, stats }, actions) {
+export function vueSemaine({ profil, fiches, ancre, maintenant, bulletin, stats, analyse, analyses }, actions, capacites = {}) {
   const r = profil.regles_studio;
   const debut = debutSemaine(ancre, r.fuseau);
   const semaine = fichesDeLaSemaine(fiches, debut, r.fuseau);
@@ -15,6 +17,8 @@ export function vueSemaine({ profil, fiches, ancre, maintenant, bulletin, stats 
   const maintenantIso = maintenant ?? new Date().toISOString();
   const actionsParId = new Map(semaine.map(f => [f.id, prochaineAction(f, (stats ?? []).filter(s => s.fiche === f.id), maintenantIso, r.fuseau)]));
   return h('div', { class: 'semaine' },
+    capacites.dossier ? rangeeAnalyse('Analyser la semaine', analyse, actions) : null,
+    sectionAvis(analyses, periodeAffichee('semaine', ancre, r.fuseau), fiches),
     bulletin === null && !semainePassee
       ? h('p', { class: 'sans-bulletin' }, 'Pas de bulletin pour cette semaine. ', h('button', { type: 'button', class: 'bouton-lien', onclick: () => actions.changerVue('bulletin') }, 'Voir l’onglet Bulletin'))
       : null,

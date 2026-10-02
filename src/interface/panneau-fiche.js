@@ -5,7 +5,7 @@ import {
 import { cleJour, heureLocale, depuisSaisieLocale } from '../logique/dates.js';
 import { RELEVES, CHAMPS_CONTENU, etatReleves, tauxAbonnesParVue, formaterValeur } from '../logique/indicateurs.js';
 import { prochaineAction, ACTIONS_SANS_SUITE } from '../logique/parcours.js';
-import { lignesExamen } from '../logique/score.js';
+import { lignesExamen, nomAssistant } from '../logique/score.js';
 
 const ROLES = [['', '—'], ['engagement', 'Engagement'], ['cta', "Appel à l'action"], ['deadpan', 'Deadpan']];
 const LIBELLES_ROLE = { engagement: 'Engagement', cta: "Appel à l'action", deadpan: 'Deadpan' };
@@ -279,7 +279,7 @@ export function panneauFiche(fiche, profil, actions, capacites, releves = []) {
   const sectionScore = () => {
     const s = brouillon.score;
     const enfants = [
-      h('h3', {}, s ? `Avis de Claude : ${s.total}/100` : 'Avis de Claude'),
+      h('h3', {}, s ? `Avis de ${nomAssistant(s.examen)} : ${s.total}/100` : 'Avis de Claude'),
       h('p', { class: 'aide' }, 'Avis d’expert, pas une prédiction de performance.'),
     ];
     if (!s) enfants.push(h('p', { class: 'aide' }, 'Pas encore évaluée.'));
@@ -291,7 +291,7 @@ export function panneauFiche(fiche, profil, actions, capacites, releves = []) {
         `Conformité : ${LIBELLES_CONFORMITE[etat] ?? 'non évaluée'}.`, causes.length ? ` ${causes.join(' ; ')}` : ''));
       enfants.push(h('ul', { class: 'criteres' }, (s.criteres ?? []).map(c => h('li', {}, `${c.nom} : ${c.points}/${c.max}. ${c.phrase ?? ''}`))));
       if (s.alertes?.length) enfants.push(h('h4', {}, 'Alertes'), h('ul', { class: 'alertes' }, s.alertes.map(a => h('li', {}, a))));
-      enfants.push(h('details', { class: 'examen' }, h('summary', {}, 'Ce que Claude a examiné'),
+      enfants.push(h('details', { class: 'examen' }, h('summary', {}, s.examen?.source === 'dossier' ? 'Ce que l’assistant a examiné' : 'Ce que Claude a examiné'),
         h('ul', {}, lignesExamen(s.examen).map(l => h('li', {}, l)))));
     }
     if (brouillon.recommandations?.length) {

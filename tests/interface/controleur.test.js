@@ -939,3 +939,29 @@ describe('analyse par dossier', () => {
     expect(db.lire(`fiches/${a.id}`).score.examen.assistant).toBe('chatgpt');
   });
 });
+
+describe('analyse par dossier : interface', () => {
+  async function avecFiche(options) {
+    const dossier = fauxDossier(options);
+    const m = monter({ dossier });
+    await m.actions.creerFiche({ format: 'reel', date_heure: '2026-09-29T10:00:00.000Z' });
+    m.actions.modifierFiche(m.etat.lire().fiches[0].id, { accroche: 'Première', caption: 'Texte' });
+    return { ...m, dossier };
+  }
+  it('dit si le partage est possible une fois le dossier prêt', async () => {
+    const oui = await avecFiche();
+    expect(oui.actions.peutPartagerDossier()).toBe(false);
+    await oui.actions.ouvrirAnalyse();
+    expect(oui.actions.peutPartagerDossier()).toBe(true);
+    const non = await avecFiche({ partage: false });
+    await non.actions.ouvrirAnalyse();
+    expect(non.actions.peutPartagerDossier()).toBe(false);
+  });
+  it('ferme la fiche ouverte avant de préparer l’analyse', async () => {
+    const { actions, etat } = await avecFiche();
+    expect(etat.lire().ficheOuverte).toBeTruthy();
+    await actions.ouvrirAnalyse();
+    expect(etat.lire().ficheOuverte).toBeNull();
+    expect(etat.lire().analyse.etape).toBe('pret');
+  });
+});

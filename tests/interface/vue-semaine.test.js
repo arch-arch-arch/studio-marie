@@ -129,3 +129,28 @@ describe('parcours dans la semaine', () => {
     expect(avec.textContent).not.toContain('null');
   });
 });
+
+describe('analyse par dossier', () => {
+  const etat = (plus = {}) => ({ profil: fictif, fiches: [], ancre: ANCRE, ...plus });
+  const bouton = el => [...el.querySelectorAll('button')].find(x => x.textContent === 'Analyser la semaine');
+  it('propose le bouton quand la capacité existe', () => {
+    const a = { ...actionsFactices(), ouvrirAnalyse: vi.fn() };
+    bouton(vueSemaine(etat(), a, { dossier: true })).click();
+    expect(a.ouvrirAnalyse).toHaveBeenCalled();
+    expect(bouton(vueSemaine(etat(), a, {}))).toBeUndefined();
+    expect(bouton(vueSemaine(etat(), a))).toBeUndefined();
+  });
+  it('désactive le bouton pendant la préparation', () => {
+    const a = { ...actionsFactices(), ouvrirAnalyse: vi.fn() };
+    expect(bouton(vueSemaine(etat({ analyse: { etape: 'preparation' } }), a, { dossier: true })).disabled).toBe(true);
+    expect(bouton(vueSemaine(etat({ analyse: { etape: 'pret' } }), a, { dossier: true })).disabled).toBe(false);
+    expect(bouton(vueSemaine(etat({ analyse: null }), a, { dossier: true })).disabled).toBe(false);
+  });
+  it('affiche l’avis de la période', () => {
+    const periode = { type: 'semaine', cle: '2026-W40' };
+    const analyses = [{ id: 'D-1', periode, assistant: 'claude', fiches: [], retour: { recu_le: '2026-09-30T10:00:00.000Z', avis: 'Bonne semaine', points_forts: [], risques: [], ordre_conseille: [] } }];
+    const el = vueSemaine(etat({ analyses }), actionsFactices(), { dossier: true });
+    expect(el.querySelector('details.avis-periode').textContent).toContain('Bonne semaine');
+    expect(vueSemaine(etat({ analyses: [] }), actionsFactices(), { dossier: true }).querySelector('.avis-periode')).toBeNull();
+  });
+});

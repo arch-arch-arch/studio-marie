@@ -1,13 +1,17 @@
 import { h } from './h.js';
 import { semainesDuMois, joursDeLaSemaine, debutMois, partiesLocales, cleJour } from '../logique/dates.js';
 import { LIBELLES_FORMAT } from '../logique/fiche.js';
+import { periodeAffichee } from '../logique/dossier.js';
+import { rangeeAnalyse, sectionAvis } from './panneau-analyse.js';
 
 const ENTETES = ['lun.', 'mar.', 'mer.', 'jeu.', 'ven.', 'sam.', 'dim.'];
 
-export function vueMois({ profil, fiches, ancre }, actions) {
+export function vueMois({ profil, fiches, ancre, analyse, analyses }, actions, capacites = {}) {
   const fz = profil.regles_studio.fuseau;
   const moisCourant = partiesLocales(debutMois(ancre, fz), fz).mois;
   return h('div', { class: 'mois' },
+    capacites.dossier ? rangeeAnalyse('Analyser le mois', analyse, actions) : null,
+    sectionAvis(analyses, periodeAffichee('mois', ancre, fz), fiches),
     h('div', { class: 'mois-entetes', 'aria-hidden': 'true' }, ENTETES.map(j => h('span', {}, j))),
     semainesDuMois(ancre, fz).map(semaine => h('div', { class: 'mois-semaine' },
       joursDeLaSemaine(semaine, fz).map(jour => {

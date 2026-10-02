@@ -363,6 +363,8 @@ export function creerControleur({ etat, depot, enregistreur, assets, horloge, id
   }
 
   async function ouvrirAnalyse() {
+    // Sans await : fermerAnalyse() appelée juste après doit toujours invalider la préparation qui démarre.
+    fermerPanneau().catch(() => {});
     if (!dossier) { etat.modifier({ analyse: { etape: 'erreur', message: ANALYSE_INDISPONIBLE } }); return; }
     if (etat.lire().analyse?.etape === 'preparation') return;
     const jeton = ++generationAnalyse;
@@ -421,6 +423,8 @@ export function creerControleur({ etat, depot, enregistreur, assets, horloge, id
   }
 
   const analysePrete = () => (etat.lire().analyse?.etape === 'pret' ? etat.lire().analyse : null);
+
+  const peutPartagerDossier = () => { const a = analysePrete(); return !!a && !!dossier?.peutPartager(a.fichier); };
 
   async function partagerDossier() {
     const a = analysePrete();
@@ -547,6 +551,7 @@ export function creerControleur({ etat, depot, enregistreur, assets, horloge, id
     ouvrirAnalyse,
     fermerAnalyse,
     partagerDossier,
+    peutPartagerDossier,
     telechargerDossier,
     copierMessage,
     noterAssistant,

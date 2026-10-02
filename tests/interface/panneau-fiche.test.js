@@ -505,3 +505,13 @@ describe('visuel signé', () => {
     expect(actions.urlVisuel).toHaveBeenCalledTimes(2);
   });
 });
+
+describe('score venu d’un dossier', () => {
+  it('nomme l’assistant dans le titre et la section', () => {
+    const score = { total: 61, criteres: [], conformite: { etat: 'vert', causes: [] }, alertes: [], version_profil: 1, evalue_le: '2026-10-01T08:00:00.000Z', empreinte: 'x', examen: { visuel: 'joint', raison_visuel: null, version_profil: 1, sections_profil: [], contenus_semaine: 4, alertes_calculees: 0, blocages_calcules: 0, source: 'dossier', assistant: 'chatgpt' } };
+    const p = panneauFiche(fiche({ score }), fictif, actionsFactices(), { assets: false });
+    expect([...p.querySelectorAll('h3')].some(h => h.textContent === 'Avis de ChatGPT : 61/100')).toBe(true);
+    expect(p.querySelector('details.examen summary').textContent).toBe('Ce que l’assistant a examiné');
+    expect(p.querySelector('details.examen li').textContent).toBe('Analyse par dossier (ChatGPT).');
+  });
+});

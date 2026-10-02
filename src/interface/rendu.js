@@ -7,6 +7,7 @@ import { vueProfil, sectionSauvegarde } from './vue-profil.js';
 import { vueBulletin } from './vue-bulletin.js';
 import { vueTableau } from './vue-tableau.js';
 import { panneauFiche } from './panneau-fiche.js';
+import { panneauAnalyse } from './panneau-analyse.js';
 
 const LIBELLES_SAUVEGARDE = { ok: 'Enregistré', en_cours: 'Enregistrement…', erreur: 'Échec de l’enregistrement : nouvel essai à la prochaine modification' };
 
@@ -42,19 +43,20 @@ function barre(e, actions) {
 
 function contenuVue(e, actions, capacites, extras) {
   if (!e.profil || e.vue === 'profil') return vueProfil(e, actions, capacites, extras);
-  if (e.vue === 'mois') return vueMois(e, actions);
+  if (e.vue === 'mois') return vueMois(e, actions, capacites);
   if (e.vue === 'jour') return vueJour(e, actions);
   if (e.vue === 'bulletin') return vueBulletin(e, actions, capacites);
   if (e.vue === 'tableau') return vueTableau(e, actions);
-  return vueSemaine(e, actions);
+  return vueSemaine(e, actions, capacites);
 }
 
 export function creerRendu(racine, actions, capacites, horloge) {
   const tete = h('header', { class: 'barre' });
   const zoneErreur = h('div', { class: 'zone-erreur' });
   const vue = h('main', { class: 'vue' });
+  const zoneAnalyse = h('div', { class: 'zone-analyse' });
   const panneau = h('div', { class: 'zone-panneau' });
-  racine.replaceChildren(tete, zoneErreur, h('div', { class: 'corps' }, vue, panneau));
+  racine.replaceChildren(tete, zoneErreur, zoneAnalyse, h('div', { class: 'corps' }, vue, panneau));
   let elementSauvegarde = null;
   const sauvegarde = () => (elementSauvegarde ??= sectionSauvegarde(actions, capacites));
   let memo = {};
@@ -77,6 +79,7 @@ export function creerRendu(racine, actions, capacites, horloge) {
     // mettreAJour?.() ne fait rien et l'écran reste bloqué sur le message de chargement.
     const sortDuChargementTableau = estVueTableau
       && (memo.stats === undefined || memo.relevesCompte === undefined) && e.stats !== undefined && e.relevesCompte !== undefined;
+    const preparation = e.analyse?.etape === 'preparation';
     let reconstructionRequise;
     if (estVueProfil) {
       reconstructionRequise = memo.profil !== e.profil || memo.vue !== e.vue || memo.ancre !== e.ancre;
@@ -85,7 +88,9 @@ export function creerRendu(racine, actions, capacites, horloge) {
       reconstructionRequise = memo.profil !== e.profil || memo.vue !== e.vue || memo.ancre !== e.ancre || sortDuChargementTableau;
     } else {
       reconstructionRequise = memo.profil !== e.profil || memo.fiches !== e.fiches || memo.vue !== e.vue || memo.ancre !== e.ancre || memo.bulletin !== e.bulletin || memo.configVeille !== e.configVeille || memo.veille !== e.veille
-        || (e.vue === 'semaine' && memo.stats !== e.stats);
+        || (e.vue === 'semaine' && memo.stats !== e.stats)
+        // Le bouton d'analyse et l'avis de la période n'existent qu'en Semaine et en Mois ; le panneau d'analyse, lui, n'en dépend pas.
+        || ((e.vue === 'semaine' || e.vue === 'mois') && (memo.analyses !== e.analyses || memo.preparation !== preparation));
     }
     if (reconstructionRequise) {
       elementVue = contenuVue(e2, actions, capacites, { sauvegarde: sauvegarde() });
@@ -95,12 +100,26 @@ export function creerRendu(racine, actions, capacites, horloge) {
     } else if (estVueTableau && (memo.stats !== e.stats || memo.relevesCompte !== e.relevesCompte || memo.fichesRecentes !== e.fichesRecentes)) {
       elementVue?.mettreAJour?.(e2);
     }
+    // Le panneau d'analyse garde le texte collé : il n'est reconstruit que si le dossier, l'étape ou le message changent.
+    const cleAnalyse = e.analyse ? [e.analyse.etape, e.analyse.code ?? '', e.analyse.message ?? ''].join('|') : null;
+    if (cleAnalyse !== memo.cleAnalyse) {
+      const ouvertureAnalyse = !memo.cleAnalyse;
+      const elementAnalyse = e.analyse ? panneauAnalyse(e.analyse, actions, { partage: e.analyse.etape === 'pret' && !!actions.peutPartagerDossier?.() }) : null;
+      zoneAnalyse.replaceChildren(...(elementAnalyse ? [elementAnalyse] : []));
+      if (elementAnalyse) {
+        elementAnalyse.querySelector('h2')?.focus({ preventScroll: true });
+        if (ouvertureAnalyse && typeof elementAnalyse.scrollIntoView === 'function') elementAnalyse.scrollIntoView({ block: 'nearest' });
+      } else {
+        vue.querySelector('.analyse-periode button')?.focus();
+      }
+    }
     const ouverte = e.profil && e.ficheOuverte ? e.fiches.find(f => f.id === e.ficheOuverte) : null;
     const panneauChange = memo.ficheOuverte !== e.ficheOuverte || memo.profil !== e.profil || (!!ouverte !== memo.panneauAffiche);
     if (panneauChange) panneau.replaceChildren(ouverte ? panneauFiche(ouverte, e.profil, actions, capacites, (e.stats ?? []).filter(s => s.fiche === ouverte.id)) : '');
     racine.classList.toggle('avec-panneau', !!ouverte);
     memo = {
       profil: e.profil, fiches: e.fiches, vue: e.vue, ancre: e.ancre, ficheOuverte: e.ficheOuverte, panneauAffiche: !!ouverte,
+      cleAnalyse, analyses: e.analyses, preparation,
       reference: e.reference, resultatReference: e.resultatReference, verificationReference: e.verificationReference,
       bulletin: e.bulletin, configVeille: e.configVeille, veille: e.veille,
       stats: e.stats, relevesCompte: e.relevesCompte, fichesRecentes: e.fichesRecentes,
