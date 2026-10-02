@@ -343,3 +343,33 @@ describe('passe finale B : textes', () => {
     expect(p.risques).toEqual(['autre']);
   });
 });
+
+describe('retouche : tri des captions en tout nombre', () => {
+  const cap = (captions, extra = {}) => valides(bloc({ ...objet, fiches: [{ ...jugement('F01'), captions, ...extra }, jugement('F02')] }));
+  const un = captions => cap(captions).valides[0];
+  it('3 captions dont une inconnue : valide, 2 gardées', () => {
+    const v = un([{ role: 'envoi', texte: 'x' }, { role: 'cta', texte: 'y' }, { role: 'deadpan', texte: 'z' }]);
+    expect(v.jugement.captions).toEqual([{ role: 'cta', texte: 'y' }, { role: 'deadpan', texte: 'z' }]);
+    expect(v.remarque).toBe('variante de caption écartée : rôle inconnu envoi');
+  });
+  it('3 captions valides : 2 gardées, remarque', () => {
+    const v = un([{ role: 'cta', texte: 'a' }, { role: 'deadpan', texte: 'b' }, { role: 'engagement', texte: 'c' }]);
+    expect(v.jugement.captions).toEqual([{ role: 'cta', texte: 'a' }, { role: 'deadpan', texte: 'b' }]);
+    expect(v.remarque).toBe('variante de caption en trop écartée');
+  });
+  it('1 caption valide : 1 gardée, remarque', () => {
+    const v = un([{ role: 'cta', texte: 'a' }]);
+    expect(v.jugement.captions).toEqual([{ role: 'cta', texte: 'a' }]);
+    expect(v.remarque).toBe('une seule variante de caption fournie');
+  });
+  it('captions absent ou non tableau : valide, 0 caption, remarque', () => {
+    for (const captions of [undefined, 'x', []]) {
+      const v = un(captions);
+      expect(v.jugement.captions).toEqual([]);
+      expect(v.remarque).toBe('aucune variante de caption fournie');
+    }
+  });
+  it('une autre invalidité écarte toujours la fiche', () => {
+    expect(cap([{ role: 'cta', texte: 'a' }], { accroches: ['Une'] }).ecartees[0].ref).toBe('F01');
+  });
+});

@@ -98,19 +98,21 @@ function textesDeLaFiche(f) {
 
 const CAPTIONS_FACTICES = [{ role: 'engagement', texte: 'x' }, { role: 'deadpan', texte: 'x' }];
 
-// Sépare les captions utilisables (rôle autorisé, rôles distincts, texte non vide) des autres, avec la cause de chaque écart.
+// Garde, dans l'ordre et au plus deux, les captions utilisables (rôle autorisé, rôle pas encore vu, texte non vide) des autres, avec la cause de chaque écart.
 function trierCaptions(captions) {
   const gardees = [];
   const inconnus = [];
   let manquant = false;
   let doublon = false;
   let vide = false;
+  let enTrop = false;
   for (const c of captions) {
     const role = estObjet(c) ? c.role : undefined;
     if (!estTexte(role)) manquant = true;
     else if (!ROLES.includes(role)) inconnus.push(role);
     else if (!estTexte(c.texte)) vide = true;
     else if (gardees.some(g => g.role === role)) doublon = true;
+    else if (gardees.length >= 2) enTrop = true;
     else gardees.push({ role, texte: c.texte.trim() });
   }
   const causes = [];
@@ -118,7 +120,12 @@ function trierCaptions(captions) {
   if (manquant) causes.push('rôle manquant');
   if (doublon) causes.push('deux fois le même rôle');
   if (vide) causes.push('texte vide');
-  return { gardees, remarque: causes.length ? `variante de caption écartée : ${causes.join(' ; ')}` : null };
+  const remarques = [];
+  if (causes.length) remarques.push(`variante de caption écartée : ${causes.join(' ; ')}`);
+  if (enTrop) remarques.push('variante de caption en trop écartée');
+  if (captions.length === 1) remarques.push('une seule variante de caption fournie');
+  if (captions.length === 0) remarques.push('aucune variante de caption fournie');
+  return { gardees, exact: captions.length === 2 && gardees.length === 2, remarque: remarques.length ? remarques.join(' ; ') : null };
 }
 
 export function validerRetour(retour, analyse) {
@@ -143,8 +150,8 @@ export function validerRetour(retour, analyse) {
         ecart = { ref, raison: RAISON_EXEMPLE };
       } else {
         // Une caption au rôle inconnu écarte la variante, pas l'analyse : le reste est validé avec des captions factices.
-        const tri = Array.isArray(brute.captions) && brute.captions.length === 2 ? trierCaptions(brute.captions) : null;
-        const partielle = tri && tri.gardees.length < 2;
+        const tri = trierCaptions(Array.isArray(brute.captions) ? brute.captions : []);
+        const partielle = !tri.exact;
         const v = validerReponse(partielle ? { ...brute, captions: CAPTIONS_FACTICES } : brute);
         if (!v.ok) {
           ecart = { ref, raison: `réponse incomplète (${v.erreurs.join(' ; ')})` };

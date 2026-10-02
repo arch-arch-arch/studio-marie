@@ -1,7 +1,7 @@
 import { debutSemaine, ajouterJours, debutMois, ajouterMois, cleSemaineIso, heureLocale, partiesLocales } from './dates.js';
 import { empreinte, LIBELLES_FORMAT } from './fiche.js';
 import { verifierRegles } from './regles-score.js';
-import { controlerSemaine } from './controle.js';
+import { controlerSemaine, fichesDeLaSemaine } from './controle.js';
 import { extraireProfilDetaille } from '../claude/evaluation.js';
 
 export const FICHES_MAX = 30;
@@ -132,13 +132,18 @@ export function enListes(valeur, niveau = 0) {
 }
 
 // Une ligne exacte par pastille de controlerSemaine : ce que chacune compte, et par rapport à quoi.
-export function ligneRegle(p, regles) {
+export function ligneRegle(p, regles, fichesSemaine = []) {
+  const feed = fichesSemaine.filter(f => ['reel', 'carrousel', 'post'].includes(f.format));
   const [n, total] = String(p.valeur).split('/');
   const fin = `(${p.etat})`;
   switch (p.cle) {
     case 'reels': case 'carrousels': return `${p.libelle} : ${n} sur ${total} attendus ${fin}`;
     case 'stories': return `${p.libelle} : ${n} sur 7 ${fin}`;
-    case 'cta': return `Appels vers l'offre : ${n} sur ${total} contenus du fil, maximum ${Math.round(regles.cta_ratio_max * 100)} % ${fin}`;
+    case 'cta': {
+      // Orange sans dépassement : aucun appel sur au moins 4 contenus du fil (voir controlerSemaine).
+      const cause = p.etat === 'orange' && n === '0' && Number(total) >= 4 ? ' : aucun appel vers l\'offre cette semaine' : '';
+      return `Appels vers l'offre : ${n} sur ${total} contenus du fil, maximum ${Math.round(regles.cta_ratio_max * 100)} % (${p.etat}${cause})`;
+    }
     case 'roles': {
       const [e, c, d] = String(p.valeur).split('/');
       const o = regles.roles_caption;
@@ -146,7 +151,12 @@ export function ligneRegle(p, regles) {
     }
     case 'ragebait': return `${p.libelle} : ${n}, maximum ${total} ${fin}`;
     case 'porte': return `${p.libelle} : ${p.valeur}, objectif ${regles.stories_porte.min} à ${regles.stories_porte.max} ${fin}`;
-    case 'piliers': return `Piliers présents : ${n} sur ${total} ${fin}`;
+    case 'piliers': {
+      const parPilier = new Map();
+      for (const f of feed) parPilier.set(f.pilier, (parPilier.get(f.pilier) ?? 0) + 1);
+      const domine = feed.length >= 4 && [...parPilier.values()].some(k => k / feed.length > 0.5);
+      return `Piliers présents : ${n} sur ${total} (${p.etat}${domine ? ' : un pilier domine plus de la moitié du fil' : ''})`;
+    }
     default: return `${p.libelle} : ${p.valeur} ${fin}`;
   }
 }
@@ -237,7 +247,7 @@ export function contenuDossier({ profil, entrees, periode, code, toutesLesFiches
   const strategie = detail.sections.map(cle => ({ titre: versLatin1(titreSection(cle)), lignes: enListes(extrait[cle]).map(versLatin1) }));
   const regles = [LEGENDE_REGLES, ...semainesDeLaPeriode(periode, fz).flatMap(debut => [
     `Semaine ${cleSemaineIso(debut, fz)} :`,
-    ...controlerSemaine(toutesLesFiches, profil.regles_studio, debut).map(p => `- ${ligneRegle(p, profil.regles_studio)}`),
+    ...controlerSemaine(toutesLesFiches, profil.regles_studio, debut).map(p => `- ${ligneRegle(p, profil.regles_studio, fichesDeLaSemaine(toutesLesFiches, debut, fz))}`),
   ])].map(versLatin1);
   return {
     titre: versLatin1(`Dossier d'analyse : ${periode.libelle}`),

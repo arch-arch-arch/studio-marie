@@ -144,7 +144,7 @@ Chaque entrée de `fiches` a exactement la forme de l'évaluation unitaire exist
 
 Pour chaque fiche valide :
 
-- si une caption a un rôle inconnu (par exemple `envoi`), manquant ou répété, seule cette variante est écartée : l'analyse (notes, phrases, conformité, accroches, hashtags, recommandations) est gardée, la fiche reçoit 0 ou 1 variante et une remarque « variante de caption écartée : rôle inconnu envoi », comptée dans les fiches mises à jour et affichée dans le panneau ; toute autre invalidité écarte la fiche ;
+- pour tout nombre de captions (0, 1, 3 ou plus), le studio garde dans l'ordre au plus deux captions au rôle autorisé, au texte non vide et au rôle pas encore vu ; si une caption a un rôle inconnu (par exemple `envoi`), manquant ou répété, ou s'il y en a trop ou pas assez, seule cette variante est écartée : l'analyse (notes, phrases, conformité, accroches, hashtags, recommandations) est gardée, la fiche reçoit 0 ou 1 variante et une remarque « variante de caption écartée : rôle inconnu envoi », comptée dans les fiches mises à jour et affichée dans le panneau ; toute autre invalidité écarte la fiche ;
 - si la fiche n'existe plus : écartée, « fiche supprimée depuis le dossier » ;
 - si la fiche a été publiée depuis le dossier : écartée, « fiche publiée depuis le dossier » ;
 - si son empreinte a changé depuis le dossier : écartée, « fiche modifiée depuis le dossier : refais une analyse » ;
@@ -188,6 +188,7 @@ Affichage : la vue Semaine et la vue Mois montrent, sous leur en-tête, le derni
 - Retour collé vide ou sans JSON lisible : « Je ne trouve pas le bloc à coller dans cette réponse. Copie toute la réponse de l'assistant, puis recolle-la. ».
 - Réponse coupée (JSON incomplet) : même message, complété de « Si la réponse a été coupée, demande à l'assistant de redonner seulement le bloc. ».
 - Écriture d'une fiche en échec : l'application s'arrête, le résultat dit combien de fiches ont été mises à jour, et un nouvel enregistrement du même retour reprend sans doublon.
+- Codes d'émojis : un code `[U+1F525]` renvoyé par le modèle dans un texte est reconverti en caractère au retour (codes valides seulement).
 - Deux dossiers pour la même période : chacun a son code ; la vue affiche le retour le plus récent.
 - Dossier identique (même période, mêmes fiches et empreintes, même version du profil) et sans retour : il est réutilisé, avec son code, au lieu d'en créer un nouveau.
 - Onglet rechargé ou panneau fermé : le bouton « Coller un retour » ouvre l'étape `retour` du panneau, qui retrouve le dossier par son code, sans dossier prêt.

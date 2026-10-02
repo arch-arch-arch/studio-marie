@@ -304,3 +304,24 @@ describe('correction 1 : bloc de fiche', () => {
     expect(c.fiches[1].lignes).toContain(`caption : ${'C'.repeat(2200)}`);
   });
 });
+
+describe('retouche : causes des états qui ne se déduisent pas des nombres', () => {
+  const periode = periodeAffichee('semaine', '2026-10-07T10:00:00.000Z', FZ);
+  const p = profil.regles_studio.piliers.map(x => x.cle);
+  const regles = fiches => contenuDossier({
+    profil, periode, code: 'D-abc123', toutesLesFiches: fiches,
+    entrees: fiches.map((f, i) => ({ ref: `F0${i + 1}`, fiche: f, etat: etatVisuel(f, null) })),
+  }).regles;
+  it('dit « aucun appel » pour un orange à 0 sur 4 contenus du fil ou plus', () => {
+    const fiches = [0, 1, 2, 3].map(i => fiche(`r${i}`, `2026-10-0${5 + (i % 3)}T10:00:00.000Z`, { pilier: p[i] }));
+    expect(regles(fiches)).toContain("- Appels vers l'offre : 0 sur 4 contenus du fil, maximum 25 % (orange : aucun appel vers l'offre cette semaine)");
+  });
+  it('n’ajoute pas de cause sous 4 contenus du fil', () => {
+    const fiches = [fiche('a', '2026-10-05T10:00:00.000Z'), fiche('b', '2026-10-06T10:00:00.000Z', { pilier: p[1] })];
+    expect(regles(fiches)).toContain("- Appels vers l'offre : 0 sur 2 contenus du fil, maximum 25 % (vert)");
+  });
+  it('dit qu’un pilier domine plus de la moitié du fil', () => {
+    const fiches = [0, 1, 2].map(i => fiche(`d${i}`, `2026-10-0${5 + i}T10:00:00.000Z`, { pilier: p[0] })).concat(fiche('e', '2026-10-08T10:00:00.000Z', { pilier: p[1] }));
+    expect(regles(fiches)).toContain('- Piliers présents : 2 sur 4 (rouge : un pilier domine plus de la moitié du fil)');
+  });
+});
