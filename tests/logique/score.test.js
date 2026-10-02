@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { nouvelleFiche, empreinte } from '../../src/logique/fiche.js';
-import { composerScore, construireExamen, lignesExamen, fusionnerConformite, POIDS, PLAFOND_ROUGE } from '../../src/logique/score.js';
+import { composerScore, construireExamen, lignesExamen, nomAssistant, fusionnerConformite, POIDS, PLAFOND_ROUGE } from '../../src/logique/score.js';
 
 const VERT = { etat: 'vert', causes: [] };
 const f = (format = 'reel') => ({ ...nouvelleFiche({ id: 'f1', format, date_heure: '2026-09-28T10:00:00.000Z', maintenant: 'x' }), caption: 'c', visuel: 'a1' });
@@ -117,5 +117,19 @@ describe('examen', () => {
   it('signale une évaluation antérieure sans examen', () => {
     expect(lignesExamen(null)).toEqual(['Détail non disponible pour cette évaluation (antérieure).']);
     expect(lignesExamen(undefined)).toEqual(['Détail non disponible pour cette évaluation (antérieure).']);
+  });
+});
+
+describe('analyse par dossier', () => {
+  const base = { visuel: 'joint', raison_visuel: null, version_profil: 2, sections_profil: ['regles_studio'], contenus_semaine: 4, alertes_calculees: 0, blocages_calcules: 0 };
+  it('nomme l’assistant et l’annonce en première ligne', () => {
+    expect(nomAssistant({ ...base, source: 'dossier', assistant: 'chatgpt' })).toBe('ChatGPT');
+    expect(nomAssistant({ ...base, source: 'dossier', assistant: 'claude' })).toBe('Claude');
+    expect(nomAssistant({ ...base, source: 'dossier', assistant: 'inconnu' })).toBe('l’assistant');
+    expect(nomAssistant(base)).toBe('Claude');
+    expect(nomAssistant(null)).toBe('Claude');
+    expect(lignesExamen({ ...base, source: 'dossier', assistant: 'chatgpt' })[0]).toBe('Analyse par dossier (ChatGPT).');
+    expect(lignesExamen({ ...base, source: 'dossier', assistant: 'inconnu' })[0]).toBe('Analyse par dossier.');
+    expect(lignesExamen(base)[0]).toBe('Visuel examiné.');
   });
 });

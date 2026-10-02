@@ -11,13 +11,13 @@ import { construireExport, COLLECTIONS_EXPORT } from '../../src/logique/sauvegar
 const T = '2026-09-28T08:00:00.000Z';
 const FZ = 'Europe/Paris';
 
-function monter({ assets = null } = {}) {
+function monter({ assets = null, dossier = null } = {}) {
   const db = creerFausseBase();
   const depot = creerDepot(db);
   const enregistreur = creerEnregistreur(f => depot.enregistrerFiche(f), 600);
   const etat = creerEtat({ profil: { ...fictif, version: 1 }, fiches: [], vue: 'semaine', ancre: T, ficheOuverte: null, erreur: null, sauvegarde: 'ok' });
   let n = 0;
-  const actions = creerControleur({ etat, depot, enregistreur, assets, horloge: () => T, idAleatoire: () => `f${++n}` });
+  const actions = creerControleur({ etat, depot, enregistreur, assets, dossier, horloge: () => T, idAleatoire: () => `f${++n}` });
   return { db, etat, actions, enregistreur };
 }
 
@@ -482,5 +482,223 @@ describe('relancerVeille', () => {
     const attendu = 'La veille a échoué : réessaie dans quelques minutes. Rien n’a été modifié.';
     expect(r.raison).toBe(attendu);
     expect(etat.lire().veille).toEqual({ enCours: false, message: attendu });
+  });
+});
+
+function fauxDossier({ cartes = () => ({ ok: true, carte: new Blob(['c'], { type: 'image/jpeg' }) }), pdfEchoue = false, partage = true } = {}) {
+  const appels = { demandes: null, contenu: null, partages: [], copies: [] };
+  return {
+    appels,
+    fabrique: async () => ({
+      preparerCartes: async demandes => { appels.demandes = demandes; return new Map(demandes.map(d => [d.ref, cartes(d)])); },
+      assemblerPdf: async (contenu, lesCartes) => {
+        if (pdfEchoue) throw new Error('pdf');
+        appels.contenu = contenu; appels.cartes = lesCartes;
+        return new Blob(['%PDF'], { type: 'application/pdf' });
+      },
+    }),
+    peutPartager: () => partage,
+    partager: async fichier => { appels.partages.push(fichier); },
+    copier: async texte => { appels.copies.push(texte); },
+  };
+}
+
+const reponse = (code, refs, plus = {}) => '```json\n' + JSON.stringify({
+  dossier: code,
+  fiches: refs.map(id => ({
+    id, notes: { accroche: 7, voix: 8, mecanique: 6 }, phrases: { accroche: 'a', voix: 'b', mecanique: 'c' },
+    conformite: { etat: 'vert', causes: [] }, captions: [{ role: 'engagement', texte: 'A ?' }, { role: 'deadpan', texte: 'B.' }],
+    accroches: ['Une', 'Deux'], hashtags: ['nuit'],
+    recommandations: [{ texte: 'r1', pourquoi: 'p1' }, { texte: 'r2', pourquoi: 'p2' }, { texte: 'r3', pourquoi: 'p3' }],
+  })),
+  periode: { avis: 'Semaine correcte.', points_forts: ['x'], risques: ['y'], ordre_conseille: refs },
+  ...plus,
+}) + '\n```';
+
+describe('analyse par dossier', () => {
+  async function avecDeuxFiches(options) {
+    const dossier = fauxDossier(options);
+    const m = monter({ dossier, assets: { upload: vi.fn(), telecharger: vi.fn(async () => new Blob(['i'], { type: 'image/png' })) } });
+    await m.actions.creerFiche({ format: 'reel', date_heure: '2026-09-29T10:00:00.000Z' });
+    await m.actions.creerFiche({ format: 'story', date_heure: '2026-09-30T10:00:00.000Z' });
+    const [a, b] = m.etat.lire().fiches;
+    m.actions.modifierFiche(a.id, { accroche: 'Première', caption: 'Texte', visuel: 'v1', visuel_type: 'image' });
+    m.actions.modifierFiche(b.id, { accroche: 'Seconde', caption: 'Texte' });
+    await m.actions.fermerPanneau();
+    return { ...m, dossier, a: m.etat.lire().fiches.find(f => f.id === a.id), b: m.etat.lire().fiches.find(f => f.id === b.id) };
+  }
+
+  it('prépare le dossier, l’enregistre et le met à disposition', async () => {
+    const { actions, etat, db, dossier, a, b } = await avecDeuxFiches();
+    await actions.ouvrirAnalyse();
+    const an = etat.lire().analyse;
+    expect(an).toMatchObject({ etape: 'pret', nombre: 2, sansVisuel: [], nom: 'analyse-2026-W40.pdf' });
+    expect(an.code).toMatch(/^D-/);
+    expect(an.fichier.type).toBe('application/pdf');
+    expect(dossier.appels.demandes).toEqual([{ ref: 'F01', etiquette: expect.stringContaining('F01'), visuel: 'v1', type: 'image' }]);
+    expect(dossier.appels.contenu.fiches.map(f => f.ref)).toEqual(['F01', 'F02']);
+    const doc = db.lire(`analyses/${an.code}`);
+    expect(doc).toMatchObject({
+      periode: { type: 'semaine', cle: '2026-W40' }, cree_le: T, assistant: 'inconnu',
+      fiches: [{ ref: 'F01', id: a.id, empreinte: empreinte(a), visuel: 'joint', raison_visuel: null }, { ref: 'F02', id: b.id, empreinte: empreinte(b), visuel: 'aucun', raison_visuel: null }],
+    });
+    expect(doc.retour).toBeUndefined();
+  });
+
+  it('signale les fiches parties sans visuel et les erreurs de préparation', async () => {
+    const sans = await avecDeuxFiches({ cartes: () => ({ ok: false }) });
+    await sans.actions.ouvrirAnalyse();
+    expect(sans.etat.lire().analyse.sansVisuel).toEqual(['F01']);
+    const casse = await avecDeuxFiches({ pdfEchoue: true });
+    await casse.actions.ouvrirAnalyse();
+    expect(casse.etat.lire().analyse).toEqual({ etape: 'erreur', message: 'Le dossier n’a pas pu être préparé : réessaie.' });
+    expect(casse.db.lister('analyses')).toEqual([]);
+    const vide = monter({ dossier: fauxDossier() });
+    await vide.actions.ouvrirAnalyse();
+    expect(vide.etat.lire().analyse).toEqual({ etape: 'erreur', message: 'Aucune fiche à analyser sur cette période.' });
+    const absent = monter();
+    await absent.actions.ouvrirAnalyse();
+    expect(absent.etat.lire().analyse).toEqual({ etape: 'erreur', message: 'L’analyse par dossier n’est pas disponible dans cette vue.' });
+  });
+
+  it('partage, télécharge et copie', async () => {
+    const { actions, dossier } = await avecDeuxFiches();
+    await actions.ouvrirAnalyse();
+    expect(await actions.partagerDossier()).toEqual({ ok: true, message: 'Dossier partagé.' });
+    expect(dossier.appels.partages).toHaveLength(1);
+    expect(await actions.copierMessage()).toEqual({ ok: true, message: 'Message copié.' });
+    expect(dossier.appels.copies[0]).toContain('Voici le dossier d’analyse de mes contenus.');
+    expect((await actions.telechargerDossier()).ok).toBe(false);
+  });
+
+  it('applique le retour à chaque fiche et garde l’avis de la période', async () => {
+    const { actions, etat, db, a, b } = await avecDeuxFiches();
+    await actions.ouvrirAnalyse();
+    const { code } = etat.lire().analyse;
+    await actions.noterAssistant('chatgpt');
+    const r = await actions.enregistrerRetour(`Mon analyse…\n\nBloc à coller dans le studio :\n${reponse(code, ['F01', 'F02'])}`);
+    expect(r).toEqual({ ok: true, appliquees: 2, ecartees: [], avisRecu: true });
+    const fa = db.lire(`fiches/${a.id}`);
+    expect(fa.score.total).toBeGreaterThan(0);
+    expect(fa.score.examen).toMatchObject({ source: 'dossier', assistant: 'chatgpt', visuel: 'joint', contenus_semaine: 1, version_profil: 1 });
+    expect(fa.recommandations).toHaveLength(3);
+    expect(fa.variantes.map(v => v.role)).toEqual(['engagement', 'deadpan']);
+    expect(db.lire(`fiches/${b.id}`).score.examen.visuel).toBe('aucun');
+    expect(db.lire(`analyses/${code}`).retour).toMatchObject({ recu_le: T, avis: 'Semaine correcte.', ordre_conseille: ['F01', 'F02'], appliquees: [a.id, b.id], ecartees: [] });
+    expect(etat.lire().analyse.retour).toEqual(r);
+  });
+
+  it('écarte une fiche modifiée ou supprimée depuis le dossier', async () => {
+    const { actions, etat, db, a, b } = await avecDeuxFiches();
+    await actions.ouvrirAnalyse();
+    const { code } = etat.lire().analyse;
+    actions.modifierFiche(a.id, { accroche: 'Autre accroche' });
+    await actions.supprimerFiche(b.id);
+    const r = await actions.enregistrerRetour(reponse(code, ['F01', 'F02']));
+    expect(r).toEqual({ ok: true, appliquees: 0, avisRecu: true, ecartees: [
+      { ref: 'F01', raison: 'fiche modifiée depuis le dossier : refais une analyse' },
+      { ref: 'F02', raison: 'fiche supprimée depuis le dossier' },
+    ] });
+    expect(db.lire(`fiches/${a.id}`)?.score ?? null).toBeNull();
+  });
+
+  it('n’écrit rien pour un retour illisible ou d’un autre dossier', async () => {
+    const { actions, etat, db } = await avecDeuxFiches();
+    await actions.ouvrirAnalyse();
+    const { code } = etat.lire().analyse;
+    const avant = JSON.stringify([...db._docs]);
+    const ecrituresAvant = db.ecritures.length;
+    expect((await actions.enregistrerRetour('Bonjour')).ok).toBe(false);
+    expect(await actions.enregistrerRetour(reponse('D-zzzzzz', ['F01']))).toEqual({ ok: false, raison: 'Ce retour ne correspond à aucun dossier produit par le studio.' });
+    expect(db.lire(`analyses/${code}`).retour).toBeUndefined();
+    expect(db.ecritures).toHaveLength(ecrituresAvant);
+    expect(JSON.stringify([...db._docs])).toBe(avant);
+  });
+
+  it('garde un blocage calculé malgré un avis vert', async () => {
+    const { actions, etat, db, a } = await avecDeuxFiches();
+    const interdit = etat.lire().profil.regles_studio.mots_a_eviter[0];
+    actions.modifierFiche(a.id, { caption: `Texte avec ${interdit}` });
+    await actions.fermerPanneau();
+    await actions.ouvrirAnalyse();
+    await actions.enregistrerRetour(reponse(etat.lire().analyse.code, ['F01', 'F02']));
+    expect(db.lire(`fiches/${a.id}`).score.conformite.etat).toBe('rouge');
+  });
+
+  it('reprend après un échec d’écriture, sans doublon', async () => {
+    const { actions, etat, db, a, b } = await avecDeuxFiches();
+    await actions.ouvrirAnalyse();
+    const { code } = etat.lire().analyse;
+    db.echouerEcritures(`fiches/${b.id}`);
+    const r1 = await actions.enregistrerRetour(reponse(code, ['F01', 'F02']));
+    expect(r1).toEqual({ ok: false, raison: 'L’enregistrement a été interrompu après 1 fiche sur 2 : réessaie, les fiches déjà notées seront simplement réécrites.' });
+    db.echouerEcritures(null);
+    const r2 = await actions.enregistrerRetour(reponse(code, ['F01', 'F02']));
+    expect(r2).toMatchObject({ ok: true, appliquees: 2 });
+    expect(db.lister('fiches')).toHaveLength(2);
+    expect(db.lire(`analyses/${code}`).retour.appliquees).toEqual([a.id, b.id]);
+  });
+
+  it('accepte deux fois le même retour : mêmes fiches, aucune écartée', async () => {
+    const { actions, etat, db } = await avecDeuxFiches();
+    await actions.ouvrirAnalyse();
+    const texte = reponse(etat.lire().analyse.code, ['F01', 'F02']);
+    const r1 = await actions.enregistrerRetour(texte);
+    const r2 = await actions.enregistrerRetour(texte);
+    expect(r1).toEqual({ ok: true, appliquees: 2, ecartees: [], avisRecu: true });
+    expect(r2).toEqual(r1);
+    expect(db.lister('fiches')).toHaveLength(2);
+  });
+
+  it('applique le retour à une fiche qui n’est plus dans l’état (autre semaine)', async () => {
+    const { actions, etat, db, a } = await avecDeuxFiches();
+    await actions.ouvrirAnalyse();
+    const { code } = etat.lire().analyse;
+    await actions.naviguer(1);
+    etat.modifier({ fiches: [] });
+    const r = await actions.enregistrerRetour(reponse(code, ['F01', 'F02']));
+    expect(r).toMatchObject({ ok: true, appliquees: 2, ecartees: [] });
+    expect(db.lire(`fiches/${a.id}`).score.total).toBeGreaterThan(0);
+  });
+
+  it('retrouve le dossier par son code quand le panneau est fermé', async () => {
+    const { actions, etat, db, a } = await avecDeuxFiches();
+    await actions.ouvrirAnalyse();
+    const { code } = etat.lire().analyse;
+    actions.fermerAnalyse();
+    expect(etat.lire().analyse).toBeNull();
+    const r = await actions.enregistrerRetour(reponse(code, ['F01', 'F02']));
+    expect(r).toMatchObject({ ok: true, appliquees: 2 });
+    expect(db.lire(`fiches/${a.id}`).score.examen.source).toBe('dossier');
+    expect(etat.lire().analyse).toBeNull();
+  });
+
+  it('garde l’assistant noté dans le document quand le panneau est fermé', async () => {
+    const { actions, etat, db, a } = await avecDeuxFiches();
+    await actions.ouvrirAnalyse();
+    const { code } = etat.lire().analyse;
+    await actions.noterAssistant('chatgpt');
+    expect(db.lire(`analyses/${code}`).assistant).toBe('chatgpt');
+    actions.fermerAnalyse();
+    await actions.enregistrerRetour(reponse(code, ['F01', 'F02']));
+    expect(db.lire(`fiches/${a.id}`).score.examen.assistant).toBe('chatgpt');
+  });
+
+  it('enregistre un retour sans avis de période', async () => {
+    const { actions, etat, db } = await avecDeuxFiches();
+    await actions.ouvrirAnalyse();
+    const { code } = etat.lire().analyse;
+    const r = await actions.enregistrerRetour(reponse(code, ['F01', 'F02'], { periode: 'rien' }));
+    expect(r).toEqual({ ok: true, appliquees: 2, ecartees: [], avisRecu: false });
+    expect(db.lire(`analyses/${code}`).retour).toMatchObject({ avis: '', points_forts: [], risques: [], ordre_conseille: [] });
+  });
+
+  it('repasse en brouillon une fiche validée dont le score devient rouge', async () => {
+    const { actions, etat, db, a } = await avecDeuxFiches();
+    const interdit = etat.lire().profil.regles_studio.mots_a_eviter[0];
+    etat.modifier({ fiches: etat.lire().fiches.map(f => (f.id === a.id ? { ...f, statut: 'valide', caption: `Texte avec ${interdit}` } : f)) });
+    await actions.ouvrirAnalyse();
+    await actions.enregistrerRetour(reponse(etat.lire().analyse.code, ['F01', 'F02']));
+    expect(db.lire(`fiches/${a.id}`).statut).toBe('brouillon');
   });
 });

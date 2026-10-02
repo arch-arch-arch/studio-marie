@@ -16,14 +16,18 @@ export function creerFausseBase() {
     metadata: { fromCache: false, hasPendingWrites: false },
   });
 
+  let cheminEnEchec; // undefined : aucun ; null/chemin : voir echouerEcritures
   const base = {
     ecritures: [],
     _docs: docs,
+    lire: chemin => (docs.has(chemin) ? structuredClone(docs.get(chemin)) : undefined),
+    lister: collection => [...docs.keys()].filter(c => c.startsWith(`${collection}/`) && c.split('/').length === collection.split('/').length + 1).sort(),
+    echouerEcritures: chemin => { cheminEnEchec = chemin ?? undefined; },
     doc: chemin => ({
       id: chemin.split('/').pop(),
       path: chemin,
       async get() { return instantane(chemin); },
-      async set(corps) { base.ecritures.push(chemin); docs.set(chemin, structuredClone(corps)); notifier(racineDe(chemin)); },
+      async set(corps) { if (cheminEnEchec === chemin) throw Object.assign(new Error('écriture refusée'), { code: 'unavailable' }); base.ecritures.push(chemin); docs.set(chemin, structuredClone(corps)); notifier(racineDe(chemin)); },
       async delete() { base.ecritures.push(`suppression:${chemin}`); docs.delete(chemin); notifier(racineDe(chemin)); },
       onSnapshot(suivant) { return ecouter(racineDe(chemin), () => suivant(instantane(chemin))); },
     }),

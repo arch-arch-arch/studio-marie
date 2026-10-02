@@ -7,7 +7,7 @@ const vide = () => Object.fromEntries(COLLECTIONS_EXPORT.map(c => [c, []]));
 
 describe('export', () => {
   it('liste les collections du studio', () => {
-    expect(COLLECTIONS_EXPORT).toEqual(['profil', 'profil_archives', 'fiches', 'bulletins', 'stats_contenu', 'releves_compte', 'reference', 'reference_resultats', 'config']);
+    expect(COLLECTIONS_EXPORT).toEqual(['profil', 'profil_archives', 'fiches', 'bulletins', 'stats_contenu', 'releves_compte', 'reference', 'reference_resultats', 'config', 'analyses']);
   });
   it('construit le fichier', () => {
     const e = construireExport({ ...vide(), fiches: [{ id: 'f1', data: { accroche: 'x' } }] }, M);
@@ -89,5 +89,15 @@ describe('validerExport', () => {
     const e = bon();
     delete e.collections.config;
     expect(validerExport(e).ok).toBe(true);
+  });
+});
+
+describe('collection analyses', () => {
+  it('est exportée, et un export ancien sans elle reste valide', () => {
+    expect(COLLECTIONS_EXPORT.at(-1)).toBe('analyses');
+    const ancien = { format: 'studio-contenu-export', version: 1, exporte_le: '2026-10-01T08:00:00.000Z', collections: { fiches: [{ id: 'f1', data: {} }] } };
+    const v = validerExport(ancien);
+    expect(v.ok).toBe(true);
+    expect(v.collections.analyses).toEqual([]);
   });
 });

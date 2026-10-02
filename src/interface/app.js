@@ -28,8 +28,9 @@ export async function demarrer(racine, claude, { horloge = () => new Date().toIS
   const veille = (await claude.use('veille')) ?? null;
   const downloads = (await claude.use('downloads')) ?? null;
   const connexion = (await claude.use('connexion')) ?? null;
+  const dossier = (await claude.use('dossier')) ?? null;
   const depot = creerDepot(db);
-  const etat = creerEtat({ profil: undefined, fiches: [], vue: 'semaine', ancre: horloge(), ficheOuverte: null, erreur: null, sauvegarde: 'ok', reference: [], resultatReference: null, verificationReference: null, bulletin: undefined, configVeille: null, stats: undefined, relevesCompte: undefined, fichesRecentes: [] });
+  const etat = creerEtat({ profil: undefined, fiches: [], vue: 'semaine', ancre: horloge(), ficheOuverte: null, erreur: null, sauvegarde: 'ok', reference: [], resultatReference: null, verificationReference: null, bulletin: undefined, configVeille: null, stats: undefined, relevesCompte: undefined, fichesRecentes: [], analyse: null, analyses: [] });
   const enregistreur = creerEnregistreur(
     async fiche => {
       etat.modifier({ sauvegarde: 'en_cours' });
@@ -43,8 +44,8 @@ export async function demarrer(racine, claude, { horloge = () => new Date().toIS
       if (e?.code === 'quota_exceeded' || e?.code === 'revoked') etat.modifier({ erreur: messageErreurBase(e) });
     },
   );
-  const actions = creerControleur({ etat, depot, enregistreur, assets, horloge, sample, downloads, connexion, veille, ...(typeof assets?.telecharger === 'function' ? { chargerImage: id => assets.telecharger(id) } : {}) });
-  const rendre = creerRendu(racine, actions, { assets: !!assets, sample: !!sample, downloads: !!downloads, connexion: !!connexion, veille: !!veille }, horloge);
+  const actions = creerControleur({ etat, depot, enregistreur, assets, horloge, sample, downloads, connexion, veille, dossier, ...(typeof assets?.telecharger === 'function' ? { chargerImage: id => assets.telecharger(id) } : {}) });
+  const rendre = creerRendu(racine, actions, { assets: !!assets, sample: !!sample, downloads: !!downloads, connexion: !!connexion, veille: !!veille, dossier: !!dossier }, horloge);
 
   let arreterFiches = null;
   let plageCourante = '';
@@ -98,6 +99,7 @@ export async function demarrer(racine, claude, { horloge = () => new Date().toIS
     err => etat.modifier({ erreur: messageErreurBase(err) }),
   );
   depot.ecouterReference(reference => recu({ reference }), err => etat.modifier({ erreur: messageErreurBase(err) }));
+  depot.ecouterAnalyses(analyses => recu({ analyses }), err => etat.modifier({ erreur: messageErreurBase(err) }));
   depot.ecouterResultatReference(resultatReference => recu({ resultatReference }), err => etat.modifier({ erreur: messageErreurBase(err) }));
   depot.ecouterConfigVeille(configVeille => recu({ configVeille }), err => etat.modifier({ erreur: messageErreurBase(err) }));
   if (typeof window !== 'undefined') window.addEventListener('pagehide', () => { enregistreur.viderTout(); });

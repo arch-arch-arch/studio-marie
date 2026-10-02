@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import fictif from '../../exemples/profil-fictif.json';
 import { creerFausseBase } from '../aides/fausseBase.js';
 import { creerDepot } from '../../src/donnees/depot.js';
@@ -143,5 +143,18 @@ describe('sauvegarde', () => {
     expect(await depot.lireCollection('bulletins')).toEqual([{ id: '2026-W40', data: { semaine: '2026-W40' } }]);
     expect(await depot.lireCollection('profil')).toEqual([{ id: 'courant', data: { version: 3 } }]);
     expect(await depot.lireCollection('config')).toEqual([]);
+  });
+});
+
+describe('analyses', () => {
+  it('enregistre, relit et écoute les dossiers', async () => {
+    const db = creerFausseBase();
+    const depot = creerDepot(db);
+    expect(await depot.lireAnalyse('D-abc123')).toBeNull();
+    await depot.enregistrerAnalyse('D-abc123', { cree_le: 'T', fiches: [] });
+    expect(await depot.lireAnalyse('D-abc123')).toEqual({ cree_le: 'T', fiches: [] });
+    const vus = [];
+    depot.ecouterAnalyses(liste => vus.push(liste.map(a => a.id)));
+    await vi.waitFor(() => expect(vus.at(-1)).toEqual(['D-abc123']));
   });
 });

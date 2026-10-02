@@ -94,6 +94,19 @@ export function creerDepot(db) {
       return db.collection('releves_compte').onSnapshot(snap => rappel(snap.docs.map(d => ({ id: d.id, ...d.data() }))), erreur);
     },
 
+    async enregistrerAnalyse(code, doc) {
+      await db.doc(`analyses/${code}`).set(doc);
+    },
+
+    async lireAnalyse(code) {
+      const doc = await db.doc(`analyses/${code}`).get();
+      return doc.exists ? doc.data() : null;
+    },
+
+    ecouterAnalyses(rappel, erreur) {
+      return db.collection('analyses').onSnapshot(snap => rappel(snap.docs.map(d => ({ id: d.id, ...d.data() }))), erreur);
+    },
+
     async lireCollection(nom) {
       const snap = await db.collection(nom).get();
       return snap.docs.map(d => ({ id: d.id, data: d.data() }));
