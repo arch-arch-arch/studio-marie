@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { construire } from '../scripts/build.mjs';
+import { construire, construireDossier } from '../scripts/build.mjs';
 
 describe('construire', () => {
   it('produit un document complet avec la configuration publique', async () => {
@@ -22,4 +22,19 @@ describe('construire', () => {
     const html = await construire({ SUPABASE_URL: 'https://projet.test', SUPABASE_ANON_KEY: 'cle-publique', SUPABASE_SERVICE_ROLE_KEY: 'SECRET-SERVICE', ANTHROPIC_API_KEY: 'SECRET-CLAUDE', CRON_SECRET: 'SECRET-CRON' });
     for (const secret of ['SECRET-SERVICE', 'SECRET-CLAUDE', 'SECRET-CRON']) expect(html).not.toContain(secret);
   });
+});
+
+describe('construireDossier', () => {
+  it('produit un module séparé qui porte la bibliothèque PDF', async () => {
+    const js = await construireDossier();
+    expect(js).toContain('preparerCartes');
+    expect(js).toContain('assemblerPdf');
+    expect(js.length).toBeGreaterThan(100000);
+  }, 30000);
+  it('laisse la page principale sans la bibliothèque PDF', async () => {
+    const html = await construire({ SUPABASE_URL: 'https://projet.test', SUPABASE_ANON_KEY: 'cle-publique' });
+    expect(html).not.toContain('jsPDF');
+    expect(html).toContain('/dossier.js');
+    expect(html).toMatch(/import\(["']\/dossier\.js["']\)/);
+  }, 30000);
 });

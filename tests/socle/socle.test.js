@@ -31,4 +31,13 @@ describe('creerSocle', () => {
     const eteint = creerSocle({ client, connexion, document, capacitesServeur: { evaluation: false, veille: false }, extras: { sample } });
     expect(await eteint.use('sample')).toBeNull();
   });
+  it('sert la capacité dossier quand elle est fournie, et null sinon', async () => {
+    const client = creerFauxSupabase();
+    const connexion = creerConnexion(client, { origine: 'https://studio.test' });
+    const dossier = { fabrique: async () => ({}) };
+    const avec = creerSocle({ client, connexion, document, capacitesServeur: {}, extras: { dossier } });
+    expect(await avec.use('dossier')).toBe(dossier);
+    const sans = creerSocle({ client, connexion, document, capacitesServeur: {} });
+    expect(await sans.use('dossier')).toBeNull();
+  });
 });

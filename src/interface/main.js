@@ -6,6 +6,7 @@ import { creerConnexion, suivreSession, lienInvalide, retirerErreurDeLAdresse } 
 import { creerSocle } from '../socle/socle.js';
 import { creerEvaluationApi } from '../socle/evaluation-api.js';
 import { creerVeilleApi } from '../socle/veille-api.js';
+import { creerDossierNavigateur } from '../socle/dossier-navigateur.js';
 import { lireCapacites } from '../socle/capacites.js';
 
 const DELAI_CAPACITES_MS = 4000;
@@ -20,7 +21,7 @@ async function ouvrir() {
     racine.replaceChildren(vueConnexion(connexion, { avis }));
     return;
   }
-  const socle = creerSocle({ client, connexion, document, capacitesServeur: await lireCapacites({ fetch: window.fetch.bind(window), jeton: connexion.jeton, delaiMs: DELAI_CAPACITES_MS, essais: 2 }), extras: { sample: creerEvaluationApi({ fetch: window.fetch.bind(window), jeton: connexion.jeton }), veille: creerVeilleApi({ fetch: window.fetch.bind(window), jeton: connexion.jeton }) } });
+  const socle = creerSocle({ client, connexion, document, capacitesServeur: await lireCapacites({ fetch: window.fetch.bind(window), jeton: connexion.jeton, delaiMs: DELAI_CAPACITES_MS, essais: 2 }), extras: { sample: creerEvaluationApi({ fetch: window.fetch.bind(window), jeton: connexion.jeton }), veille: creerVeilleApi({ fetch: window.fetch.bind(window), jeton: connexion.jeton }), dossier: creerDossierNavigateur({ charger: () => import('/dossier.js'), navigator: window.navigator, File: window.File }) } });
   await demarrer(racine, socle);
 }
 

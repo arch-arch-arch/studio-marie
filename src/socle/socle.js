@@ -11,6 +11,7 @@ export function creerSocle({ client, connexion, document: doc, capacitesServeur 
     connexion,
     sample: serveur.evaluation ? (extras.sample ?? null) : null,
     veille: serveur.veille ? (extras.veille ?? null) : null,
+    dossier: extras.dossier ?? null,
   };
   return { use: async nom => capacites[nom] ?? null };
 }
