@@ -514,7 +514,7 @@ function nettoyer(valeur) {
   if (typeof valeur === 'string') {
     let t = valeur;
     for (const re of CITATIONS) t = t.replace(re, '');
-    return t.replace(/[ \t]{2,}/g, ' ').replace(/ +([.,;:!?])/g, (m, p, i, s) => (/[:;!?]/.test(p) && s[i - 1] !== ' ' ? m : m)).trim();
+    return t.replace(/[ \t]{2,}/g, ' ').trim();
   }
   if (Array.isArray(valeur)) return valeur.map(nettoyer);
   if (estObjet(valeur)) return Object.fromEntries(Object.entries(valeur).map(([k, v]) => [k, nettoyer(v)]));
