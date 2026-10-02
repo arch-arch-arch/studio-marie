@@ -78,6 +78,8 @@ Cas particuliers :
 
 L'extraction d'images d'une vidéo est tentée pendant 8 secondes au plus par fiche. Un échec ne bloque pas le dossier.
 
+Le chargement d'un visuel est limité à 8 secondes pour une image et à 30 secondes pour une vidéo (un Reel de 15 à 20 Mo ne se télécharge pas en 8 secondes sur réseau mobile). La couverture d'une vidéo est la première image livrée par la lecture, sans retour à l'instant 0 ; les deux images suivantes sont prises vers le tiers et les deux tiers. Si `toBlob` lève ou ne rappelle pas en 8 secondes, la carte est écartée et sa toile libérée.
+
 ### 3.4 Structure du PDF
 
 Dans cet ordre :
@@ -142,7 +144,9 @@ Chaque entrée de `fiches` a exactement la forme de l'évaluation unitaire exist
 
 Pour chaque fiche valide :
 
+- si une caption a un rôle inconnu (par exemple `envoi`), manquant ou répété, seule cette variante est écartée : l'analyse (notes, phrases, conformité, accroches, hashtags, recommandations) est gardée, la fiche reçoit 0 ou 1 variante et une remarque « variante de caption écartée : rôle inconnu envoi », comptée dans les fiches mises à jour et affichée dans le panneau ; toute autre invalidité écarte la fiche ;
 - si la fiche n'existe plus : écartée, « fiche supprimée depuis le dossier » ;
+- si la fiche a été publiée depuis le dossier : écartée, « fiche publiée depuis le dossier » ;
 - si son empreinte a changé depuis le dossier : écartée, « fiche modifiée depuis le dossier : refais une analyse » ;
 - sinon, le studio recalcule la vérification de la fiche (règles calculées, comme pour une évaluation ordinaire), compose le score avec `composerScore` et l'applique avec `appliquerEvaluation`. Les règles calculées gardent l'autorité : un blocage calculé n'est pas levé par le modèle.
 
@@ -185,6 +189,8 @@ Affichage : la vue Semaine et la vue Mois montrent, sous leur en-tête, le derni
 - Réponse coupée (JSON incomplet) : même message, complété de « Si la réponse a été coupée, demande à l'assistant de redonner seulement le bloc. ».
 - Écriture d'une fiche en échec : l'application s'arrête, le résultat dit combien de fiches ont été mises à jour, et un nouvel enregistrement du même retour reprend sans doublon.
 - Deux dossiers pour la même période : chacun a son code ; la vue affiche le retour le plus récent.
+- Dossier identique (même période, mêmes fiches et empreintes, même version du profil) et sans retour : il est réutilisé, avec son code, au lieu d'en créer un nouveau.
+- Onglet rechargé ou panneau fermé : le bouton « Coller un retour » ouvre l'étape `retour` du panneau, qui retrouve le dossier par son code, sans dossier prêt.
 - Session expirée pendant l'enregistrement : message de session existant, rien d'écrit.
 
 ## 8. Tests
