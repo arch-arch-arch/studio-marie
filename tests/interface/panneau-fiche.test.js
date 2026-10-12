@@ -568,6 +568,32 @@ describe('catégorie de la fiche', () => {
     expect(p.textContent).toContain('Proposée : Preuve (proposée par l’analyse)');
   });
 
+  it('après « Confirmer », le focus revient sur le menu « Catégorie »', () => {
+    const p = panneauFiche(fiche({ porte: true }), fictif, actionsFactices(), { assets: true });
+    document.body.append(p);
+    bouton(p, 'Confirmer').click();
+    expect(document.activeElement).toBe(p.querySelector('select[name="categorie"]'));
+    p.remove();
+  });
+
+  it('ancienne fiche sans categorie ni categorie_proposee : « Non rangée », sans proposition ni erreur', () => {
+    const ancienne = fiche();
+    delete ancienne.categorie;
+    delete ancienne.categorie_proposee;
+    const p = panneauFiche(ancienne, fictif, actionsFactices(), { assets: true });
+    const menu = p.querySelector('select[name="categorie"]');
+    expect(menu.value).toBe('');
+    expect(menu.selectedOptions[0].textContent).toBe('Non rangée');
+    expect(p.textContent).not.toContain('Proposée');
+  });
+
+  it('le menu « Catégorie » reste le même élément du DOM après une modification de l’accroche', () => {
+    const p = panneauFiche(fiche(), fictif, actionsFactices(), { assets: true });
+    const menu = p.querySelector('select[name="categorie"]');
+    saisir(p.querySelector('textarea[name="accroche"]'), 'Autre accroche');
+    expect(p.querySelector('select[name="categorie"]')).toBe(menu);
+  });
+
   it('fiche rangée : aucune proposition, même si une règle s’applique', () => {
     const p = panneauFiche(fiche({ porte: true, categorie: 'desir' }), fictif, actionsFactices(), { assets: true });
     expect(p.textContent).not.toContain('Proposée');

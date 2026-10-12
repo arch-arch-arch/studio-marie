@@ -24,10 +24,11 @@ export function badgeScore(f) {
 }
 
 // Couleur de la catégorie choisie ; une proposition ou une fiche non rangée donne le gris neutre.
-export function couleurCategorie(f, categories = CATEGORIES) {
+// Le neutre dépend de l'élément : gris de trait pour le bord d'une carte, texte secondaire pour un point du Mois.
+export function couleurCategorie(f, categories = CATEGORIES, neutre = 'var(--trait)') {
   const { cle, etat } = categorieAffichee(f);
-  if (etat !== 'choisie') return 'var(--trait)';
-  return categories.find(c => c.cle === cle)?.couleur ?? 'var(--trait)';
+  if (etat !== 'choisie') return neutre;
+  return categories.find(c => c.cle === cle)?.couleur ?? neutre;
 }
 
 export function carte(f, regles, actions, action = null, categories = CATEGORIES) {

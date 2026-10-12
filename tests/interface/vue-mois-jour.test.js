@@ -32,11 +32,50 @@ describe('couleurs de catégorie (Mois)', () => {
       ancre: '2026-10-15T10:00:00.000Z',
     }, actionsFactices());
     const points = el.querySelectorAll('.mois-jour')[3].querySelectorAll('.point-format');
-    expect([...points].map(p => p.style.getPropertyValue('--categorie'))).toEqual(['#b3125a', 'var(--trait)']);
+    expect([...points].map(p => p.style.getPropertyValue('--categorie'))).toEqual(['#b3125a', 'var(--texte-2)']);
+  });
+
+  it('un point non rangé porte la couleur neutre marquée, pas le gris du bord des cartes', () => {
+    const el = vueMois({ profil: fictif, fiches: [f('a', 'post', '2026-10-01T10:00:00.000Z')], ancre: '2026-10-15T10:00:00.000Z' }, actionsFactices());
+    expect(el.querySelector('.point-format').style.getPropertyValue('--categorie')).toBe('var(--texte-2)');
+  });
+
+  it('chaque point porte la lettre de son format, en lecture seule pour les lecteurs d’écran', () => {
+    const el = vueMois({
+      profil: fictif,
+      fiches: [f('a', 'reel', '2026-10-01T10:00:00.000Z'), f('b', 'carrousel', '2026-10-01T11:00:00.000Z'), f('c', 'story', '2026-10-01T12:00:00.000Z'), f('d', 'post', '2026-10-01T13:00:00.000Z')],
+      ancre: '2026-10-15T10:00:00.000Z',
+    }, actionsFactices());
+    const points = [...el.querySelectorAll('.mois-jour')[3].querySelectorAll('.point-format')];
+    expect(points.map(p => p.querySelector('.point-lettre').textContent)).toEqual(['R', 'C', 'S', 'P']);
+    expect(points[0].querySelector('.point-lettre').getAttribute('aria-hidden')).toBe('true');
+  });
+
+  it('la case du jour cite les formats distincts', () => {
+    const el = vueMois({
+      profil: fictif,
+      fiches: [f('a', 'reel', '2026-10-01T10:00:00.000Z'), f('b', 'story', '2026-10-01T17:00:00.000Z'), f('c', 'reel', '2026-10-01T18:00:00.000Z')],
+      ancre: '2026-10-15T10:00:00.000Z',
+    }, actionsFactices());
+    expect(el.querySelectorAll('.mois-jour')[3].getAttribute('aria-label')).toBe('2026-10-01, 3 contenus : Reel, Story');
+  });
+
+  it('une couleur de catégorie personnalisée par le profil s’applique au point', () => {
+    const perso = structuredClone(fictif);
+    perso.categories_de_contenu.categories = [{ cle: 'attraction', couleur: '#123456' }];
+    const el = vueMois({ profil: perso, fiches: [{ ...f('a', 'reel', '2026-10-01T10:00:00.000Z'), categorie: 'attraction' }], ancre: '2026-10-15T10:00:00.000Z' }, actionsFactices());
+    expect(el.querySelector('.point-format').style.getPropertyValue('--categorie')).toBe('#123456');
   });
 });
 
 describe('vueJour', () => {
+  it('la carte prend la couleur de catégorie du profil, y compris personnalisée', () => {
+    const perso = structuredClone(fictif);
+    perso.categories_de_contenu.categories = [{ cle: 'desir', couleur: '#112233' }];
+    const el = vueJour({ profil: perso, fiches: [{ ...f('a', 'reel', '2026-09-28T10:00:00.000Z'), categorie: 'desir' }], ancre: '2026-09-28T08:00:00.000Z' }, actionsFactices());
+    expect(el.querySelector('.carte').style.getPropertyValue('--categorie')).toBe('#112233');
+  });
+
   it('liste les contenus du jour dans l’ordre des heures', () => {
     const el = vueJour({ profil: fictif, fiches: [f('b', 'story', '2026-09-28T17:00:00.000Z', 'soir'), f('a', 'reel', '2026-09-28T10:00:00.000Z', 'midi'), f('c', 'reel', '2026-09-29T10:00:00.000Z', 'lendemain')], ancre: '2026-09-28T08:00:00.000Z' }, actionsFactices());
     expect([...el.querySelectorAll('.frise-heure')].map(x => x.textContent)).toEqual(['12:00', '19:00']);

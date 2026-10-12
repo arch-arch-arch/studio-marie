@@ -52,7 +52,8 @@ export function panneauFiche(fiche, profil, actions, capacites, releves = []) {
     zoneProposition.replaceChildren(...(proposition
       ? [
         h('p', { class: 'aide' }, `Proposée : ${CATEGORIES.find(c => c.cle === proposition.cle).nom} (${proposition.raison})`),
-        h('button', { type: 'button', class: 'bouton-secondaire', onclick: () => changer({ categorie: proposition.cle }) }, 'Confirmer'),
+        // La zone de proposition disparaît après le clic : le focus revient sur le menu.
+        h('button', { type: 'button', class: 'bouton-secondaire', onclick: () => { changer({ categorie: proposition.cle }); selectCategorie?.focus(); } }, 'Confirmer'),
       ]
       : []));
     if (selectCategorie) selectCategorie.value = brouillon.categorie ?? '';

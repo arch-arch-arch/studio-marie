@@ -54,7 +54,7 @@ export function categorieAffichee(fiche) {
 const selonFil = (n, cible) => (n >= cible ? 'vert' : n === cible - 1 ? 'orange' : 'rouge');
 const selonStories = (n, { min, max }) => (n >= min && n <= max ? 'vert' : n === min - 1 || n === max + 1 ? 'orange' : 'rouge');
 const libelleStories = (n, { min, max }) => `${n} ${n > 1 ? 'stories' : 'story'}, objectif ${min === max ? min : `${min} à ${max}`}`;
-const contenusFil = (n, cible) => `${n} sur ${cible} ${cible === 1 ? 'contenu du fil' : 'contenus du fil'}`;
+const contenusFil = (n, cible) => `${n} sur ${cible} ${cible <= 1 ? 'contenu du fil' : 'contenus du fil'}`;
 
 export function controlerCategories(fiches, profil, debutIso) {
   if (!profil?.categories_de_contenu) return [];

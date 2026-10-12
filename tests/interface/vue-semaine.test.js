@@ -102,6 +102,13 @@ describe('catégories dans la semaine', () => {
     expect(el.querySelector('.carte[data-id="c"]').style.getPropertyValue('--categorie')).toBe('var(--trait)');
   });
 
+  it('une couleur de catégorie personnalisée par le profil s’applique à la carte', () => {
+    const perso = structuredClone(fictif);
+    perso.categories_de_contenu.categories = [{ cle: 'attraction', couleur: '#123456' }];
+    const el = vueSemaine({ profil: perso, fiches: [jour('a', '10', { categorie: 'attraction' })], ancre: ANCRE }, actionsFactices());
+    expect(el.querySelector('.carte[data-id="a"]').style.getPropertyValue('--categorie')).toBe('#123456');
+  });
+
   it('le nom du pilier reste écrit sur la carte', () => {
     const el = vueSemaine({ profil: fictif, fiches: [jour('a', '10', { categorie: 'desir' })], ancre: ANCRE }, actionsFactices());
     expect(el.querySelector('.carte[data-id="a"]').textContent).toContain('Nuit');

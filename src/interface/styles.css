@@ -101,7 +101,11 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .mois-jour.hors-mois { opacity: .45; }
 .mois-num { font-family: var(--mono); font-size: 12px; }
 .points { display: flex; flex-wrap: wrap; gap: 3px; }
-.point-format { width: 8px; height: 8px; border-radius: 50%; background: var(--categorie, var(--trait)); }
+.point-format { width: 16px; height: 16px; border-radius: 50%; background: var(--categorie, var(--texte-2)); display: grid; place-items: center; }
+.point-lettre { color: var(--accent-texte); font: 700 11px/1 var(--mono); }
+/* Sur fond sombre, les points de catégorie sont éclaircis comme les bords des cartes ; la lettre garde le contraste. */
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .point-format { background: color-mix(in srgb, var(--categorie, var(--texte-2)) 65%, #ffffff); } }
+:root[data-theme="dark"] .point-format { background: color-mix(in srgb, var(--categorie, var(--texte-2)) 65%, #ffffff); }
 
 /* Jour */
 .frise { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 8px; max-width: 640px; }

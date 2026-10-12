@@ -157,6 +157,11 @@ describe('controlerCategories', () => {
     expect(controlerCategories([], p, LUNDI).map(x => x.valeur)).toEqual(['0 sur 1 contenu du fil', '0 story, objectif 1 à 2']);
   });
 
+  it('cible 0 : singulier, « 0 sur 0 contenu du fil »', () => {
+    const p = avecSection([{ cle: 'desir', cible_fil: 0 }]);
+    expect(controlerCategories([], p, LUNDI)).toEqual([{ cle: 'desir_fil', libelle: 'Désir', valeur: '0 sur 0 contenu du fil', etat: 'vert' }]);
+  });
+
   it('Non rangées garde son libellé et sa valeur', () => {
     const p = avecSection([{ cle: 'desir', cible_fil: 1 }]);
     expect(controlerCategories([fiche('post', JOURS[0]), fiche('post', JOURS[1])], p, LUNDI).at(-1))
