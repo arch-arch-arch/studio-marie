@@ -29,6 +29,31 @@ describe('plageDeVue', () => {
   });
 });
 
+describe('vue Aperçu (contrôleur)', () => {
+  it('charge la même plage que le mois', () => {
+    expect(plageDeVue('apercu', '2026-10-15T10:00:00.000Z', FZ)).toEqual(plageDeVue('mois', '2026-10-15T10:00:00.000Z', FZ));
+  });
+
+  it('changerPeriodeApercu et changerFiltresApercu modifient etat.apercu', () => {
+    const { actions, etat } = monter();
+    etat.modifier({ apercu: { periode: 'semaine', filtres: { story: true, reel: true, post: true } } });
+    actions.changerPeriodeApercu('mois');
+    expect(etat.lire().apercu.periode).toBe('mois');
+    actions.changerFiltresApercu({ story: false, reel: true, post: true });
+    expect(etat.lire().apercu).toEqual({ periode: 'mois', filtres: { story: false, reel: true, post: true } });
+  });
+
+  it('les flèches avancent d’une semaine en Aperçu Semaine, d’un mois en Aperçu Mois', async () => {
+    const { actions, etat } = monter();
+    etat.modifier({ vue: 'apercu', apercu: { periode: 'semaine', filtres: { story: true, reel: true, post: true } } });
+    await actions.naviguer(1);
+    expect(etat.lire().ancre).toBe('2026-10-05T08:00:00.000Z');
+    etat.modifier({ apercu: { periode: 'mois', filtres: { story: true, reel: true, post: true } } });
+    await actions.naviguer(1);
+    expect(etat.lire().ancre).toBe('2026-10-31T23:00:00.000Z');
+  });
+});
+
 describe('fusionnerInstantane', () => {
   it('garde la version locale des fiches en cours d’enregistrement', () => {
     const recues = [{ id: 'a', accroche: 'ancienne' }, { id: 'b', accroche: 'b' }];

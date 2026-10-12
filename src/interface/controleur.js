@@ -20,8 +20,11 @@ const MESSAGES_TELEVERSEMENT = {
   revoked: 'Ta session a expiré : reconnecte-toi puis réessaie.',
 };
 
+const APERCU_PAR_DEFAUT = { periode: 'semaine', filtres: { story: true, reel: true, post: true } };
+
 export function plageDeVue(vue, ancre, fuseau) {
-  if (vue === 'mois') {
+  // L'aperçu charge le mois : sa semaine ou son mois est toujours couvert, même une semaine à cheval sur deux mois.
+  if (vue === 'mois' || vue === 'apercu') {
     const semaines = semainesDuMois(ancre, fuseau);
     return [semaines[0], ajouterJours(semaines[semaines.length - 1], 7, fuseau)];
   }
@@ -645,8 +648,18 @@ export function creerControleur({ etat, depot, enregistreur, assets, horloge, id
     naviguer(delta) {
       const { vue, ancre } = etat.lire();
       const fz = fuseau();
-      const suivante = vue === 'mois' ? ajouterMois(ancre, delta, fz) : vue === 'jour' ? ajouterJours(ancre, delta, fz) : ajouterJours(ancre, 7 * delta, fz);
+      const mensuelle = vue === 'mois' || (vue === 'apercu' && (etat.lire().apercu ?? APERCU_PAR_DEFAUT).periode === 'mois');
+      const suivante = mensuelle ? ajouterMois(ancre, delta, fz) : vue === 'jour' ? ajouterJours(ancre, delta, fz) : ajouterJours(ancre, 7 * delta, fz);
       return changerAncre(vue, suivante);
+    },
+
+    changerPeriodeApercu(periode) {
+      if (!['semaine', 'mois'].includes(periode)) return;
+      etat.modifier({ apercu: { ...(etat.lire().apercu ?? APERCU_PAR_DEFAUT), periode } });
+    },
+
+    changerFiltresApercu(filtres) {
+      etat.modifier({ apercu: { ...(etat.lire().apercu ?? APERCU_PAR_DEFAUT), filtres: { story: !!filtres.story, reel: !!filtres.reel, post: !!filtres.post } } });
     },
 
     allerAujourdhui: () => changerAncre(etat.lire().vue, horloge()),

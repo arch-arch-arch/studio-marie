@@ -2,6 +2,7 @@ import { h } from './h.js';
 import { debutSemaine, ajouterJours } from '../logique/dates.js';
 import { vueSemaine } from './vue-semaine.js';
 import { vueMois } from './vue-mois.js';
+import { vueApercu, creerCacheVisuels } from './vue-apercu.js';
 import { vueJour } from './vue-jour.js';
 import { vueProfil, sectionSauvegarde } from './vue-profil.js';
 import { vueBulletin } from './vue-bulletin.js';
@@ -33,14 +34,14 @@ function barre(e, actions) {
   }, libelle);
   const elements = [
     h('h1', { class: 'titre' }, 'Studio'),
-    h('nav', { class: 'onglets', 'aria-label': 'Vues' }, onglet('semaine', 'Semaine'), onglet('mois', 'Mois'), onglet('jour', 'Jour'), onglet('bulletin', 'Bulletin'), onglet('tableau', 'Tableau de bord'), onglet('profil', 'Profil')),
+    h('nav', { class: 'onglets', 'aria-label': 'Vues' }, onglet('semaine', 'Semaine'), onglet('mois', 'Mois'), onglet('apercu', 'Aperçu'), onglet('jour', 'Jour'), onglet('bulletin', 'Bulletin'), onglet('tableau', 'Tableau de bord'), onglet('profil', 'Profil')),
   ];
   if (aProfil && e.vue !== 'profil' && e.vue !== 'tableau') {
     elements.push(h('div', { class: 'periode' },
       h('button', { type: 'button', class: 'bouton-icone', 'aria-label': 'Période précédente', onclick: () => actions.naviguer(-1) }, '‹'),
       h('button', { type: 'button', class: 'bouton-secondaire', onclick: () => actions.allerAujourdhui() }, "Aujourd'hui"),
       h('button', { type: 'button', class: 'bouton-icone', 'aria-label': 'Période suivante', onclick: () => actions.naviguer(1) }, '›'),
-      h('span', { class: 'periode-libelle' }, libellePeriode(e.vue, e.ancre, e.profil.regles_studio.fuseau))));
+      h('span', { class: 'periode-libelle' }, libellePeriode(e.vue === 'apercu' && e.apercu?.periode === 'mois' ? 'mois' : e.vue, e.ancre, e.profil.regles_studio.fuseau))));
   }
   elements.push(h('span', { class: `sauvegarde sauvegarde-${e.sauvegarde}`, role: 'status' }, LIBELLES_SAUVEGARDE[e.sauvegarde]));
   return elements;
@@ -49,6 +50,7 @@ function barre(e, actions) {
 function contenuVue(e, actions, capacites, extras) {
   if (!e.profil || e.vue === 'profil') return vueProfil(e, actions, capacites, extras);
   if (e.vue === 'mois') return vueMois(e, actions, capacites);
+  if (e.vue === 'apercu') return vueApercu(e, actions);
   if (e.vue === 'jour') return vueJour(e, actions);
   if (e.vue === 'bulletin') return vueBulletin(e, actions, capacites);
   if (e.vue === 'tableau') return vueTableau(e, actions);
@@ -67,6 +69,8 @@ export function creerRendu(racine, actions, capacites, horloge) {
   let memo = {};
   // État ouvert de « Avis sur la période », par période : la vue est reconstruite à chaque frappe dans une fiche.
   const avisOuverts = new Map();
+  // Liens des visuels de l'aperçu : gardés d'une reconstruction à l'autre, pour ne pas recharger toutes les images à chaque frappe.
+  const cacheVisuels = creerCacheVisuels();
   let elementVue = null;
   let boutonOuvreur = 0;
 
@@ -79,7 +83,7 @@ export function creerRendu(racine, actions, capacites, horloge) {
       return;
     }
     tete.replaceChildren(...barre(e, actions));
-    const e2 = { ...e, maintenant: horloge(), avisOuverts };
+    const e2 = { ...e, maintenant: horloge(), avisOuverts, cacheVisuels };
     const estVueProfil = !e.profil || e.vue === 'profil';
     const estVueTableau = !estVueProfil && e.vue === 'tableau';
     // vueTableau affiche « Chargement du tableau de bord… » (sans mettreAJour) tant que stats ou
@@ -98,7 +102,9 @@ export function creerRendu(racine, actions, capacites, horloge) {
       reconstructionRequise = memo.profil !== e.profil || memo.fiches !== e.fiches || memo.vue !== e.vue || memo.ancre !== e.ancre || memo.bulletin !== e.bulletin || memo.configVeille !== e.configVeille || memo.veille !== e.veille
         || (e.vue === 'semaine' && memo.stats !== e.stats)
         // Le bouton d'analyse et l'avis de la période n'existent qu'en Semaine et en Mois ; le panneau d'analyse, lui, n'en dépend pas.
-        || ((e.vue === 'semaine' || e.vue === 'mois') && (memo.analyses !== e.analyses || memo.panneauOuvert !== panneauOuvert));
+        || ((e.vue === 'semaine' || e.vue === 'mois') && (memo.analyses !== e.analyses || memo.panneauOuvert !== panneauOuvert))
+        // Les filtres et la période de l'aperçu vivent dans e.apercu : un changement reconstruit la grille.
+        || (e.vue === 'apercu' && memo.apercu !== e.apercu);
     }
     if (reconstructionRequise) {
       elementVue = contenuVue(e2, actions, capacites, { sauvegarde: sauvegarde() });
@@ -136,7 +142,7 @@ export function creerRendu(racine, actions, capacites, horloge) {
     if (panneauChange) panneau.replaceChildren(ouverte ? panneauFiche(ouverte, e.profil, actions, capacites, (e.stats ?? []).filter(s => s.fiche === ouverte.id)) : '');
     racine.classList.toggle('avec-panneau', !!ouverte);
     memo = {
-      profil: e.profil, fiches: e.fiches, vue: e.vue, ancre: e.ancre, ficheOuverte: e.ficheOuverte, panneauAffiche: !!ouverte,
+      profil: e.profil, fiches: e.fiches, vue: e.vue, ancre: e.ancre, ficheOuverte: e.ficheOuverte, panneauAffiche: !!ouverte, apercu: e.apercu,
       cleAnalyse, etapeAnalyse: e.analyse?.etape ?? null, analyses: e.analyses, panneauOuvert,
       reference: e.reference, resultatReference: e.resultatReference, verificationReference: e.verificationReference,
       bulletin: e.bulletin, configVeille: e.configVeille, veille: e.veille,
