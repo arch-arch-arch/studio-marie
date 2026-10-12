@@ -15,7 +15,9 @@ export function vueSemaine({ profil, fiches, ancre, maintenant, bulletin, stats,
   const libres = creneauxLibres(fiches, r, debut, maintenant ?? null);
   const semainePassee = maintenant != null && debut < debutSemaine(maintenant, r.fuseau);
   const maintenantIso = maintenant ?? new Date().toISOString();
-  const actionsParId = new Map(semaine.map(f => [f.id, prochaineAction(f, (stats ?? []).filter(s => s.fiche === f.id), maintenantIso, r.fuseau)]));
+  const viaDossier = !capacites.sample && !!capacites.dossier;
+  const traduire = a => (viaDossier && (a.cle === 'evaluer' || a.cle === 'reevaluer') ? { ...a, libelle: 'Analyser la semaine' } : a);
+  const actionsParId = new Map(semaine.map(f => [f.id, traduire(prochaineAction(f, (stats ?? []).filter(s => s.fiche === f.id), maintenantIso, r.fuseau))]));
   return h('div', { class: 'semaine' },
     capacites.dossier ? rangeeAnalyse('Analyser la semaine', analyse, actions) : null,
     sectionAvis(analyses, periodeAffichee('semaine', ancre, r.fuseau), fiches, r.fuseau, avisOuverts),

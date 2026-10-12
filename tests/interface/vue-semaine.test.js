@@ -169,3 +169,34 @@ describe('coller un retour (Semaine)', () => {
     expect(trouver(vueSemaine({ profil: fictif, fiches: [], ancre: ANCRE }, a, {}))).toBeUndefined();
   });
 });
+
+describe('libellé « Évaluer » selon les capacités', () => {
+  const M = '2026-09-30T08:00:00.000Z';
+  const prete = reel('a', '2026-09-29T10:00:00.000Z', { accroche: 'Prête', caption: 'x', visuel: 'v.jpg' });
+  const perimee = { ...prete, id: 'b', accroche: 'Périmée', caption: 'changée', score: { total: 70, conformite: { etat: 'vert', causes: [] }, empreinte: empreinte(prete) } };
+  const rendre = capacites => vueSemaine({ profil: fictif, fiches: [prete, perimee], ancre: ANCRE, maintenant: M, stats: [] }, actionsFactices(), capacites);
+
+  it('affiche « Analyser la semaine » sans sample et avec dossier', () => {
+    const el = rendre({ dossier: true });
+    const lignes = [...el.querySelectorAll('.a-faire li')];
+    expect(lignes).toHaveLength(2);
+    for (const l of lignes) {
+      expect(l.querySelector('strong').textContent).toBe('Analyser la semaine');
+      expect(l.classList.contains('action-retard')).toBe(true);
+    }
+    expect(el.querySelector('.carte[data-id="a"] .carte-action').textContent).toBe('Analyser la semaine');
+    expect(el.querySelector('.carte[data-id="b"] .carte-action').textContent).toBe('Analyser la semaine');
+  });
+
+  it('garde « Évaluer » et « Réévaluer » avec sample', () => {
+    const el = rendre({ sample: true, dossier: true });
+    const textes = [...el.querySelectorAll('.a-faire li strong')].map(s => s.textContent);
+    expect(textes).toEqual(['Évaluer', 'Réévaluer']);
+    expect(el.querySelector('.carte[data-id="a"] .carte-action').textContent).toBe('Évaluer');
+  });
+
+  it('garde « Évaluer » sans aucune des deux capacités', () => {
+    const el = rendre({});
+    expect([...el.querySelectorAll('.a-faire li strong')].map(s => s.textContent)).toEqual(['Évaluer', 'Réévaluer']);
+  });
+});
