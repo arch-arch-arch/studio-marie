@@ -316,26 +316,15 @@ describe('evaluerFiche', () => {
   });
 });
 
-describe('reverifierFiches', () => {
-  it('repasse en brouillon les fiches validées ou programmées bloquées par le profil actuel, et pose le message', async () => {
+describe('profil réimporté', () => {
+  it('ne rétrograde pas une fiche programmée que le profil rend rouge, et n’affiche aucun message', async () => {
     const { db, etat, actions } = await monter();
     await actions.evaluerFiche('f1');
     expect((await actions.confirmerProgrammation('f1', '2026-10-01T10:00:00.000Z', true)).ok).toBe(true);
     const profil = etat.lire().profil;
     etat.modifier({ profil: { ...profil, regles_studio: { ...profil.regles_studio, mots_a_eviter: [...profil.regles_studio.mots_a_eviter, 'ligne'] } } });
-    const n = await actions.reverifierFiches();
-    expect(n).toBe(1);
-    expect(etat.lire().fiches[0].statut).toBe('brouillon');
-    expect(db._docs.get('fiches/f1').statut).toBe('brouillon');
-    expect(etat.lire().erreur).toBe('1 fiche(s) repassée(s) en Brouillon : le profil actuel les bloque.');
-  });
-
-  it('ne touche à rien si aucune fiche n’est bloquée', async () => {
-    const { etat, actions } = await monter();
-    await actions.evaluerFiche('f1');
-    expect(await actions.changerStatut('f1', 'valide')).toEqual({ ok: true });
-    expect(await actions.reverifierFiches()).toBe(0);
-    expect(etat.lire().fiches[0].statut).toBe('valide');
+    expect(etat.lire().fiches[0].statut).toBe('programme');
+    expect(db._docs.get('fiches/f1').statut).toBe('programme');
     expect(etat.lire().erreur).toBeNull();
   });
 });

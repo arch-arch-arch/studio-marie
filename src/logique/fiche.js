@@ -68,11 +68,15 @@ export function peutPasserA(f, cible) {
   return { ok: true };
 }
 
+// Sans règles (profil sans regles_studio), les causes calculées sont omises ; les autres avertissements restent.
 export function avertissementsFiche(fiche, regles) {
   const avertissements = [];
   if (!fiche.visuel) avertissements.push('Pas de visuel');
   if (fiche.format !== 'story' && !fiche.caption?.trim()) avertissements.push('Pas de caption');
-  avertissements.push(...verifierRegles(fiche, regles).conformite.causes);
+  const calculees = regles ? verifierRegles(fiche, regles).conformite.causes : [];
+  avertissements.push(...calculees);
+  const jugees = fiche.score?.conformite?.etat === 'rouge' ? (fiche.score.conformite.causes ?? []).filter(c => !calculees.includes(c)) : [];
+  if (jugees.length) avertissements.push(`Conformité jugée rouge par l’analyse : ${jugees.join(' ; ')}`);
   if (!fiche.score) avertissements.push('Pas encore analysée');
   if (aReevaluer(fiche)) avertissements.push('Analyse dépassée : la fiche a changé depuis');
   return avertissements;

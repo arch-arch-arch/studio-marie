@@ -96,7 +96,7 @@ describe('parcours dans la semaine', () => {
   it('affiche la prochaine action sur chaque carte, en retard si besoin', () => {
     const el = vueSemaine({ profil: fictif, fiches: [reel('a', '2026-09-29T10:00:00.000Z'), reel('b', '2026-10-02T10:00:00.000Z')], ancre: ANCRE, maintenant: M, stats: [] }, actionsFactices());
     const a = el.querySelector('.carte[data-id="a"] .carte-action');
-    expect(a.textContent).toContain('Valider la fiche');
+    expect(a.textContent).toBe('Valider la fiche');
     expect(a.classList.contains('action-retard')).toBe(true);
     expect(el.querySelector('.carte[data-id="b"] .carte-action').classList.contains('action-retard')).toBe(false);
   });

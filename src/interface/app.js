@@ -51,17 +51,12 @@ export async function demarrer(racine, claude, { horloge = () => new Date().toIS
   let plageCourante = '';
   let arreterBulletin = null;
   let cleBulletinCourante = '';
-  let derniereVersionVerifiee = null;
   let statsDemarrees = false;
   // Un instantané qui arrive après une erreur de base efface le bandeau « base indisponible », mais pas un autre message non lu.
   const recu = champs => etat.modifier(etat.lire().erreur === MESSAGE_BASE_INDISPONIBLE ? { ...champs, erreur: null } : champs);
   // Une erreur de base garde l'état précédent affiché ; seule une session révoquée le vide (et un état encore en chargement est débloqué).
   const echec = (err, champ, vide) => etat.modifier({ erreur: messageErreurBase(err), ...(err?.code === 'revoked' || etat.lire()[champ] === undefined ? { [champ]: vide } : {}) });
   etat.abonner(e => {
-    if (e.profil && e.profil.version !== derniereVersionVerifiee) {
-      derniereVersionVerifiee = e.profil.version;
-      actions.reverifierFiches();
-    }
     if (e.profil) {
       if (!statsDemarrees) {
         statsDemarrees = true;
@@ -79,7 +74,6 @@ export async function demarrer(racine, claude, { horloge = () => new Date().toIS
         arreterFiches = depot.ecouterFiches(debut, fin,
           recues => {
             recu({ fiches: fusionnerInstantane(recues, etat.lire().fiches, enregistreur.estEnAttente) });
-            actions.reverifierFiches();
           },
           err => etat.modifier({ erreur: messageErreurBase(err) }));
       }

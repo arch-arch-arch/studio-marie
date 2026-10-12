@@ -93,3 +93,9 @@ describe('prochaineAction : statistiques', () => {
     expect(action(evaluee({ statut: 'publie', date_heure: '2026-09-27T10:00:00.000Z' })).libelle).toBe('Saisir les stats à 48 h');
   });
 });
+
+describe('prochaineAction sans règles', () => {
+  it('ne lève pas : les autres avertissements restent', () => {
+    expect(prochaineAction(base(), [], M, FZ)).toEqual({ cle: 'valider', libelle: 'Valider la fiche', detail: 'Pas de visuel ; Pas de caption ; Pas encore analysée', retard: false });
+  });
+});

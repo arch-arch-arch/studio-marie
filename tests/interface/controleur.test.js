@@ -291,13 +291,12 @@ describe('confirmations', () => {
     expect(etat.lire().fiches[0]).toMatchObject({ statut: 'programme', programme_pour: '2026-10-01T10:00:00.000Z', date_heure: '2026-10-02T10:00:00.000Z' });
   });
 
-  it('une fiche programmée bloquée par le profil repasse en Brouillon sans confirmation', async () => {
+  it('une fiche programmée reste programmée quand le profil la rend rouge', async () => {
     const { actions, etat } = monte();
     await actions.confirmerProgrammation('f1', '2026-10-02T09:00:00.000Z', true);
     const profil = etat.lire().profil;
     etat.modifier({ profil: { ...profil, regles_studio: { ...profil.regles_studio, mots_a_eviter: [...profil.regles_studio.mots_a_eviter, 'caption'] } } });
-    await actions.reverifierFiches();
-    expect(etat.lire().fiches[0]).toMatchObject({ statut: 'brouillon', programme_pour: null });
+    expect(etat.lire().fiches[0]).toMatchObject({ statut: 'programme', programme_pour: '2026-10-02T09:00:00.000Z' });
   });
 });
 

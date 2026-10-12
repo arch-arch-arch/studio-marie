@@ -307,3 +307,33 @@ describe('validation libre', () => {
     expect(avertissementsFiche({ ...prete(), caption: 'modifiée' }, R)).toEqual(['Analyse dépassée : la fiche a changé depuis']);
   });
 });
+
+describe('avertissementsFiche : sans règles, analyse rouge, ordre', () => {
+  const R = fictif.regles_studio;
+  const avec = (f, causes) => ({ ...f, score: { total: 50, criteres: [], conformite: { etat: causes.length ? 'rouge' : 'vert', causes }, empreinte: empreinte(f) } });
+
+  it('sans règles, ne lève pas et rend les autres avertissements', () => {
+    expect(() => avertissementsFiche(base())).not.toThrow();
+    expect(avertissementsFiche(base())).toEqual(['Pas de visuel', 'Pas de caption', 'Pas encore analysée']);
+  });
+
+  it('une cause jugée rouge par l’analyse seule donne un avertissement', () => {
+    const f = avec({ ...base(), visuel: 'a1', caption: 'Texte.' }, ['groupe visé']);
+    expect(avertissementsFiche(f, R)).toEqual(['Conformité jugée rouge par l’analyse : groupe visé']);
+  });
+
+  it('une cause du score déjà calculée ne se répète pas', () => {
+    const f = avec({ ...base(), visuel: 'a1', caption: 'Le mindset du jour.' }, ['mot à éviter « mindset »']);
+    expect(avertissementsFiche(f, R)).toEqual(['mot à éviter « mindset »']);
+  });
+
+  it('ordre : visuel, caption, cause calculée, puis pas encore analysée', () => {
+    expect(avertissementsFiche({ ...base(), accroche: 'Le mindset.' }, R))
+      .toEqual(['Pas de visuel', 'Pas de caption', 'mot à éviter « mindset »', 'Pas encore analysée']);
+  });
+
+  it('ordre : cause calculée, puis analyse dépassée', () => {
+    const f = { ...avec({ ...base(), visuel: 'a1', caption: 'Le mindset.' }, []), caption: 'Le mindset du soir.' };
+    expect(avertissementsFiche(f, R)).toEqual(['mot à éviter « mindset »', 'Analyse dépassée : la fiche a changé depuis']);
+  });
+});

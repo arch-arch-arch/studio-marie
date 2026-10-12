@@ -198,7 +198,7 @@ describe('demarrer', () => {
     expect(sample.json).toHaveBeenCalledTimes(1);
   });
 
-  it('réimporter le profil repasse en brouillon les fiches validées que les nouvelles règles bloquent', async () => {
+  it('réimporter le profil ne rétrograde pas les fiches validées que les nouvelles règles jugent rouges', async () => {
     const REPONSE = {
       notes: { accroche: 8, voix: 7, mecanique: 6 },
       phrases: { accroche: 'A.', voix: 'V.', mecanique: 'M.' },
@@ -225,11 +225,11 @@ describe('demarrer', () => {
     const bloque = { ...fictif, regles_studio: { ...fictif.regles_studio, mots_a_eviter: [...fictif.regles_studio.mots_a_eviter, 'ligne'] } };
     await app.actions.importerProfil(JSON.stringify(bloque));
 
-    expect(app.etat.lire().fiches.find(x => x.id === f.id).statut).toBe('brouillon');
-    await vi.waitFor(() => expect(app.etat.lire().erreur).toBe('1 fiche(s) repassée(s) en Brouillon : le profil actuel les bloque.'));
+    expect(app.etat.lire().fiches.find(x => x.id === f.id).statut).toBe('valide');
+    expect(app.etat.lire().erreur).toBeNull();
   });
 
-  it('rétrograde une fiche déjà bloquée par le profil dès le premier instantané de fiches, au démarrage', async () => {
+  it('ne rétrograde pas une fiche validée déjà jugée rouge par le profil, au démarrage', async () => {
     const db = creerFausseBase();
     const bloquant = { ...fictif, regles_studio: { ...fictif.regles_studio, mots_a_eviter: [...fictif.regles_studio.mots_a_eviter, 'ligne'] } };
     await db.doc('profil/courant').set({ ...bloquant, version: 1, importe_le: T });
@@ -240,11 +240,12 @@ describe('demarrer', () => {
     const racine = document.createElement('div');
     const app = await demarrer(racine, { use: async nom => (nom === 'db' ? db : null) }, { horloge });
 
-    await vi.waitFor(() => expect(app.etat.lire().fiches.find(x => x.id === 'f-bloquee')?.statut).toBe('brouillon'));
-    await vi.waitFor(() => expect(db._docs.get('fiches/f-bloquee')?.statut).toBe('brouillon'));
+    await vi.waitFor(() => expect(app.etat.lire().fiches.find(x => x.id === 'f-bloquee')).toBeDefined());
+    expect(app.etat.lire().fiches.find(x => x.id === 'f-bloquee').statut).toBe('valide');
+    expect(db._docs.get('fiches/f-bloquee').statut).toBe('valide');
   });
 
-  it('rétrograde une fiche bloquée qui arrive par navigation, après un réimport de profil pendant qu’elle n’était pas chargée', async () => {
+  it('ne rétrograde pas une fiche jugée rouge qui arrive par navigation, après un réimport de profil', async () => {
     const db = creerFausseBase();
     const racine = document.createElement('div');
     const app = await demarrer(racine, { use: async nom => (nom === 'db' ? db : null) }, { horloge });
@@ -259,29 +260,9 @@ describe('demarrer', () => {
     expect(app.etat.lire().fiches.some(x => x.id === 'f-loin')).toBe(false);
 
     await app.actions.naviguer(1);
-    await vi.waitFor(() => expect(app.etat.lire().fiches.find(x => x.id === 'f-loin')?.statut).toBe('brouillon'));
-    await vi.waitFor(() => expect(db._docs.get('fiches/f-loin')?.statut).toBe('brouillon'));
-  });
-
-  it('ne réécrit pas une fiche déjà rétrogradée à chaque nouvel instantané de fiches', async () => {
-    const db = creerFausseBase();
-    const bloquant = { ...fictif, regles_studio: { ...fictif.regles_studio, mots_a_eviter: [...fictif.regles_studio.mots_a_eviter, 'ligne'] } };
-    await db.doc('profil/courant').set({ ...bloquant, version: 1, importe_le: T });
-    const f = ficheValideDirecte({ id: 'f-stable', date_heure: '2026-09-28T10:00:00.000Z', caption: 'Une ligne. Dis-moi en commentaire.' });
-    const { id, ...corps } = f;
-    await db.doc(`fiches/${id}`).set(corps);
-
-    const racine = document.createElement('div');
-    await demarrer(racine, { use: async nom => (nom === 'db' ? db : null) }, { horloge });
-    await vi.waitFor(() => expect(db._docs.get('fiches/f-stable')?.statut).toBe('brouillon'));
-    const ecrituresApres = db.ecritures.filter(e => e === 'fiches/f-stable').length;
-
-    for (let i = 0; i < 3; i++) {
-      await db.doc(`fiches/autre-${i}`).set({ date_heure: '2026-09-28T11:00:00.000Z', format: 'reel', statut: 'idee' });
-    }
-    await new Promise(r => setTimeout(r, 20));
-
-    expect(db.ecritures.filter(e => e === 'fiches/f-stable').length).toBe(ecrituresApres);
+    await vi.waitFor(() => expect(app.etat.lire().fiches.find(x => x.id === 'f-loin')).toBeDefined());
+    expect(app.etat.lire().fiches.find(x => x.id === 'f-loin').statut).toBe('valide');
+    expect(db._docs.get('fiches/f-loin').statut).toBe('valide');
   });
 
   it('propose « Évaluer » dans la fiche quand la capacité sample existe', async () => {

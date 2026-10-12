@@ -100,7 +100,7 @@ describe('panneauFiche', () => {
       const brouillonBouton = bouton(p, 'Brouillon');
       expect(brouillonBouton.getAttribute('aria-pressed')).toBe('true');
     });
-    expect(p.querySelector('.panneau-message').textContent).not.toContain('repassée');
+    expect(p.querySelector('.panneau-message').textContent).toBe('Visuel ajouté.');
   });
 
   it('suit le statut renvoyé par modifierFiche, sans message et sans perdre le focus de la caption', () => {
@@ -112,7 +112,7 @@ describe('panneauFiche', () => {
     saisir(caption, 'Nouvelle caption');
     const brouillonBouton = bouton(p, 'Brouillon');
     expect(brouillonBouton.getAttribute('aria-pressed')).toBe('true');
-    expect(p.querySelector('.panneau-message').textContent).not.toContain('repassée');
+    expect(p.querySelector('.panneau-message').textContent).toBe('');
     expect(p.querySelector('textarea[name="caption"]')).toBe(caption);
   });
 });
@@ -238,7 +238,7 @@ describe('évaluation dans le panneau', () => {
       const brouillonBouton = bouton(p, 'Brouillon');
       expect(brouillonBouton.getAttribute('aria-pressed')).toBe('true');
     });
-    expect(p.querySelector('.panneau-message').textContent).not.toContain('repassée');
+    expect(p.querySelector('.panneau-message').textContent).toBe('Évaluation terminée.');
   });
 
   it('« Utiliser » suit le statut renvoyé, sans message « repassée en Brouillon »', () => {
@@ -249,7 +249,7 @@ describe('évaluation dans le panneau', () => {
     utiliserCaption.click();
     const brouillonBouton = bouton(p, 'Brouillon');
     expect(brouillonBouton.getAttribute('aria-pressed')).toBe('true');
-    expect(p.querySelector('.panneau-message').textContent).not.toContain('repassée');
+    expect(p.querySelector('.panneau-message').textContent).toBe('Caption remplacée.');
   });
 
   it('« Utiliser » garde le même nœud de caption, mis à jour et focus', () => {
