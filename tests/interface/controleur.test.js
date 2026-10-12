@@ -75,13 +75,13 @@ describe('creerControleur', () => {
     expect(db._docs.get('fiches/f1')).toMatchObject({ accroche: 'saisie', date_heure: '2026-09-30T10:00:00.000Z' });
   });
 
-  it('refuse une validation impossible et affiche la raison', async () => {
+  it('valide une fiche sans visuel ni analyse, sans erreur', async () => {
     const { etat, actions } = monter();
     await actions.creerFiche({ format: 'reel', date_heure: '2026-09-28T10:00:00.000Z' });
     const r = await actions.changerStatut('f1', 'valide');
-    expect(r).toEqual({ ok: false, raison: 'Ajoute un visuel avant de valider.' });
-    expect(etat.lire().erreur).toBe('Ajoute un visuel avant de valider.');
-    expect(etat.lire().fiches[0].statut).toBe('idee');
+    expect(r).toEqual({ ok: true });
+    expect(etat.lire().erreur).toBeNull();
+    expect(etat.lire().fiches[0].statut).toBe('valide');
   });
 
   it('supprime sans qu’une écriture en attente ne ressuscite la fiche', async () => {
@@ -264,11 +264,11 @@ describe('confirmations', () => {
     expect(etat.lire().fiches[0]).toMatchObject({ statut: 'publie', publie_le: '2026-09-28T07:30:00.000Z', programme_pour: null });
   });
 
-  it('refuse une conformité devenue rouge avec le profil actuel', async () => {
-    const { actions } = monte({ caption: 'Un mindset.' });
+  it('programme une fiche dont la conformité est rouge, sans la bloquer', async () => {
+    const { actions, etat } = monte({ caption: 'Un mindset.' });
     const r = await actions.confirmerProgrammation('f1', '2026-10-02T09:00:00.000Z', true);
-    expect(r.ok).toBe(false);
-    expect(r.raison).toMatch(/^Conformité au rouge : /);
+    expect(r).toEqual({ ok: true, fiche: expect.objectContaining({ statut: 'programme' }) });
+    expect(etat.lire().fiches[0].statut).toBe('programme');
   });
 
   it('changerStatut n’accepte plus Programmé ni Publié', async () => {
@@ -695,13 +695,14 @@ describe('analyse par dossier', () => {
     expect(db.lire(`analyses/${code}`).retour).toMatchObject({ avis: '', points_forts: [], risques: [], ordre_conseille: [] });
   });
 
-  it('repasse en brouillon une fiche validée dont le score devient rouge', async () => {
+  it('garde Validé une fiche dont le score devient rouge au retour de dossier', async () => {
     const { actions, etat, db, a } = await avecDeuxFiches();
     const interdit = etat.lire().profil.regles_studio.mots_a_eviter[0];
     etat.modifier({ fiches: etat.lire().fiches.map(f => (f.id === a.id ? { ...f, statut: 'valide', caption: `Texte avec ${interdit}` } : f)) });
     await actions.ouvrirAnalyse();
     await actions.enregistrerRetour(reponse(etat.lire().analyse.code, ['F01', 'F02']));
-    expect(db.lire(`fiches/${a.id}`).statut).toBe('brouillon');
+    expect(db.lire(`fiches/${a.id}`).statut).toBe('valide');
+    expect(db.lire(`fiches/${a.id}`).score.conformite.etat).toBe('rouge');
   });
 
   const INTERROMPU = n => `L’enregistrement a été interrompu après ${n} fiche${n > 1 ? 's' : ''} sur 2 : réessaie, les fiches déjà notées seront simplement réécrites.`;

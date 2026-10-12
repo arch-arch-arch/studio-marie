@@ -15,9 +15,7 @@ export function vueSemaine({ profil, fiches, ancre, maintenant, bulletin, stats,
   const libres = creneauxLibres(fiches, r, debut, maintenant ?? null);
   const semainePassee = maintenant != null && debut < debutSemaine(maintenant, r.fuseau);
   const maintenantIso = maintenant ?? new Date().toISOString();
-  const viaDossier = !capacites.sample && !!capacites.dossier;
-  const traduire = a => (viaDossier && (a.cle === 'evaluer' || a.cle === 'reevaluer') ? { ...a, libelle: 'Analyser la semaine' } : a);
-  const actionsParId = new Map(semaine.map(f => [f.id, traduire(prochaineAction(f, (stats ?? []).filter(s => s.fiche === f.id), maintenantIso, r.fuseau))]));
+  const actionsParId = new Map(semaine.map(f => [f.id, prochaineAction(f, (stats ?? []).filter(s => s.fiche === f.id), maintenantIso, r.fuseau, r)]));
   return h('div', { class: 'semaine' },
     capacites.dossier ? rangeeAnalyse('Analyser la semaine', analyse, actions) : null,
     sectionAvis(analyses, periodeAffichee('semaine', ancre, r.fuseau), fiches, r.fuseau, avisOuverts),
@@ -68,6 +66,7 @@ function aFaire(semaine, actionsParId, fz, actions) {
       ? h('ul', {}, lignes.map(({ f, a }) => h('li', { class: a.retard ? 'action-retard' : null },
         h('span', {}, `${LIBELLES_FORMAT[f.format]} · ${libelleJour(f.date_heure, fz)} ${heureLocale(f.date_heure, fz)} · ${f.accroche || 'Sans accroche'}`),
         h('strong', {}, a.libelle),
+        a.detail ? h('span', { class: 'aide' }, a.detail) : null,
         h('button', { type: 'button', class: 'bouton-lien', 'aria-label': `Ouvrir « ${f.accroche || 'Sans accroche'} »`, onclick: () => actions.ouvrirFiche(f.id) }, 'Ouvrir'))))
       : h('p', { class: 'aide' }, 'Rien à faire cette semaine.'));
 }

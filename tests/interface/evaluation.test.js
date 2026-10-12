@@ -54,12 +54,21 @@ describe('evaluerFiche', () => {
     expect(await actions.changerStatut('f1', 'valide')).toEqual({ ok: true });
   });
 
-  it('garde le rouge calculé même si Claude répond vert, et refuse la validation', async () => {
+  it('garde le rouge calculé même si Claude répond vert, sans bloquer la validation', async () => {
     const { actions } = await monter({ contenu: { caption: 'Mon mindset du jour.' } });
     const r = await actions.evaluerFiche('f1');
     expect(r.fiche.score.conformite).toEqual({ etat: 'rouge', causes: ['mot à éviter « mindset »'] });
     expect(r.fiche.score.total).toBeLessThanOrEqual(40);
-    expect(await actions.changerStatut('f1', 'valide')).toEqual({ ok: false, raison: 'Conformité au rouge : mot à éviter « mindset ».' });
+    expect(await actions.changerStatut('f1', 'valide')).toEqual({ ok: true });
+  });
+
+  it('une analyse avec blocage rouge laisse une fiche validée validée', async () => {
+    const { etat, actions } = await monter({ contenu: { caption: 'Mon mindset du jour.' } });
+    expect(await actions.changerStatut('f1', 'valide')).toEqual({ ok: true });
+    const r = await actions.evaluerFiche('f1');
+    expect(r.fiche.score.conformite.etat).toBe('rouge');
+    expect(r.fiche.statut).toBe('valide');
+    expect(etat.lire().fiches[0].statut).toBe('valide');
   });
 
   it('une réponse incomplète ne modifie ni la fiche ni la base', async () => {
@@ -91,7 +100,7 @@ describe('evaluerFiche', () => {
     expect(await sansSample.actions.evaluerFiche('f1')).toEqual({ ok: false, raison: 'L’évaluation par Claude n’est pas disponible dans cette vue.', indisponible: true });
   });
 
-  it('une modification pendant l’évaluation laisse la fiche à réévaluer', async () => {
+  it('une modification pendant l’évaluation laisse la fiche à réévaluer, sans bloquer la validation', async () => {
     const reponse = differe();
     const { etat, actions } = await monter({ sample: fauxSample(() => reponse.p) });
     const enCours = actions.evaluerFiche('f1');
@@ -102,7 +111,7 @@ describe('evaluerFiche', () => {
     expect(r.ok).toBe(true);
     expect(etat.lire().fiches[0].caption).toBe('Changée pendant l’évaluation.');
     expect(aReevaluer(etat.lire().fiches[0])).toBe(true);
-    expect(await actions.changerStatut('f1', 'valide')).toEqual({ ok: false, raison: 'La fiche a changé depuis son évaluation : réévalue-la.' });
+    expect(await actions.changerStatut('f1', 'valide')).toEqual({ ok: true });
   });
 
   it('refuse une deuxième évaluation simultanée de la même fiche', async () => {
@@ -255,26 +264,26 @@ describe('evaluerFiche', () => {
     expect(sample.json).toHaveBeenCalledTimes(1);
   });
 
-  it('refuse la validation si le géotag change après une évaluation au vert (verrou en profondeur)', async () => {
-    const { actions } = await monter({ contenu: { geotag: 'Paris' } });
+  it('ne bloque pas la validation quand le géotag change après une évaluation au vert', async () => {
+    const { etat, actions } = await monter({ contenu: { geotag: 'Paris' } });
     await actions.evaluerFiche('f1');
     expect(await actions.changerStatut('f1', 'valide')).toEqual({ ok: true });
     actions.modifierFiche('f1', { geotag: '12 rue des Lilas' });
-    expect((await actions.changerStatut('f1', 'valide')).ok).toBe(false);
+    expect(etat.lire().fiches[0].statut).toBe('valide');
+    expect(await actions.changerStatut('f1', 'valide')).toEqual({ ok: true });
   });
 
-  it('refuse la validation si un profil réimporté ajoute un mot à éviter présent dans une fiche au score vert à jour', async () => {
+  it('garde la validation quand un profil réimporté ajoute un mot à éviter présent dans la fiche', async () => {
     const { etat, actions } = await monter({ contenu: { caption: 'Une ligne sur lilas. Dis-moi en commentaire.' } });
     await actions.evaluerFiche('f1');
     expect(await actions.changerStatut('f1', 'valide')).toEqual({ ok: true });
     const profil = etat.lire().profil;
     etat.modifier({ profil: { ...profil, regles_studio: { ...profil.regles_studio, mots_a_eviter: [...profil.regles_studio.mots_a_eviter, 'lilas'] } } });
-    const r = await actions.changerStatut('f1', 'valide');
-    expect(r.ok).toBe(false);
-    expect(r.raison).toMatch(/^Conformité au rouge :/);
+    expect(etat.lire().fiches[0].statut).toBe('valide');
+    expect(await actions.changerStatut('f1', 'valide')).toEqual({ ok: true });
   });
 
-  it('repasse en brouillon si la conformité redevient rouge après la réévaluation d’une fiche validée', async () => {
+  it('garde Validé si la conformité redevient rouge après la réévaluation d’une fiche validée', async () => {
     const sample = fauxSample();
     const { db, etat, actions } = await monter({ sample });
     await actions.evaluerFiche('f1');
@@ -282,12 +291,12 @@ describe('evaluerFiche', () => {
     sample.json.mockImplementationOnce(async () => ({ ...REPONSE, conformite: { etat: 'rouge', causes: ['groupe visé'] } }));
     const r = await actions.evaluerFiche('f1');
     expect(r.ok).toBe(true);
-    expect(r.fiche.statut).toBe('brouillon');
-    expect(etat.lire().fiches[0].statut).toBe('brouillon');
-    expect(db._docs.get('fiches/f1').statut).toBe('brouillon');
+    expect(r.fiche.statut).toBe('valide');
+    expect(etat.lire().fiches[0].statut).toBe('valide');
+    expect(db._docs.get('fiches/f1').statut).toBe('valide');
   });
 
-  it('repasse en brouillon si le profil change pour bloquer une fiche validée pendant que la réévaluation est en cours', async () => {
+  it('garde Validé si le profil change pour bloquer une fiche validée pendant que la réévaluation est en cours', async () => {
     const sample = fauxSample();
     const { db, etat, actions } = await monter({ sample });
     await actions.evaluerFiche('f1');
@@ -301,9 +310,9 @@ describe('evaluerFiche', () => {
     reponse.resoudre(REPONSE);
     const r = await enCours;
     expect(r.ok).toBe(true);
-    expect(r.fiche.statut).toBe('brouillon');
-    expect(etat.lire().fiches[0].statut).toBe('brouillon');
-    expect(db._docs.get('fiches/f1').statut).toBe('brouillon');
+    expect(r.fiche.statut).toBe('valide');
+    expect(etat.lire().fiches[0].statut).toBe('valide');
+    expect(db._docs.get('fiches/f1').statut).toBe('valide');
   });
 });
 

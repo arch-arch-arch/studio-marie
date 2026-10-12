@@ -88,7 +88,7 @@ describe('panneauFiche', () => {
     expect(actions.televerserVisuel).not.toHaveBeenCalled();
   });
 
-  it('rétrograde l’affichage en Brouillon quand le téléversement d’un visuel change le statut en base', async () => {
+  it('suit le statut renvoyé par le téléversement, sans message « repassée en Brouillon »', async () => {
     const f = fiche({ statut: 'valide' });
     const actions = actionsFactices();
     actions.televerserVisuel = vi.fn(async () => ({ ok: true, id: 'as2', type: 'image', statut: 'brouillon' }));
@@ -100,10 +100,10 @@ describe('panneauFiche', () => {
       const brouillonBouton = bouton(p, 'Brouillon');
       expect(brouillonBouton.getAttribute('aria-pressed')).toBe('true');
     });
-    expect(p.querySelector('.panneau-message').textContent).toBe('La fiche est repassée en Brouillon : réévalue-la.');
+    expect(p.querySelector('.panneau-message').textContent).not.toContain('repassée');
   });
 
-  it('rétrograde l’affichage en Brouillon quand modifierFiche renvoie un nouveau statut, sans perdre le focus de la caption', () => {
+  it('suit le statut renvoyé par modifierFiche, sans message et sans perdre le focus de la caption', () => {
     const f = fiche({ statut: 'valide' });
     const actions = actionsFactices();
     actions.modifierFiche = vi.fn(() => ({ ...fiche(), statut: 'brouillon' }));
@@ -112,7 +112,7 @@ describe('panneauFiche', () => {
     saisir(caption, 'Nouvelle caption');
     const brouillonBouton = bouton(p, 'Brouillon');
     expect(brouillonBouton.getAttribute('aria-pressed')).toBe('true');
-    expect(p.querySelector('.panneau-message').textContent).toBe('La fiche est repassée en Brouillon : réévalue-la.');
+    expect(p.querySelector('.panneau-message').textContent).not.toContain('repassée');
     expect(p.querySelector('textarea[name="caption"]')).toBe(caption);
   });
 });
@@ -229,7 +229,7 @@ describe('évaluation dans le panneau', () => {
     expect(actions.modifierFiche).toHaveBeenCalledWith('f1', { accroche: 'Acc 2' });
   });
 
-  it('affiche « repassée en Brouillon » quand l’évaluation fait perdre la validation', async () => {
+  it('suit le statut renvoyé par l’évaluation, sans message « repassée en Brouillon »', async () => {
     const f = fiche({ statut: 'valide' });
     const actions = { ...actionsFactices(), evaluerFiche: vi.fn(async () => ({ ok: true, fiche: { ...evaluee(), statut: 'brouillon' } })) };
     const p = panneauFiche(f, fictif, actions, { assets: true, sample: true });
@@ -238,10 +238,10 @@ describe('évaluation dans le panneau', () => {
       const brouillonBouton = bouton(p, 'Brouillon');
       expect(brouillonBouton.getAttribute('aria-pressed')).toBe('true');
     });
-    expect(p.querySelector('.panneau-message').textContent).toBe('La fiche est repassée en Brouillon : réévalue-la.');
+    expect(p.querySelector('.panneau-message').textContent).not.toContain('repassée');
   });
 
-  it('« Utiliser » affiche « repassée en Brouillon » quand modifierFiche renvoie un nouveau statut', () => {
+  it('« Utiliser » suit le statut renvoyé, sans message « repassée en Brouillon »', () => {
     const f = { ...evaluee(), statut: 'valide' };
     const actions = { ...actionsFactices(), modifierFiche: vi.fn(() => ({ ...f, statut: 'brouillon' })) };
     const p = panneauFiche(f, fictif, actions, { assets: true, sample: true });
@@ -249,7 +249,7 @@ describe('évaluation dans le panneau', () => {
     utiliserCaption.click();
     const brouillonBouton = bouton(p, 'Brouillon');
     expect(brouillonBouton.getAttribute('aria-pressed')).toBe('true');
-    expect(p.querySelector('.panneau-message').textContent).toBe('La fiche est repassée en Brouillon : réévalue-la.');
+    expect(p.querySelector('.panneau-message').textContent).not.toContain('repassée');
   });
 
   it('« Utiliser » garde le même nœud de caption, mis à jour et focus', () => {
@@ -356,7 +356,8 @@ describe('parcours dans la fiche', () => {
 
   it('affiche la prochaine action en tête de fiche', () => {
     const p = panneauFiche(fiche(), fictif, actionsParcours(), { assets: true });
-    expect(p.querySelector('.prochaine-action').textContent).toContain('Terminer : ajoute un visuel et une caption');
+    expect(p.querySelector('.prochaine-action').textContent).toContain('Valider la fiche');
+    expect(p.querySelector('.prochaine-action').textContent).toContain('Pas de visuel ; Pas de caption ; Pas encore analysée');
     expect(p.textContent).not.toContain('null');
   });
 

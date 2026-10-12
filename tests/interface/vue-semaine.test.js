@@ -96,7 +96,7 @@ describe('parcours dans la semaine', () => {
   it('affiche la prochaine action sur chaque carte, en retard si besoin', () => {
     const el = vueSemaine({ profil: fictif, fiches: [reel('a', '2026-09-29T10:00:00.000Z'), reel('b', '2026-10-02T10:00:00.000Z')], ancre: ANCRE, maintenant: M, stats: [] }, actionsFactices());
     const a = el.querySelector('.carte[data-id="a"] .carte-action');
-    expect(a.textContent).toBe('Terminer : ajoute un visuel et une caption');
+    expect(a.textContent).toContain('Valider la fiche');
     expect(a.classList.contains('action-retard')).toBe(true);
     expect(el.querySelector('.carte[data-id="b"] .carte-action').classList.contains('action-retard')).toBe(false);
   });
@@ -170,33 +170,33 @@ describe('coller un retour (Semaine)', () => {
   });
 });
 
-describe('libellé « Évaluer » selon les capacités', () => {
+describe('« Valider la fiche » et ses avertissements', () => {
   const M = '2026-09-30T08:00:00.000Z';
   const prete = reel('a', '2026-09-29T10:00:00.000Z', { accroche: 'Prête', caption: 'x', visuel: 'v.jpg' });
   const perimee = { ...prete, id: 'b', accroche: 'Périmée', caption: 'changée', score: { total: 70, conformite: { etat: 'vert', causes: [] }, empreinte: empreinte(prete) } };
   const rendre = capacites => vueSemaine({ profil: fictif, fiches: [prete, perimee], ancre: ANCRE, maintenant: M, stats: [] }, actionsFactices(), capacites);
 
-  it('affiche « Analyser la semaine » sans sample et avec dossier', () => {
+  it('propose « Valider la fiche » sans sample et avec dossier, avec les avertissements en détail', () => {
     const el = rendre({ dossier: true });
     const lignes = [...el.querySelectorAll('.a-faire li')];
     expect(lignes).toHaveLength(2);
     for (const l of lignes) {
-      expect(l.querySelector('strong').textContent).toBe('Analyser la semaine');
+      expect(l.querySelector('strong').textContent).toBe('Valider la fiche');
       expect(l.classList.contains('action-retard')).toBe(true);
     }
-    expect(el.querySelector('.carte[data-id="a"] .carte-action').textContent).toBe('Analyser la semaine');
-    expect(el.querySelector('.carte[data-id="b"] .carte-action').textContent).toBe('Analyser la semaine');
+    expect(lignes.map(l => l.querySelector('.aide').textContent).sort()).toEqual(['Analyse dépassée : la fiche a changé depuis', 'Pas encore analysée']);
+    expect(el.querySelector('.carte[data-id="a"] .carte-action').textContent).toBe('Valider la fiche');
+    expect(el.querySelector('.carte[data-id="b"] .carte-action').textContent).toBe('Valider la fiche');
   });
 
-  it('garde « Évaluer » et « Réévaluer » avec sample', () => {
+  it('propose « Valider la fiche » avec sample, sans « Évaluer » ni « Réévaluer »', () => {
     const el = rendre({ sample: true, dossier: true });
-    const textes = [...el.querySelectorAll('.a-faire li strong')].map(s => s.textContent);
-    expect(textes).toEqual(['Évaluer', 'Réévaluer']);
-    expect(el.querySelector('.carte[data-id="a"] .carte-action').textContent).toBe('Évaluer');
+    expect([...el.querySelectorAll('.a-faire li strong')].map(s => s.textContent)).toEqual(['Valider la fiche', 'Valider la fiche']);
+    expect(el.querySelector('.carte[data-id="a"] .carte-action').textContent).toBe('Valider la fiche');
   });
 
-  it('garde « Évaluer » sans aucune des deux capacités', () => {
+  it('propose « Valider la fiche » sans aucune capacité', () => {
     const el = rendre({});
-    expect([...el.querySelectorAll('.a-faire li strong')].map(s => s.textContent)).toEqual(['Évaluer', 'Réévaluer']);
+    expect([...el.querySelectorAll('.a-faire li strong')].map(s => s.textContent)).toEqual(['Valider la fiche', 'Valider la fiche']);
   });
 });

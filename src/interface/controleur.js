@@ -1,6 +1,6 @@
 import {
   nouvelId, nouvelleFiche, modifierFiche as appliquer, peutPasserA, changerStatut as appliquerStatut, deplacerFiche as deplacer,
-  appliquerEvaluation, confirmerProgrammation as confirmerProg, confirmerPublication as confirmerPub, effacementsPour, empreinte,
+  appliquerEvaluation, confirmerProgrammation as confirmerProg, confirmerPublication as confirmerPub, empreinte,
 } from '../logique/fiche.js';
 import { ajouterJours, ajouterMois, debutJour, debutSemaine, semainesDuMois } from '../logique/dates.js';
 import { verifierRegles } from '../logique/regles-score.js';
@@ -129,13 +129,6 @@ export function creerControleur({ etat, depot, enregistreur, assets, horloge, id
     return { ok: true, score, jugement: reponse.jugement };
   }
 
-  function verrouillerSiRouge(g) {
-    if (g.statut !== 'valide' && g.statut !== 'programme') return g;
-    const { profil } = etat.lire();
-    const { conformite } = verifierRegles(g, profil.regles_studio);
-    return conformite.etat === 'rouge' ? { ...g, statut: 'brouillon', ...effacementsPour('brouillon') } : g;
-  }
-
   async function evaluerFiche(id, { signal } = {}) {
     if (!sample) return INDISPONIBLE;
     if (evaluationsEnCours.has(id)) return { ok: false, raison: 'Une évaluation est déjà en cours pour cette fiche.' };
@@ -157,7 +150,7 @@ export function creerControleur({ etat, depot, enregistreur, assets, horloge, id
       const actuelle = trouver(id);
       if (actuelle) {
         if (supprimeesPendantSession.has(id)) return { ok: false, raison: 'La fiche a été supprimée pendant l’évaluation.' };
-        const g = verrouillerSiRouge(appliquerEvaluation(actuelle, changements, horloge()));
+        const g = appliquerEvaluation(actuelle, changements, horloge());
         remplacer(g);
         await ecrireMaintenant(g);
         return { ok: true, fiche: g };
@@ -167,13 +160,13 @@ export function creerControleur({ etat, depot, enregistreur, assets, horloge, id
       const revenue = trouver(id);
       if (revenue) {
         if (supprimeesPendantSession.has(id)) return { ok: false, raison: 'La fiche a été supprimée pendant l’évaluation.' };
-        const g = verrouillerSiRouge(appliquerEvaluation(revenue, changements, horloge()));
+        const g = appliquerEvaluation(revenue, changements, horloge());
         remplacer(g);
         await ecrireMaintenant(g);
         return { ok: true, fiche: g };
       }
       if (!relue || supprimeesPendantSession.has(id)) return { ok: false, raison: 'La fiche a été supprimée pendant l’évaluation.' };
-      const g = verrouillerSiRouge(appliquerEvaluation(relue, changements, horloge()));
+      const g = appliquerEvaluation(relue, changements, horloge());
       if (supprimeesPendantSession.has(id)) return { ok: false, raison: 'La fiche a été supprimée pendant l’évaluation.' };
       enregistreur.planifier(g);
       await enregistreur.vider(g.id);
@@ -203,8 +196,6 @@ export function creerControleur({ etat, depot, enregistreur, assets, horloge, id
     if (!f) return { ok: false, raison: 'Fiche introuvable.' };
     const r = appliquerConfirmation(f, { date: dateIso, coche }, horloge());
     if (!r.ok) return r;
-    const { conformite } = verifierRegles(r.fiche, etat.lire().profil.regles_studio);
-    if (conformite.etat === 'rouge') return { ok: false, raison: `Conformité au rouge : ${conformite.causes.join(' ; ')}.` };
     remplacer(r.fiche);
     etat.modifier({ erreur: null });
     await ecrireMaintenant(r.fiche);
@@ -532,11 +523,11 @@ export function creerControleur({ etat, depot, enregistreur, assets, horloge, id
         source: 'dossier', assistant: analyse.assistant ?? 'inconnu',
       };
       const score = composerScore({ fiche: actuelle, verification, jugement: item.jugement, versionProfil: profil.version, maintenant: horloge(), examen });
-      const g = verrouillerSiRouge(appliquerEvaluation(actuelle, {
+      const g = appliquerEvaluation(actuelle, {
         score, variantes: item.jugement.captions,
         suggestions: { accroches: item.jugement.accroches, hashtags: item.jugement.hashtags },
         recommandations: item.jugement.recommandations,
-      }, horloge()));
+      }, horloge());
       remplacer(g);
       await ecrireMaintenant(g);
       if (enregistreur.enEchec().includes(g.id)) return interruption(appliquees.length, aNoter.length - ecarteesEnEcriture);
@@ -633,15 +624,6 @@ export function creerControleur({ etat, depot, enregistreur, assets, horloge, id
       if (!verification.ok) {
         etat.modifier({ erreur: verification.raison });
         return verification;
-      }
-      if (cible === 'valide' || cible === 'programme' || cible === 'publie') {
-        const { profil } = etat.lire();
-        const { conformite } = verifierRegles(f, profil.regles_studio);
-        if (conformite.etat === 'rouge') {
-          const raison = `Conformité au rouge : ${conformite.causes.join(' ; ')}.`;
-          etat.modifier({ erreur: raison });
-          return { ok: false, raison };
-        }
       }
       const g = appliquerStatut(f, cible, horloge());
       remplacer(g);

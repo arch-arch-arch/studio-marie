@@ -85,7 +85,6 @@ export function panneauFiche(fiche, profil, actions, capacites, releves = []) {
     elementStatut.replaceWith(nouvelElement);
     elementStatut = nouvelElement;
     majAction();
-    afficher('La fiche est repassée en Brouillon : réévalue-la.');
   };
   const changer = changements => {
     brouillon = { ...brouillon, ...changements };
@@ -126,15 +125,13 @@ export function panneauFiche(fiche, profil, actions, capacites, releves = []) {
   }
 
   const LIBELLES_BOUTON_ACTION = {
-    evaluer: 'Lancer l’évaluation', reevaluer: 'Lancer l’évaluation', programmer: 'Confirmer…', reconfirmer: 'Confirmer…',
+    programmer: 'Confirmer…', reconfirmer: 'Confirmer…',
     publier: 'Confirmer…', stats: 'Aller aux statistiques', valider: 'Passer en Validé',
   };
 
   const sectionAction = () => {
-    const a = prochaineAction(brouillon, relevesConnus, maintenant(), fz);
+    const a = prochaineAction(brouillon, relevesConnus, maintenant(), fz, r);
     const surClic = {
-      evaluer: evaluationDisponible ? () => evaluer() : null,
-      reevaluer: evaluationDisponible ? () => evaluer() : null,
       programmer: () => ouvrirConfirmation('programme'),
       reconfirmer: () => ouvrirConfirmation('programme'),
       publier: () => ouvrirConfirmation('publie'),

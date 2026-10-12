@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { nouvelleFiche, empreinte } from '../../src/logique/fiche.js';
 import { libelleJour, heureLocale } from '../../src/logique/dates.js';
+import fictif from '../../exemples/profil-fictif.json';
 import { prochaineAction, ACTIONS_SANS_SUITE } from '../../src/logique/parcours.js';
 
 const FZ = 'Europe/Paris';
@@ -12,29 +13,30 @@ const evaluee = (extra = {}, conformite = { etat: 'vert', causes: [] }) => {
   return { ...f, score: { total: 70, criteres: [], conformite, empreinte: empreinte(f) } };
 };
 const quand = iso => `${libelleJour(iso, FZ)} à ${heureLocale(iso, FZ)}`;
-const action = (f, releves = [], m = M) => prochaineAction(f, releves, m, FZ);
+const R = fictif.regles_studio;
+const action = (f, releves = [], m = M) => prochaineAction(f, releves, m, FZ, R);
 
 describe('prochaineAction : préparation', () => {
-  it('liste ce qui manque pour terminer', () => {
-    expect(action(base())).toEqual({ cle: 'terminer', libelle: 'Terminer : ajoute un visuel et une caption', detail: '', retard: false });
-    expect(action(base({ visuel: 'a1' })).libelle).toBe('Terminer : ajoute une caption');
-    expect(action(base({ caption: 'x' })).libelle).toBe('Terminer : ajoute un visuel');
-    expect(action(base({ format: 'story' })).libelle).toBe('Terminer : ajoute un visuel');
+  it('propose de valider même sans visuel ni caption, avec les manques en détail', () => {
+    expect(action(base())).toEqual({ cle: 'valider', libelle: 'Valider la fiche', detail: 'Pas de visuel ; Pas de caption ; Pas encore analysée', retard: false });
+    expect(action(base({ visuel: 'a1' })).detail).toBe('Pas de caption ; Pas encore analysée');
+    expect(action(base({ caption: 'x' })).detail).toBe('Pas de visuel ; Pas encore analysée');
+    expect(action(base({ format: 'story' })).detail).toBe('Pas de visuel ; Pas encore analysée');
   });
-  it('demande l’évaluation, puis la réévaluation', () => {
-    expect(action(base({ visuel: 'a1', caption: 'x' })).cle).toBe('evaluer');
-    expect(action({ ...evaluee(), caption: 'autre' })).toMatchObject({ cle: 'reevaluer', libelle: 'Réévaluer' });
+  it('ne demande plus d’évaluation : une analyse dépassée se lit en détail', () => {
+    expect(action(base({ visuel: 'a1', caption: 'x' })).cle).toBe('valider');
+    expect(action({ ...evaluee(), caption: 'autre' })).toMatchObject({ cle: 'valider', libelle: 'Valider la fiche', detail: 'Analyse dépassée : la fiche a changé depuis' });
   });
-  it('demande de corriger une conformité rouge, avec les causes', () => {
-    expect(action(evaluee({}, { etat: 'rouge', causes: ['mot « mindset »', 'lien'] })))
-      .toEqual({ cle: 'corriger', libelle: 'Corriger la conformité', detail: 'mot « mindset » ; lien', retard: false });
+  it('propose de valider une fiche au rouge, avec la cause en détail', () => {
+    expect(action(evaluee({ caption: 'Le mindset du jour.' })))
+      .toEqual({ cle: 'valider', libelle: 'Valider la fiche', detail: 'mot à éviter « mindset »', retard: false });
   });
   it('propose de valider une fiche prête', () => {
     expect(action(evaluee())).toMatchObject({ cle: 'valider', libelle: 'Valider la fiche' });
     expect(action(evaluee({ statut: 'brouillon' })).cle).toBe('valider');
   });
-  it('demande de réévaluer si la conformité n’est ni verte ni orange', () => {
-    expect(action(evaluee({}, { etat: undefined, causes: [] })).cle).toBe('reevaluer');
+  it('propose de valider même si la conformité du score n’est pas évaluée', () => {
+    expect(action(evaluee({}, { etat: undefined, causes: [] })).cle).toBe('valider');
   });
   it('signale le retard quand la date prévue est passée', () => {
     expect(action(base({ date_heure: '2026-09-28T10:00:00.000Z' })).retard).toBe(true);

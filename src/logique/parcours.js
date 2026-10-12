@@ -1,4 +1,4 @@
-import { aReevaluer } from './fiche.js';
+import { avertissementsFiche } from './fiche.js';
 import { RELEVES, etatReleves } from './indicateurs.js';
 import { libelleJour, heureLocale } from './dates.js';
 
@@ -9,16 +9,10 @@ const LIBELLES_RELEVE = { '48h': '48 h', '7j': '7 jours' };
 const action = (cle, libelle, detail = '', retard = false) => ({ cle, libelle, detail, retard });
 const quand = (iso, fuseau) => `${libelleJour(iso, fuseau)} à ${heureLocale(iso, fuseau)}`;
 
-export function prochaineAction(fiche, releves, maintenant, fuseau) {
+export function prochaineAction(fiche, releves, maintenant, fuseau, regles) {
   const passee = fiche.date_heure <= maintenant;
   if (fiche.statut === 'idee' || fiche.statut === 'brouillon') {
-    const manque = [!fiche.visuel && 'un visuel', fiche.format !== 'story' && !fiche.caption?.trim() && 'une caption'].filter(Boolean);
-    if (manque.length) return action('terminer', `Terminer : ajoute ${manque.join(' et ')}`, '', passee);
-    if (!fiche.score) return action('evaluer', 'Évaluer', '', passee);
-    if (aReevaluer(fiche)) return action('reevaluer', 'Réévaluer', '', passee);
-    if (fiche.score.conformite?.etat === 'rouge') return action('corriger', 'Corriger la conformité', (fiche.score.conformite.causes ?? []).join(' ; '), passee);
-    if (fiche.score.conformite?.etat !== 'vert' && fiche.score.conformite?.etat !== 'orange') return action('reevaluer', 'Réévaluer', '', passee);
-    return action('valider', 'Valider la fiche', '', passee);
+    return action('valider', 'Valider la fiche', avertissementsFiche(fiche, regles).join(' ; '), passee);
   }
   if (fiche.statut === 'valide') return action('programmer', 'Confirmer la programmation', '', passee);
   if (fiche.statut === 'programme') {

@@ -1,10 +1,10 @@
 import { partiesLocales, versUtc } from './dates.js';
+import { verifierRegles } from './regles-score.js';
 
 export const FORMATS = ['reel', 'carrousel', 'story', 'post'];
 export const LIBELLES_FORMAT = { reel: 'Reel', carrousel: 'Carrousel', story: 'Story', post: 'Post' };
 export const STATUTS = ['idee', 'brouillon', 'valide', 'programme', 'publie'];
 export const LIBELLES_STATUT = { idee: 'Idée', brouillon: 'Brouillon', valide: 'Validé', programme: 'Programmé', publie: 'Publié' };
-const EXIGE_EVALUATION = new Set(['valide', 'programme', 'publie']);
 
 export function nouvelId() {
   return `f-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
@@ -59,29 +59,23 @@ export function modifierFiche(fiche, changements, maintenant) {
       throw new Error(`Champ protégé : ${cle}`);
     }
   }
-  const resultat = { ...fiche, ...changements, modifiee_depuis_creation: true, maj_le: maintenant };
-  if ((resultat.statut === 'valide' || resultat.statut === 'programme') && aReevaluer(resultat)) {
-    Object.assign(resultat, { statut: 'brouillon' }, SANS_CONFIRMATION);
-  }
-  return resultat;
+  return { ...fiche, ...changements, modifiee_depuis_creation: true, maj_le: maintenant };
 }
 
+// Validation libre : aucun statut connu n'est bloqué, les avertissements sont dans avertissementsFiche.
 export function peutPasserA(f, cible) {
   if (!STATUTS.includes(cible)) return { ok: false, raison: `Statut inconnu : ${cible}` };
-  if (!EXIGE_EVALUATION.has(cible)) return { ok: true };
-  if (!f.visuel) return { ok: false, raison: 'Ajoute un visuel avant de valider.' };
-  if (f.format !== 'story' && !f.caption?.trim()) return { ok: false, raison: 'Ajoute une caption avant de valider.' };
-  if (!f.score) return { ok: false, raison: 'Évalue la fiche avant de la valider.' };
-  if (f.score.conformite?.etat === 'rouge') {
-    const causes = (f.score.conformite.causes ?? []).join(' ; ') || 'cause non précisée';
-    return { ok: false, raison: `Conformité au rouge : ${causes}.` };
-  }
-  const etat = f.score.conformite?.etat;
-  if (etat !== 'vert' && etat !== 'orange') {
-    return { ok: false, raison: 'Conformité non évaluée : réévalue la fiche.' };
-  }
-  if (aReevaluer(f)) return { ok: false, raison: 'La fiche a changé depuis son évaluation : réévalue-la.' };
   return { ok: true };
+}
+
+export function avertissementsFiche(fiche, regles) {
+  const avertissements = [];
+  if (!fiche.visuel) avertissements.push('Pas de visuel');
+  if (fiche.format !== 'story' && !fiche.caption?.trim()) avertissements.push('Pas de caption');
+  avertissements.push(...verifierRegles(fiche, regles).conformite.causes);
+  if (!fiche.score) avertissements.push('Pas encore analysée');
+  if (aReevaluer(fiche)) avertissements.push('Analyse dépassée : la fiche a changé depuis');
+  return avertissements;
 }
 
 export function changerStatut(fiche, cible, maintenant) {
@@ -135,9 +129,5 @@ export const formaterHashtags = tags => (tags ?? []).map(t => `#${t}`).join(' ')
 export const texteAPublier = f => [f.caption?.trim(), formaterHashtags(f.hashtags)].filter(Boolean).join('\n\n');
 
 export function appliquerEvaluation(fiche, { score, variantes, suggestions, recommandations }, maintenant) {
-  const resultat = { ...fiche, score, variantes, suggestions, recommandations, maj_le: maintenant };
-  if ((resultat.statut === 'valide' || resultat.statut === 'programme') && !peutPasserA(resultat, resultat.statut).ok) {
-    Object.assign(resultat, { statut: 'brouillon' }, SANS_CONFIRMATION);
-  }
-  return resultat;
+  return { ...fiche, score, variantes, suggestions, recommandations, maj_le: maintenant };
 }
