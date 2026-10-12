@@ -3,11 +3,14 @@ import { semainesDuMois, joursDeLaSemaine, debutMois, partiesLocales, cleJour } 
 import { LIBELLES_FORMAT } from '../logique/fiche.js';
 import { periodeAffichee } from '../logique/dossier.js';
 import { rangeeAnalyse, sectionAvis } from './panneau-analyse.js';
+import { categoriesDuProfil } from '../logique/categories.js';
+import { couleurCategorie } from './carte.js';
 
 const ENTETES = ['lun.', 'mar.', 'mer.', 'jeu.', 'ven.', 'sam.', 'dim.'];
 
 export function vueMois({ profil, fiches, ancre, analyse, analyses, avisOuverts }, actions, capacites = {}) {
   const fz = profil.regles_studio.fuseau;
+  const categories = categoriesDuProfil(profil);
   const moisCourant = partiesLocales(debutMois(ancre, fz), fz).mois;
   return h('div', { class: 'mois' },
     capacites.dossier ? rangeeAnalyse('Analyser le mois', analyse, actions) : null,
@@ -25,7 +28,7 @@ export function vueMois({ profil, fiches, ancre, analyse, analyses, avisOuverts 
         },
         h('span', { class: 'mois-num' }, String(p.jour)),
         h('span', { class: 'points' }, duJour.map(f => h('span', {
-          class: `point-format format-${f.format}`, title: `${LIBELLES_FORMAT[f.format]} · ${f.accroche || 'sans accroche'}`,
+          class: `point-format format-${f.format}`, style: { '--categorie': couleurCategorie(f, categories) }, title: `${LIBELLES_FORMAT[f.format]} · ${f.accroche || 'sans accroche'}`,
         }))));
       }))));
 }

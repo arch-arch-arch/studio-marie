@@ -2,6 +2,7 @@ import { h } from './h.js';
 import { LIBELLES_FORMAT, LIBELLES_STATUT, aReevaluer } from '../logique/fiche.js';
 import { heureLocale } from '../logique/dates.js';
 import { ACTIONS_SANS_SUITE } from '../logique/parcours.js';
+import { CATEGORIES, categorieAffichee } from '../logique/categories.js';
 
 const LIBELLES_ETAT = { vert: 'conforme à la cible', orange: 'à surveiller', rouge: 'hors cible' };
 
@@ -22,11 +23,18 @@ export function badgeScore(f) {
     perimee ? h('span', { class: 'point', 'aria-label': 'à réévaluer' }) : null);
 }
 
-export function carte(f, regles, actions, action = null) {
+// Couleur de la catégorie choisie ; une proposition ou une fiche non rangée donne le gris neutre.
+export function couleurCategorie(f, categories = CATEGORIES) {
+  const { cle, etat } = categorieAffichee(f);
+  if (etat !== 'choisie') return 'var(--trait)';
+  return categories.find(c => c.cle === cle)?.couleur ?? 'var(--trait)';
+}
+
+export function carte(f, regles, actions, action = null, categories = CATEGORIES) {
   const pilier = regles.piliers.find(p => p.cle === f.pilier);
   return h('article', {
     class: `carte statut-${f.statut}`, draggable: true, tabindex: '0', 'data-id': f.id,
-    style: { '--pilier': pilier?.couleur ?? 'var(--trait)' },
+    style: { '--categorie': couleurCategorie(f, categories) },
     ondragstart: e => e.dataTransfer?.setData('text/plain', f.id),
     onclick: () => actions.ouvrirFiche(f.id),
     onkeydown: e => { if (e.key === 'Enter') actions.ouvrirFiche(f.id); },
@@ -35,6 +43,7 @@ export function carte(f, regles, actions, action = null) {
     h('span', { class: 'format' }, LIBELLES_FORMAT[f.format]),
     h('span', { class: 'heure' }, heureLocale(f.date_heure, regles.fuseau))),
   h('p', { class: 'carte-accroche' }, f.accroche || 'Sans accroche'),
+  pilier ? h('p', { class: 'carte-pilier' }, pilier.nom) : null,
   action ? h('p', {
     class: ['carte-action', action.retard ? 'action-retard' : '', ACTIONS_SANS_SUITE.has(action.cle) ? 'action-calme' : ''].filter(Boolean).join(' '),
   }, action.libelle) : null,

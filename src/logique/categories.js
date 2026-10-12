@@ -53,7 +53,8 @@ export function categorieAffichee(fiche) {
 
 const selonFil = (n, cible) => (n >= cible ? 'vert' : n === cible - 1 ? 'orange' : 'rouge');
 const selonStories = (n, { min, max }) => (n >= min && n <= max ? 'vert' : n === min - 1 || n === max + 1 ? 'orange' : 'rouge');
-const libelleStories = (nom, n, { min, max }) => `${nom} : ${n} stories, objectif ${min === max ? min : `${min} à ${max}`}`;
+const libelleStories = (n, { min, max }) => `${n} ${n > 1 ? 'stories' : 'story'}, objectif ${min === max ? min : `${min} à ${max}`}`;
+const contenusFil = (n, cible) => `${n} sur ${cible} ${cible === 1 ? 'contenu du fil' : 'contenus du fil'}`;
 
 export function controlerCategories(fiches, profil, debutIso) {
   if (!profil?.categories_de_contenu) return [];
@@ -66,8 +67,8 @@ export function controlerCategories(fiches, profil, debutIso) {
       const n = choisies.filter(f => FIL.has(f.format)).length;
       pastilles.push({
         cle: `${c.cle}_fil`,
-        libelle: `${c.nom} : ${n} sur ${c.cible_fil} contenus du fil`,
-        valeur: String(n),
+        libelle: c.nom,
+        valeur: contenusFil(n, c.cible_fil),
         etat: selonFil(n, c.cible_fil),
       });
     }
@@ -75,8 +76,8 @@ export function controlerCategories(fiches, profil, debutIso) {
       const n = choisies.filter(f => f.format === 'story').length;
       pastilles.push({
         cle: `${c.cle}_stories`,
-        libelle: libelleStories(c.nom, n, c.cible_stories),
-        valeur: String(n),
+        libelle: c.nom,
+        valeur: libelleStories(n, c.cible_stories),
         etat: selonStories(n, c.cible_stories),
       });
     }

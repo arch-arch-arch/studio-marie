@@ -1,7 +1,8 @@
 import { h } from './h.js';
 import {
-  FORMATS, LIBELLES_FORMAT, STATUTS, LIBELLES_STATUT, analyserHashtags, formaterHashtags, texteAPublier, aReevaluer, effacementsPour,
+  FORMATS, LIBELLES_FORMAT, STATUTS, LIBELLES_STATUT, analyserHashtags, formaterHashtags, texteAPublier, aReevaluer, effacementsPour, avertissementsFiche,
 } from '../logique/fiche.js';
+import { CATEGORIES, propositionCategorie } from '../logique/categories.js';
 import { cleJour, heureLocale, depuisSaisieLocale } from '../logique/dates.js';
 import { RELEVES, CHAMPS_CONTENU, etatReleves, tauxAbonnesParVue, formaterValeur } from '../logique/indicateurs.js';
 import { prochaineAction, ACTIONS_SANS_SUITE } from '../logique/parcours.js';
@@ -33,6 +34,28 @@ export function panneauFiche(fiche, profil, actions, capacites, releves = []) {
     const nouveau = sectionScore();
     elementScore.replaceWith(nouveau);
     elementScore = nouveau;
+    majAvertissements();
+  };
+  // Validation libre : la liste d'avertissements se recalcule à chaque modification, sans bloquer le statut.
+  const zoneAvertissements = h('div', { class: 'zone-avertissements' });
+  const majAvertissements = () => {
+    const liste = avertissementsFiche(brouillon, r);
+    zoneAvertissements.replaceChildren(...(liste.length
+      ? [h('section', { class: 'avertissements' }, h('h3', {}, 'À vérifier avant de publier'), h('ul', {}, liste.map(a => h('li', {}, a))))]
+      : []));
+  };
+  // Catégorie : le menu reste celui de la fiche ; seule la proposition en dessous est recalculée.
+  const zoneProposition = h('div', { class: 'proposition-categorie' });
+  let selectCategorie = null;
+  const majCategorie = () => {
+    const proposition = propositionCategorie(brouillon);
+    zoneProposition.replaceChildren(...(proposition
+      ? [
+        h('p', { class: 'aide' }, `Proposée : ${CATEGORIES.find(c => c.cle === proposition.cle).nom} (${proposition.raison})`),
+        h('button', { type: 'button', class: 'bouton-secondaire', onclick: () => changer({ categorie: proposition.cle }) }, 'Confirmer'),
+      ]
+      : []));
+    if (selectCategorie) selectCategorie.value = brouillon.categorie ?? '';
   };
 
   async function evaluer() {
@@ -91,6 +114,8 @@ export function panneauFiche(fiche, profil, actions, capacites, releves = []) {
     const resultat = actions.modifierFiche(id, changements);
     if (resultat != null) appliquerStatutRenvoye(resultat.statut);
     majAction();
+    majAvertissements();
+    majCategorie();
   };
 
   const champ = (libelle, controle) => h('label', { class: 'champ' }, h('span', { class: 'champ-libelle' }, libelle), controle);
@@ -205,6 +230,12 @@ export function panneauFiche(fiche, profil, actions, capacites, releves = []) {
       type: 'button', class: s === brouillon.statut ? 'statut-bouton actif' : 'statut-bouton', 'aria-pressed': String(s === brouillon.statut),
       onclick: () => (s === 'programme' || s === 'publie' ? ouvrirConfirmation(s) : passerA(s)),
     }, LIBELLES_STATUT[s])));
+
+  const sectionCategorie = () => {
+    selectCategorie = selection('categorie', brouillon.categorie ?? '', [['', 'Non rangée'], ...CATEGORIES.map(c => [c.cle, c.nom])], v => changer({ categorie: v || null }));
+    majCategorie();
+    return h('div', { class: 'categorie-bloc' }, champ('Catégorie', selectCategorie), zoneProposition);
+  };
 
   const sectionType = () => h('div', { class: 'grille-champs' },
     champ('Format', selection('format', brouillon.format, FORMATS.map(f => [f, LIBELLES_FORMAT[f]]), v => {
@@ -389,11 +420,12 @@ export function panneauFiche(fiche, profil, actions, capacites, releves = []) {
     elementAction = sectionAction();
     elementStatut = sectionStatut();
     elementScore = sectionScore();
+    majAvertissements();
     racine.replaceChildren(
       h('header', { class: 'panneau-tete' },
         h('h2', {}, LIBELLES_FORMAT[brouillon.format]),
         h('button', { type: 'button', class: 'fermer', 'aria-label': 'Fermer la fiche', onclick: () => actions.fermerPanneau() }, '×')),
-      ...[elementAction, elementStatut, zoneConfirmation, sectionType(), sectionDate(), sectionVisuel(), sectionTexte(), elementScore, sectionStats(), message, sectionSuppression()].filter(Boolean));
+      ...[elementAction, zoneAvertissements, elementStatut, zoneConfirmation, sectionCategorie(), sectionType(), sectionDate(), sectionVisuel(), sectionTexte(), elementScore, sectionStats(), message, sectionSuppression()].filter(Boolean));
   }
 
   construire();

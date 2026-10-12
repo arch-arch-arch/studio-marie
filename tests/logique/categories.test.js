@@ -122,8 +122,8 @@ describe('controlerCategories', () => {
 
   it('pastilles exactes : cibles, non rangées ; proposée et hors semaine non comptées', () => {
     expect(controlerCategories(semaine(), profil, LUNDI)).toEqual([
-      { cle: 'attraction_fil', libelle: 'Attraction : 1 sur 3 contenus du fil', valeur: '1', etat: 'rouge' },
-      { cle: 'conversion_stories', libelle: 'Conversion : 2 stories, objectif 2 à 3', valeur: '2', etat: 'vert' },
+      { cle: 'attraction_fil', libelle: 'Attraction', valeur: '1 sur 3 contenus du fil', etat: 'rouge' },
+      { cle: 'conversion_stories', libelle: 'Conversion', valeur: '2 stories, objectif 2 à 3', etat: 'vert' },
       { cle: 'non_rangees', libelle: 'Non rangées', valeur: '2', etat: 'orange' },
     ]);
   });
@@ -145,9 +145,22 @@ describe('controlerCategories', () => {
   it('une catégorie avec les deux cibles donne deux pastilles', () => {
     const p = avecSection([{ cle: 'preuve', cible_fil: 1, cible_stories: { min: 1, max: 1 } }]);
     expect(controlerCategories([], p, LUNDI)).toEqual([
-      { cle: 'preuve_fil', libelle: 'Preuve : 0 sur 1 contenus du fil', valeur: '0', etat: 'orange' },
-      { cle: 'preuve_stories', libelle: 'Preuve : 0 stories, objectif 1', valeur: '0', etat: 'orange' },
+      { cle: 'preuve_fil', libelle: 'Preuve', valeur: '0 sur 1 contenu du fil', etat: 'orange' },
+      { cle: 'preuve_stories', libelle: 'Preuve', valeur: '0 story, objectif 1', etat: 'orange' },
     ]);
+  });
+
+  it('accord au singulier : « 1 story », « 1 sur 1 contenu du fil », « 0 sur 1 contenu du fil »', () => {
+    const p = avecSection([{ cle: 'desir', cible_fil: 1, cible_stories: { min: 1, max: 2 } }]);
+    const sortie = controlerCategories([fiche('story', JOURS[0], { categorie: 'desir' }), fiche('reel', JOURS[1], { categorie: 'desir' })], p, LUNDI);
+    expect(sortie.map(x => x.valeur)).toEqual(['1 sur 1 contenu du fil', '1 story, objectif 1 à 2']);
+    expect(controlerCategories([], p, LUNDI).map(x => x.valeur)).toEqual(['0 sur 1 contenu du fil', '0 story, objectif 1 à 2']);
+  });
+
+  it('Non rangées garde son libellé et sa valeur', () => {
+    const p = avecSection([{ cle: 'desir', cible_fil: 1 }]);
+    expect(controlerCategories([fiche('post', JOURS[0]), fiche('post', JOURS[1])], p, LUNDI).at(-1))
+      .toEqual({ cle: 'non_rangees', libelle: 'Non rangées', valeur: '2', etat: 'orange' });
   });
 
   it('profil sans section : []', () => {

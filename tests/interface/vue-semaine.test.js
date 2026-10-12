@@ -11,7 +11,7 @@ const reel = (id, date_heure, extra = {}) => ({ ...nouvelleFiche({ id, format: '
 describe('vueSemaine', () => {
   it('affiche le bandeau et 7 colonnes', () => {
     const el = vueSemaine({ profil: fictif, fiches: [], ancre: ANCRE }, actionsFactices());
-    expect(el.querySelectorAll('.bandeau .pastille')).toHaveLength(8);
+    expect(el.querySelectorAll('.bandeau .pastille')).toHaveLength(15);
     expect([...el.querySelectorAll('.jour')].map(j => j.dataset.jour)).toEqual(['2026-09-28', '2026-09-29', '2026-09-30', '2026-10-01', '2026-10-02', '2026-10-03', '2026-10-04']);
   });
 
@@ -22,7 +22,7 @@ describe('vueSemaine', () => {
     const c = colonne.querySelector('.carte');
     expect(c.textContent).toContain('Ma phrase');
     expect(c.textContent).toContain('18:00');
-    expect(c.style.getPropertyValue('--pilier')).toBe('#0b8574');
+    expect(c.style.getPropertyValue('--categorie')).toBe('var(--trait)');
     c.click();
     expect(actions.ouvrirFiche).toHaveBeenCalledWith('a');
   });
@@ -88,6 +88,56 @@ describe('vueSemaine', () => {
     const semainePassee = '2026-09-02T10:00:00.000Z';
     const el = vueSemaine({ profil: fictif, fiches: [], ancre: semainePassee, maintenant: ANCRE, bulletin: null }, actionsFactices());
     expect(el.querySelector('.sans-bulletin')).toBeNull();
+  });
+});
+
+describe('catégories dans la semaine', () => {
+  const NOMS = ['Attraction', 'Autorité', 'Connexion', 'Désir', 'Preuve', 'Conversion'];
+  const jour = (id, heure, extra = {}) => reel(id, `2026-10-01T${heure}:00:00.000Z`, extra);
+
+  it('la carte prend la couleur de sa catégorie choisie ; proposition ou rien : neutre', () => {
+    const el = vueSemaine({ profil: fictif, fiches: [jour('a', '10', { categorie: 'desir' }), jour('b', '12', { cta: true }), jour('c', '14')], ancre: ANCRE }, actionsFactices());
+    expect(el.querySelector('.carte[data-id="a"]').style.getPropertyValue('--categorie')).toBe('#b3125a');
+    expect(el.querySelector('.carte[data-id="b"]').style.getPropertyValue('--categorie')).toBe('var(--trait)');
+    expect(el.querySelector('.carte[data-id="c"]').style.getPropertyValue('--categorie')).toBe('var(--trait)');
+  });
+
+  it('le nom du pilier reste écrit sur la carte', () => {
+    const el = vueSemaine({ profil: fictif, fiches: [jour('a', '10', { categorie: 'desir' })], ancre: ANCRE }, actionsFactices());
+    expect(el.querySelector('.carte[data-id="a"]').textContent).toContain('Nuit');
+  });
+
+  it('ajoute une pastille par cible après les pastilles existantes, nom seul en libellé', () => {
+    const el = vueSemaine({ profil: fictif, fiches: [jour('a', '10', { categorie: 'attraction' })], ancre: ANCRE }, actionsFactices());
+    const pastilles = [...el.querySelectorAll('.bandeau .pastille')].map(p => [p.children[0].textContent, p.children[1].textContent]);
+    expect(pastilles).toHaveLength(15);
+    expect(pastilles.slice(8)).toEqual([
+      ['Attraction', '1 sur 3 contenus du fil'],
+      ['Autorité', '0 sur 2 contenus du fil'],
+      ['Connexion', '0 story, objectif 3 à 5'],
+      ['Désir', '0 sur 1 contenu du fil'],
+      ['Preuve', '0 sur 1 contenu du fil'],
+      ['Conversion', '0 sur 1 contenu du fil'],
+      ['Conversion', '0 story, objectif 2 à 3'],
+    ]);
+  });
+
+  it('légende « Catégories » sous le contrôle, avec les six noms et les couleurs du profil', () => {
+    const el = vueSemaine({ profil: fictif, fiches: [], ancre: ANCRE }, actionsFactices());
+    const legende = el.querySelector('.legende-categories');
+    expect(legende.textContent).toContain('Catégories');
+    for (const nom of NOMS) expect(legende.textContent).toContain(nom);
+    expect(legende.querySelector('[data-categorie="attraction"]').style.getPropertyValue('--categorie')).toBe('#d9622b');
+    expect(legende.querySelector('[data-categorie="desir"]').style.getPropertyValue('--categorie')).toBe('#b3125a');
+    expect(el.querySelector('.bandeau').nextElementSibling).toBe(legende);
+  });
+
+  it('profil sans section : ni pastille ni légende nouvelles', () => {
+    const sans = structuredClone(fictif);
+    delete sans.categories_de_contenu;
+    const el = vueSemaine({ profil: sans, fiches: [jour('a', '10', { categorie: 'desir' })], ancre: ANCRE }, actionsFactices());
+    expect(el.querySelectorAll('.bandeau .pastille')).toHaveLength(8);
+    expect(el.querySelector('.legende-categories')).toBeNull();
   });
 });
 

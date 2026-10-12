@@ -1,6 +1,7 @@
 import { h } from './h.js';
 import { carte } from './carte.js';
 import { cleJour, heureLocale, depuisSaisieLocale } from '../logique/dates.js';
+import { categoriesDuProfil } from '../logique/categories.js';
 
 export function vueJour({ profil, fiches, ancre }, actions) {
   const r = profil.regles_studio;
@@ -10,7 +11,7 @@ export function vueJour({ profil, fiches, ancre }, actions) {
     duJour.length
       ? h('ol', { class: 'frise' }, duJour.map(f => h('li', { class: 'frise-ligne' },
         h('span', { class: 'frise-heure' }, heureLocale(f.date_heure, r.fuseau)),
-        carte(f, r, actions))))
+        carte(f, r, actions, null, categoriesDuProfil(profil)))))
       : h('p', { class: 'aide' }, 'Rien de prévu ce jour-là.'),
     h('button', {
       type: 'button', class: 'bouton-secondaire',

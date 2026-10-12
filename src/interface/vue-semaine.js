@@ -7,6 +7,7 @@ import { LIBELLES_FORMAT } from '../logique/fiche.js';
 import { prochaineAction, ACTIONS_SANS_SUITE } from '../logique/parcours.js';
 import { periodeAffichee } from '../logique/dossier.js';
 import { rangeeAnalyse, sectionAvis } from './panneau-analyse.js';
+import { controlerCategories, categoriesDuProfil } from '../logique/categories.js';
 
 export function vueSemaine({ profil, fiches, ancre, maintenant, bulletin, stats, analyse, analyses, avisOuverts }, actions, capacites = {}) {
   const r = profil.regles_studio;
@@ -16,18 +17,29 @@ export function vueSemaine({ profil, fiches, ancre, maintenant, bulletin, stats,
   const semainePassee = maintenant != null && debut < debutSemaine(maintenant, r.fuseau);
   const maintenantIso = maintenant ?? new Date().toISOString();
   const actionsParId = new Map(semaine.map(f => [f.id, prochaineAction(f, (stats ?? []).filter(s => s.fiche === f.id), maintenantIso, r.fuseau, r)]));
+  const categories = categoriesDuProfil(profil);
   return h('div', { class: 'semaine' },
     capacites.dossier ? rangeeAnalyse('Analyser la semaine', analyse, actions) : null,
     sectionAvis(analyses, periodeAffichee('semaine', ancre, r.fuseau), fiches, r.fuseau, avisOuverts),
     bulletin === null && !semainePassee
       ? h('p', { class: 'sans-bulletin' }, 'Pas de bulletin pour cette semaine. ', h('button', { type: 'button', class: 'bouton-lien', onclick: () => actions.changerVue('bulletin') }, 'Voir l’onglet Bulletin'))
       : null,
-    bandeau(controlerSemaine(fiches, r, debut)),
+    bandeau([...controlerSemaine(fiches, r, debut), ...controlerCategories(fiches, profil, debut)]),
+    legendeCategories(profil, categories),
     aFaire(semaine, actionsParId, r.fuseau, actions),
-    h('div', { class: 'colonnes' }, joursDeLaSemaine(debut, r.fuseau).map(jour => colonne(jour, semaine, libres, r, actions, actionsParId))));
+    h('div', { class: 'colonnes' }, joursDeLaSemaine(debut, r.fuseau).map(jour => colonne(jour, semaine, libres, r, actions, actionsParId, categories))));
 }
 
-function colonne(jour, semaine, libres, r, actions, actionsParId) {
+// Légende sous le contrôle, seulement quand le profil a la section des catégories.
+function legendeCategories(profil, categories) {
+  if (!profil.categories_de_contenu) return null;
+  return h('div', { class: 'legende-categories', role: 'group', 'aria-label': 'Catégories' },
+    h('span', { class: 'legende-titre' }, 'Catégories'),
+    categories.map(c => h('span', { class: 'legende-item', 'data-categorie': c.cle, style: { '--categorie': c.couleur } },
+      h('span', { class: 'legende-pastille', 'aria-hidden': 'true' }), c.nom)));
+}
+
+function colonne(jour, semaine, libres, r, actions, actionsParId, categories) {
   const fz = r.fuseau;
   const cle = cleJour(jour, fz);
   const duJour = semaine.filter(f => cleJour(f.date_heure, fz) === cle).sort((a, b) => a.date_heure.localeCompare(b.date_heure));
@@ -44,7 +56,7 @@ function colonne(jour, semaine, libres, r, actions, actionsParId) {
     },
   },
   h('h3', { class: 'jour-titre' }, libelleJour(jour, fz)),
-  duJour.map(f => carte(f, r, actions, actionsParId.get(f.id))),
+  duJour.map(f => carte(f, r, actions, actionsParId.get(f.id), categories)),
   vides.map(c => h('button', {
     type: 'button', class: 'creneau-vide',
     onclick: () => actions.creerFiche({ format: c.format, date_heure: c.date_heure }),

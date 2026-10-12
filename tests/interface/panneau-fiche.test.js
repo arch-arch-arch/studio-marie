@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import fictif from '../../exemples/profil-fictif.json';
-import { nouvelleFiche, empreinte } from '../../src/logique/fiche.js';
+import { nouvelleFiche, empreinte, avertissementsFiche } from '../../src/logique/fiche.js';
 import { panneauFiche } from '../../src/interface/panneau-fiche.js';
 
 const fiche = (extra = {}) => ({ ...nouvelleFiche({ id: 'f1', format: 'reel', date_heure: '2026-09-28T10:00:00.000Z', pilier: 'socio', maintenant: 'x' }), ...extra });
@@ -533,5 +533,78 @@ describe('score venu d’un dossier', () => {
     expect([...p.querySelectorAll('h3')].some(h => h.textContent === 'Avis de ChatGPT : 61/100')).toBe(true);
     expect(p.querySelector('details.examen summary').textContent).toBe('Ce que l’assistant a examiné');
     expect(p.querySelector('details.examen li').textContent).toBe('Analyse par dossier (ChatGPT).');
+  });
+});
+
+describe('catégorie de la fiche', () => {
+  const NOMS = ['Non rangée', 'Attraction', 'Autorité', 'Connexion', 'Désir', 'Preuve', 'Conversion'];
+
+  it('propose un menu « Catégorie » avec « Non rangée » puis les six noms', () => {
+    const p = panneauFiche(fiche(), fictif, actionsFactices(), { assets: true });
+    expect([...p.querySelector('select[name="categorie"]').options].map(o => o.textContent)).toEqual(NOMS);
+  });
+
+  it('choisir « Désir » enregistre categorie: desir, « Non rangée » enregistre null', () => {
+    const actions = actionsFactices();
+    const p = panneauFiche(fiche(), fictif, actions, { assets: true });
+    saisir(p.querySelector('select[name="categorie"]'), 'desir', 'change');
+    expect(actions.modifierFiche).toHaveBeenLastCalledWith('f1', { categorie: 'desir' });
+    saisir(p.querySelector('select[name="categorie"]'), '', 'change');
+    expect(actions.modifierFiche).toHaveBeenLastCalledWith('f1', { categorie: null });
+  });
+
+  it('règle porte : propose Conversion ; « Confirmer » range la fiche', () => {
+    const actions = actionsFactices();
+    const p = panneauFiche(fiche({ porte: true }), fictif, actions, { assets: true });
+    expect(p.textContent).toContain('Proposée : Conversion (règle : mène vers l’offre)');
+    bouton(p, 'Confirmer').click();
+    expect(actions.modifierFiche).toHaveBeenCalledWith('f1', { categorie: 'conversion' });
+    expect(p.querySelector('select[name="categorie"]').value).toBe('conversion');
+    expect(p.textContent).not.toContain('Proposée :');
+  });
+
+  it('proposition de l’analyse : « (proposée par l’analyse) »', () => {
+    const p = panneauFiche(fiche({ categorie_proposee: { cle: 'preuve', source: 'analyse' } }), fictif, actionsFactices(), { assets: true });
+    expect(p.textContent).toContain('Proposée : Preuve (proposée par l’analyse)');
+  });
+
+  it('fiche rangée : aucune proposition, même si une règle s’applique', () => {
+    const p = panneauFiche(fiche({ porte: true, categorie: 'desir' }), fictif, actionsFactices(), { assets: true });
+    expect(p.textContent).not.toContain('Proposée');
+    expect(bouton(p, 'Confirmer')).toBeUndefined();
+  });
+});
+
+describe('avertissements de la fiche', () => {
+  const titre = p => [...p.querySelectorAll('.avertissements h3')].map(h => h.textContent);
+  const textes = p => [...p.querySelectorAll('.avertissements li')].map(l => l.textContent);
+
+  it('liste « À vérifier avant de publier » avec les textes de avertissementsFiche', () => {
+    const f = fiche({ caption: '' });
+    const p = panneauFiche(f, fictif, actionsFactices(), { assets: true });
+    expect(titre(p)).toEqual(['À vérifier avant de publier']);
+    expect(textes(p)).toEqual(avertissementsFiche(f, fictif.regles_studio));
+    expect(textes(p)).toContain('Pas de visuel');
+  });
+
+  it('absente quand la liste est vide', () => {
+    const base = fiche({ visuel: 'v.jpg', caption: 'Une phrase.', accroche: 'Accroche' });
+    const f = { ...base, score: { total: 70, conformite: { etat: 'vert', causes: [] }, empreinte: empreinte(base) } };
+    expect(avertissementsFiche(f, fictif.regles_studio)).toEqual([]);
+    const p = panneauFiche(f, fictif, actionsFactices(), { assets: true });
+    expect(p.querySelector('.avertissements')).toBeNull();
+  });
+
+  it('recalculée à chaque modification', () => {
+    const p = panneauFiche(fiche({ caption: '' }), fictif, actionsFactices(), { assets: true });
+    expect(textes(p)).toContain('Pas de caption');
+    saisir(p.querySelector('textarea[name="caption"]'), 'Bonjour.');
+    expect(textes(p)).not.toContain('Pas de caption');
+  });
+
+  it('« Passer en Validé » reste actif malgré les avertissements', () => {
+    const p = panneauFiche(fiche(), fictif, actionsFactices(), { assets: true });
+    expect(textes(p).length).toBeGreaterThan(0);
+    expect(bouton(p, 'Validé').disabled).toBe(false);
   });
 });

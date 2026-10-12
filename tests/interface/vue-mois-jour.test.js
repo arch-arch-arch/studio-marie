@@ -24,6 +24,18 @@ describe('vueMois', () => {
   });
 });
 
+describe('couleurs de catégorie (Mois)', () => {
+  it('chaque point prend la couleur de sa catégorie choisie ; proposition ou rien : neutre', () => {
+    const el = vueMois({
+      profil: fictif,
+      fiches: [{ ...f('a', 'reel', '2026-10-01T10:00:00.000Z'), categorie: 'desir' }, { ...f('b', 'story', '2026-10-01T17:00:00.000Z'), cta: true }],
+      ancre: '2026-10-15T10:00:00.000Z',
+    }, actionsFactices());
+    const points = el.querySelectorAll('.mois-jour')[3].querySelectorAll('.point-format');
+    expect([...points].map(p => p.style.getPropertyValue('--categorie'))).toEqual(['#b3125a', 'var(--trait)']);
+  });
+});
+
 describe('vueJour', () => {
   it('liste les contenus du jour dans l’ordre des heures', () => {
     const el = vueJour({ profil: fictif, fiches: [f('b', 'story', '2026-09-28T17:00:00.000Z', 'soir'), f('a', 'reel', '2026-09-28T10:00:00.000Z', 'midi'), f('c', 'reel', '2026-09-29T10:00:00.000Z', 'lendemain')], ancre: '2026-09-28T08:00:00.000Z' }, actionsFactices());
