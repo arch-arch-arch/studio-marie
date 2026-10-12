@@ -176,7 +176,7 @@ Elles sont toutes détaillées dans le registre de chaque plan (`.superpowers/sd
 - **Interface :** l'onglet Tableau de bord se met à jour sans reconstruire le formulaire du relevé du compte. `replaceChildren` natif n'aplatit pas les tableaux et affiche « null » : on ne lui passe que des nœuds filtrés.
 - **Veille :** elle lit `stats_contenu` et `releves_compte` par des requêtes bornées, et `--maintenant` est normalisé en ISO.
 - **Studio de test :** profil fictif v2 avec cibles, et relevés fictifs (`exemples/stats-fictives.json`).
-- **Studio réel :** page publiée ; cibles validées par Jean et écrites dans la base (profil version 2, la version 1 archivée) : 0,3 % d'abonnés par vue, 20 partages et envois par post, +125 abonnés nets par semaine, pas de cible de clics sur la porte.
+- **Studio réel :** page publiée ; cibles validées par Jean et écrites dans la base (profil version 2, la version 1 archivée) (valeurs dans la base uniquement, jamais dans le dépôt).
 
 ### Plan 5 : décisions prises à l'exécution
 - **Confirmations :** « Programmé » et « Publié » s'obtiennent par un formulaire daté avec une case obligatoire ; le contrôleur refuse de changer ces statuts sans confirmation. Programmation refusée dans le passé, publication refusée au-delà de maintenant + 5 min.
