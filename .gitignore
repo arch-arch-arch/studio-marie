@@ -1,6 +1,7 @@
 # Secrets (tokens Meta / Instagram)
 .env
 .env.*
+!.env.example
 *.key
 secrets/
 
@@ -28,4 +29,8 @@ veille-tmp/
 
 # Build et adresses locales des studios
 dist/
+public/
 .studio.local.json
+
+# Liaison locale avec le projet Vercel
+.vercel/

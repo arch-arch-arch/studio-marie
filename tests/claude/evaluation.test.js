@@ -126,6 +126,9 @@ describe('messageErreurSample', () => {
     expect(CODES_INDISPONIBLES.has('not_granted')).toBe(true);
     expect(CODES_INDISPONIBLES.has('rate_limited')).toBe(false);
   });
+  it('invite à se reconnecter quand la session a expiré', () => {
+    expect(messageErreurSample({ code: 'session_expired' })).toBe('Ta session a expiré : reconnecte-toi, puis réessaie.');
+  });
   it('rend une chaîne vide pour une annulation', () => {
     expect(messageErreurSample({ code: 'cancelled' })).toBe('');
   });

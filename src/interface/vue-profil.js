@@ -28,6 +28,11 @@ export function vueProfil({ profil, reference = [], resultatReference = null, ve
     enfants.push(ref.element);
   }
 
+  if (capacites.connexion) {
+    enfants.push(h('section', { class: 'compte' },
+      h('button', { type: 'button', class: 'bouton-secondaire', onclick: () => actions.seDeconnecter() }, 'Se déconnecter')));
+  }
+
   enfants.push(extras.sauvegarde ?? sectionSauvegarde(actions, capacites));
 
   const racine = h('div', { class: 'profil' }, ...enfants);

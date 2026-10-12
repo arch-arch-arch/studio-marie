@@ -137,6 +137,25 @@ describe('évaluation dans le panneau', () => {
     };
   };
 
+  it('passe finale C1 : affiche 0 ou 1 variante sans planter', () => {
+    const sans = panneauFiche({ ...evaluee(), variantes: [] }, fictif, actionsFactices(), { assets: true, sample: true });
+    expect(sans.textContent).not.toContain('Captions proposées');
+    expect(sans.textContent).toContain('Acc 1');
+    const une = panneauFiche({ ...evaluee(), variantes: [{ role: 'cta', texte: 'Seule variante' }] }, fictif, actionsFactices(), { assets: true, sample: true });
+    expect([...une.querySelectorAll('.suggestion-role')].map(x => x.textContent)).toHaveLength(1);
+    expect(une.textContent).toContain('Seule variante');
+  });
+
+  it('passe finale D2 : le champ des hashtags enregistre à chaque frappe sans reformater le texte', () => {
+    const actions = actionsFactices();
+    const p = panneauFiche(fiche(), fictif, actions, { assets: true });
+    const champ = p.querySelector('input[name="hashtags"]');
+    saisir(champ, '#nuit so', 'input');
+    expect(actions.modifierFiche).toHaveBeenLastCalledWith('f1', { hashtags: ['nuit', 'so'] });
+    expect(champ.value).toBe('#nuit so');
+    saisir(champ, '#nuit socio', 'input');
+    expect(actions.modifierFiche).toHaveBeenLastCalledWith('f1', { hashtags: ['nuit', 'socio'] });
+  });
   it('masque « Évaluer » sans la capacité sample', () => {
     const p = panneauFiche(fiche(), fictif, actionsFactices(), { assets: true, sample: false });
     expect(bouton(p, 'Évaluer')).toBeUndefined();
@@ -463,5 +482,55 @@ describe('avis de Claude', () => {
     expect(items[2].textContent).toBe('Ancienne.');
     expect(p.textContent).not.toContain('[object Object]');
     expect(p.textContent).not.toContain('null');
+  });
+});
+
+describe('visuel signé', () => {
+  it('affiche le visuel avec le lien fourni par le contrôleur', async () => {
+    const actions = { ...actionsFactices(), urlVisuel: vi.fn(async id => `https://stockage.test/${id}?jeton=1`) };
+    const p = panneauFiche(fiche({ visuel: 'a.png', visuel_type: 'image' }), fictif, actions, { assets: true });
+    await vi.waitFor(() => expect(p.querySelector('img.apercu')?.getAttribute('src')).toBe('https://stockage.test/a.png?jeton=1'));
+  });
+  it('garde le chemin d’Artifact sans cette action', () => {
+    const p = panneauFiche(fiche({ visuel: 'a1', visuel_type: 'image' }), fictif, actionsFactices(), { assets: true });
+    expect(p.querySelector('img.apercu').getAttribute('src')).toBe('/_blob/a1');
+  });
+  it('signale un visuel introuvable', async () => {
+    const actions = { ...actionsFactices(), urlVisuel: vi.fn(async () => { throw Object.assign(new Error('x'), { code: 'not_found' }); }) };
+    const p = panneauFiche(fiche({ visuel: 'a.png', visuel_type: 'image' }), fictif, actions, { assets: true });
+    await vi.waitFor(() => expect(p.querySelector('.zone-visuel').textContent).toContain('Visuel introuvable.'));
+  });
+  it('signale un visuel indisponible quand l’échec n’est pas un fichier absent', async () => {
+    const actions = { ...actionsFactices(), urlVisuel: vi.fn(async () => { throw new Error('x'); }) };
+    const p = panneauFiche(fiche({ visuel: 'a.png', visuel_type: 'image' }), fictif, actions, { assets: true });
+    await vi.waitFor(() => expect(p.querySelector('.zone-visuel p[role="status"]')?.textContent).toBe('Visuel indisponible pour l’instant : réessaie.'));
+  });
+  it('n’ajoute aucun avis quand le lien arrive bien', async () => {
+    const actions = { ...actionsFactices(), urlVisuel: vi.fn(async id => `https://stockage.test/${id}`) };
+    const p = panneauFiche(fiche({ visuel: 'a.png', visuel_type: 'image' }), fictif, actions, { assets: true });
+    await vi.waitFor(() => expect(p.querySelector('img.apercu').getAttribute('src')).toBe('https://stockage.test/a.png'));
+    expect(p.querySelector('.zone-visuel p[role="status"]')).toBeNull();
+  });
+  it('redemande le lien une seule fois quand l’aperçu échoue', async () => {
+    let n = 0;
+    const actions = { ...actionsFactices(), urlVisuel: vi.fn(async id => `https://stockage.test/${id}?n=${++n}`) };
+    const p = panneauFiche(fiche({ visuel: 'a.png', visuel_type: 'image' }), fictif, actions, { assets: true });
+    await vi.waitFor(() => expect(p.querySelector('img.apercu').getAttribute('src')).toBe('https://stockage.test/a.png?n=1'));
+    p.querySelector('img.apercu').dispatchEvent(new Event('error'));
+    await vi.waitFor(() => expect(p.querySelector('img.apercu').getAttribute('src')).toBe('https://stockage.test/a.png?n=2'));
+    expect(actions.urlVisuel).toHaveBeenCalledTimes(2);
+    p.querySelector('img.apercu').dispatchEvent(new Event('error'));
+    await vi.waitFor(() => expect(p.querySelector('.zone-visuel p[role="status"]')?.textContent).toBe('Visuel indisponible pour l’instant : réessaie.'));
+    expect(actions.urlVisuel).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('score venu d’un dossier', () => {
+  it('nomme l’assistant dans le titre et la section', () => {
+    const score = { total: 61, criteres: [], conformite: { etat: 'vert', causes: [] }, alertes: [], version_profil: 1, evalue_le: '2026-10-01T08:00:00.000Z', empreinte: 'x', examen: { visuel: 'joint', raison_visuel: null, version_profil: 1, sections_profil: [], contenus_semaine: 4, alertes_calculees: 0, blocages_calcules: 0, source: 'dossier', assistant: 'chatgpt' } };
+    const p = panneauFiche(fiche({ score }), fictif, actionsFactices(), { assets: false });
+    expect([...p.querySelectorAll('h3')].some(h => h.textContent === 'Avis de ChatGPT : 61/100')).toBe(true);
+    expect(p.querySelector('details.examen summary').textContent).toBe('Ce que l’assistant a examiné');
+    expect(p.querySelector('details.examen li').textContent).toBe('Analyse par dossier (ChatGPT).');
   });
 });

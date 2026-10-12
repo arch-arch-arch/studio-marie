@@ -5,7 +5,7 @@ import {
 import { cleJour, heureLocale, depuisSaisieLocale } from '../logique/dates.js';
 import { RELEVES, CHAMPS_CONTENU, etatReleves, tauxAbonnesParVue, formaterValeur } from '../logique/indicateurs.js';
 import { prochaineAction, ACTIONS_SANS_SUITE } from '../logique/parcours.js';
-import { lignesExamen } from '../logique/score.js';
+import { lignesExamen, nomAssistant } from '../logique/score.js';
 
 const ROLES = [['', '—'], ['engagement', 'Engagement'], ['cta', "Appel à l'action"], ['deadpan', 'Deadpan']];
 const LIBELLES_ROLE = { engagement: 'Engagement', cta: "Appel à l'action", deadpan: 'Deadpan' };
@@ -233,10 +233,31 @@ export function panneauFiche(fiche, profil, actions, capacites, releves = []) {
 
   const sectionVisuel = () => {
     if (!capacites.assets) return h('p', { class: 'aide' }, 'Le téléversement de visuels n’est pas disponible dans cette vue.');
-    const source = brouillon.visuel ? `/_blob/${brouillon.visuel}` : null;
-    const apercu = !source ? null : brouillon.visuel_type === 'video'
-      ? h('video', { class: 'apercu', src: source, controls: true })
-      : h('img', { class: 'apercu', src: source, alt: 'Visuel de la fiche' });
+    let apercu = null;
+    if (brouillon.visuel) {
+      apercu = brouillon.visuel_type === 'video'
+        ? h('video', { class: 'apercu', controls: true })
+        : h('img', { class: 'apercu', alt: 'Visuel de la fiche' });
+      if (typeof actions.urlVisuel === 'function') {
+        let avis = null;
+        let redemande = false;
+        const echec = e => {
+          if (avis) return;
+          avis = h('p', { class: 'aide', role: 'status' }, e?.code === 'not_found' ? 'Visuel introuvable.' : 'Visuel indisponible pour l’instant : réessaie.');
+          apercu.after(avis);
+        };
+        const charger = () => actions.urlVisuel(brouillon.visuel).then(url => { apercu.setAttribute('src', url); }, echec);
+        // Le lien signé dure une heure : une seule nouvelle demande si l'aperçu échoue.
+        apercu.addEventListener('error', () => {
+          if (redemande) { echec(null); return; }
+          redemande = true;
+          charger();
+        });
+        charger();
+      } else {
+        apercu.setAttribute('src', `/_blob/${brouillon.visuel}`);
+      }
+    }
     return h('div', {
       class: 'zone-visuel',
       ondragover: e => e.preventDefault(),
@@ -251,14 +272,14 @@ export function panneauFiche(fiche, profil, actions, capacites, releves = []) {
   const sectionTexte = () => h('div', { class: 'textes' },
     champ('Accroche', h('textarea', { name: 'accroche', rows: 2, value: brouillon.accroche, oninput: e => changer({ accroche: e.target.value }) })),
     champ('Caption', h('textarea', { name: 'caption', rows: 6, value: brouillon.caption, oninput: e => changer({ caption: e.target.value }) })),
-    champ('Hashtags', h('input', { type: 'text', name: 'hashtags', placeholder: '#mot #autre', value: formaterHashtags(brouillon.hashtags), onchange: e => changer({ hashtags: analyserHashtags(e.target.value) }) })),
+    champ('Hashtags', h('input', { type: 'text', name: 'hashtags', placeholder: '#mot #autre', value: formaterHashtags(brouillon.hashtags), oninput: e => changer({ hashtags: analyserHashtags(e.target.value) }), onchange: e => changer({ hashtags: analyserHashtags(e.target.value) }) })),
     champ('Géotag (ville)', h('input', { type: 'text', name: 'geotag', maxlength: 200, value: brouillon.geotag, oninput: e => changer({ geotag: e.target.value }) })),
     h('button', { type: 'button', class: 'bouton-principal', onclick: copier }, 'Copier la caption et les hashtags'));
 
   const sectionScore = () => {
     const s = brouillon.score;
     const enfants = [
-      h('h3', {}, s ? `Avis de Claude : ${s.total}/100` : 'Avis de Claude'),
+      h('h3', {}, s ? `Avis de ${nomAssistant(s.examen)} : ${s.total}/100` : 'Avis de Claude'),
       h('p', { class: 'aide' }, 'Avis d’expert, pas une prédiction de performance.'),
     ];
     if (!s) enfants.push(h('p', { class: 'aide' }, 'Pas encore évaluée.'));
@@ -270,7 +291,7 @@ export function panneauFiche(fiche, profil, actions, capacites, releves = []) {
         `Conformité : ${LIBELLES_CONFORMITE[etat] ?? 'non évaluée'}.`, causes.length ? ` ${causes.join(' ; ')}` : ''));
       enfants.push(h('ul', { class: 'criteres' }, (s.criteres ?? []).map(c => h('li', {}, `${c.nom} : ${c.points}/${c.max}. ${c.phrase ?? ''}`))));
       if (s.alertes?.length) enfants.push(h('h4', {}, 'Alertes'), h('ul', { class: 'alertes' }, s.alertes.map(a => h('li', {}, a))));
-      enfants.push(h('details', { class: 'examen' }, h('summary', {}, 'Ce que Claude a examiné'),
+      enfants.push(h('details', { class: 'examen' }, h('summary', {}, s.examen?.source === 'dossier' ? 'Ce que l’assistant a examiné' : 'Ce que Claude a examiné'),
         h('ul', {}, lignesExamen(s.examen).map(l => h('li', {}, l)))));
     }
     if (brouillon.recommandations?.length) {

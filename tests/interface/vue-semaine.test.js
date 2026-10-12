@@ -129,3 +129,74 @@ describe('parcours dans la semaine', () => {
     expect(avec.textContent).not.toContain('null');
   });
 });
+
+describe('analyse par dossier', () => {
+  const etat = (plus = {}) => ({ profil: fictif, fiches: [], ancre: ANCRE, ...plus });
+  const bouton = el => [...el.querySelectorAll('button')].find(x => x.textContent === 'Analyser la semaine');
+  const boutonRetour = el => [...el.querySelectorAll('button')].find(x => x.textContent === 'Coller un retour');
+  it('propose le bouton quand la capacité existe', () => {
+    const a = { ...actionsFactices(), ouvrirAnalyse: vi.fn() };
+    bouton(vueSemaine(etat(), a, { dossier: true })).click();
+    expect(a.ouvrirAnalyse).toHaveBeenCalled();
+    expect(bouton(vueSemaine(etat(), a, {}))).toBeUndefined();
+    expect(bouton(vueSemaine(etat(), a))).toBeUndefined();
+  });
+  it('désactive les boutons tant qu’un panneau d’analyse est ouvert', () => {
+    const a = { ...actionsFactices(), ouvrirAnalyse: vi.fn() };
+    expect(bouton(vueSemaine(etat({ analyse: { etape: 'preparation' } }), a, { dossier: true })).disabled).toBe(true);
+    expect(bouton(vueSemaine(etat({ analyse: { etape: 'pret' } }), a, { dossier: true })).disabled).toBe(true);
+    expect(bouton(vueSemaine(etat({ analyse: { etape: 'retour' } }), a, { dossier: true })).disabled).toBe(true);
+    expect(boutonRetour(vueSemaine(etat({ analyse: { etape: 'pret' } }), a, { dossier: true })).disabled).toBe(true);
+    expect(bouton(vueSemaine(etat({ analyse: null }), a, { dossier: true })).disabled).toBe(false);
+  });
+  it('affiche l’avis de la période', () => {
+    const periode = { type: 'semaine', cle: '2026-W40' };
+    const analyses = [{ id: 'D-1', periode, assistant: 'claude', fiches: [], retour: { recu_le: '2026-09-30T10:00:00.000Z', avis: 'Bonne semaine', points_forts: [], risques: [], ordre_conseille: [] } }];
+    const el = vueSemaine(etat({ analyses }), actionsFactices(), { dossier: true });
+    expect(el.querySelector('details.avis-periode').textContent).toContain('Bonne semaine');
+    expect(vueSemaine(etat({ analyses: [] }), actionsFactices(), { dossier: true }).querySelector('.avis-periode')).toBeNull();
+  });
+});
+
+describe('coller un retour (Semaine)', () => {
+  it('propose « Coller un retour » avec la capacité, sans elle non', () => {
+    const a = { ...actionsFactices(), ouvrirAnalyse: vi.fn(), ouvrirRetour: vi.fn() };
+    const trouver = el => [...el.querySelectorAll('button')].find(x => x.textContent === 'Coller un retour');
+    const b = trouver(vueSemaine({ profil: fictif, fiches: [], ancre: ANCRE }, a, { dossier: true }));
+    expect(b.className).toBe('bouton-secondaire');
+    b.click();
+    expect(a.ouvrirRetour).toHaveBeenCalled();
+    expect(trouver(vueSemaine({ profil: fictif, fiches: [], ancre: ANCRE }, a, {}))).toBeUndefined();
+  });
+});
+
+describe('libellé « Évaluer » selon les capacités', () => {
+  const M = '2026-09-30T08:00:00.000Z';
+  const prete = reel('a', '2026-09-29T10:00:00.000Z', { accroche: 'Prête', caption: 'x', visuel: 'v.jpg' });
+  const perimee = { ...prete, id: 'b', accroche: 'Périmée', caption: 'changée', score: { total: 70, conformite: { etat: 'vert', causes: [] }, empreinte: empreinte(prete) } };
+  const rendre = capacites => vueSemaine({ profil: fictif, fiches: [prete, perimee], ancre: ANCRE, maintenant: M, stats: [] }, actionsFactices(), capacites);
+
+  it('affiche « Analyser la semaine » sans sample et avec dossier', () => {
+    const el = rendre({ dossier: true });
+    const lignes = [...el.querySelectorAll('.a-faire li')];
+    expect(lignes).toHaveLength(2);
+    for (const l of lignes) {
+      expect(l.querySelector('strong').textContent).toBe('Analyser la semaine');
+      expect(l.classList.contains('action-retard')).toBe(true);
+    }
+    expect(el.querySelector('.carte[data-id="a"] .carte-action').textContent).toBe('Analyser la semaine');
+    expect(el.querySelector('.carte[data-id="b"] .carte-action').textContent).toBe('Analyser la semaine');
+  });
+
+  it('garde « Évaluer » et « Réévaluer » avec sample', () => {
+    const el = rendre({ sample: true, dossier: true });
+    const textes = [...el.querySelectorAll('.a-faire li strong')].map(s => s.textContent);
+    expect(textes).toEqual(['Évaluer', 'Réévaluer']);
+    expect(el.querySelector('.carte[data-id="a"] .carte-action').textContent).toBe('Évaluer');
+  });
+
+  it('garde « Évaluer » sans aucune des deux capacités', () => {
+    const el = rendre({});
+    expect([...el.querySelectorAll('.a-faire li strong')].map(s => s.textContent)).toEqual(['Évaluer', 'Réévaluer']);
+  });
+});

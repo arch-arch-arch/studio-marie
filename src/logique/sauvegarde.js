@@ -1,7 +1,7 @@
 import { cleJour } from './dates.js';
 import { validerProfil } from './profil.js';
 
-export const COLLECTIONS_EXPORT = ['profil', 'profil_archives', 'fiches', 'bulletins', 'stats_contenu', 'releves_compte', 'reference', 'reference_resultats', 'config'];
+export const COLLECTIONS_EXPORT = ['profil', 'profil_archives', 'fiches', 'bulletins', 'stats_contenu', 'releves_compte', 'reference', 'reference_resultats', 'config', 'analyses'];
 const FORMAT = 'studio-contenu-export';
 const VERSION = 1;
 const NOTE = 'Les visuels ne sont pas inclus : seuls leurs identifiants le sont.';
@@ -52,7 +52,7 @@ export function validerExport(e) {
 const LIBELLES_COLLECTIONS = {
   profil: 'profil', profil_archives: 'archives de profil', fiches: 'fiches', bulletins: 'bulletins',
   stats_contenu: 'relevés de contenu', releves_compte: 'relevés du compte', reference: 'jeu de référence',
-  reference_resultats: 'bilan de référence', config: 'réglages',
+  reference_resultats: 'bilan de référence', config: 'réglages', analyses: 'analyses',
 };
 
 export function resumeRestauration({ collections, total, ignorees }) {

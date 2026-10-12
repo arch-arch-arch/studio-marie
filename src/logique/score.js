@@ -66,14 +66,20 @@ const LIBELLES_VISUEL = {
   indisponible: 'Visuel non examiné : envoi d’images indisponible.',
 };
 const s = n => (n > 1 ? 's' : '');
+const ASSISTANTS = { claude: 'Claude', chatgpt: 'ChatGPT' };
+export const nomAssistant = examen => (examen?.source === 'dossier' ? (ASSISTANTS[examen.assistant] ?? 'l’assistant') : 'Claude');
 
 export function lignesExamen(examen) {
   if (!examen) return ['Détail non disponible pour cette évaluation (antérieure).'];
   const visuel = examen.visuel === 'joint' ? 'Visuel examiné.' : examen.visuel === 'aucun' ? 'Pas de visuel.' : LIBELLES_VISUEL[examen.raison_visuel] ?? LIBELLES_VISUEL.indisponible;
   const sections = examen.sections_profil?.length ? ` : sections ${examen.sections_profil.join(', ')}` : '';
   const n = examen.contenus_semaine ?? 0;
-  const semaine = n === 0 ? 'Aucun autre contenu de la semaine comparé.' : `${n} autre${s(n)} contenu${s(n)} de la semaine comparé${s(n)}.`;
+  const lieu = examen.source === 'dossier' ? 'du dossier' : 'de la semaine';
+  const semaine = n === 0 ? `Aucun autre contenu ${lieu} comparé.` : `${n} autre${s(n)} contenu${s(n)} ${lieu} comparé${s(n)}.`;
   const a = examen.alertes_calculees ?? 0;
   const b = examen.blocages_calcules ?? 0;
-  return [visuel, `Profil version ${examen.version_profil ?? '?'}${sections}.`, semaine, `${a} alerte${s(a)} et ${b} blocage${s(b)} calculés par le studio.`];
+  const lignes = [visuel, `Profil version ${examen.version_profil ?? '?'}${sections}.`, semaine, `${a} alerte${s(a)} et ${b} blocage${s(b)} calculés par le studio.`];
+  if (examen.source !== 'dossier') return lignes;
+  const nom = ASSISTANTS[examen.assistant];
+  return [nom ? `Analyse par dossier (${nom}).` : 'Analyse par dossier.', ...lignes];
 }

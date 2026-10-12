@@ -10,5 +10,10 @@
     "esbuild": "^0.28.2",
     "happy-dom": "^20.14.5",
     "vitest": "^5.0.2"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.131.0",
+    "@supabase/supabase-js": "^2.117.2",
+    "jspdf": "^4.2.1"
   }
 }

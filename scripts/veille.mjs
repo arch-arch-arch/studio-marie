@@ -1,14 +1,11 @@
 import { readFileSync, writeFileSync, readdirSync, realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
-import { construireVeille } from '../src/logique/veille.js';
-import { ajouterJours, debutSemaine, cleSemaineIso, partiesLocales } from '../src/logique/dates.js';
+import { construireVeille, plageVeille, doitTourner } from '../src/logique/veille.js';
 import { nouvelId } from '../src/logique/fiche.js';
 import { fuseauValide } from '../src/logique/profil.js';
 
 const USAGE = 'Usage : veille.mjs plage|doit-tourner|construire --profil <fichier> [--fiches <dossier> --entree <fichier> --sortie <fichier> --bulletin <fichier> --versions <fichier> --stats <dossier> --releves <dossier>] [--maintenant <iso>] [--forcer]';
-const FENETRE_DEBUT = 18 * 60 + 30;
-const FENETRE_FIN = 21 * 60 + 29;
 
 function options(argv) {
   const o = {};
@@ -36,19 +33,10 @@ export function executer(argv, { lireJson, listerJson, ecrireJson, maintenant })
     const fz = profil?.regles_studio?.fuseau;
     if (!fuseauValide(fz)) return { code: 1, sortie: 'Fuseau du profil absent ou invalide.' };
     if (commande === 'plage') {
-      const debut = debutSemaine(ajouterJours(quand, 1, fz), fz);
-      const fin = ajouterJours(debut, 7, fz);
-      const lecture_debut = ajouterJours(debut, -14, fz);
-      const lecture_fin = ajouterJours(fin, 28, fz);
-      return { code: 0, sortie: JSON.stringify({ semaine: cleSemaineIso(debut, fz), debut, fin, lecture_debut, lecture_fin }) };
+      return { code: 0, sortie: JSON.stringify(plageVeille(profil.regles_studio, quand)) };
     }
     if (commande === 'doit-tourner') {
-      if (o.forcer) return { code: 0, sortie: 'oui' };
-      const local = partiesLocales(quand, fz);
-      const minutesJour = local.heure * 60 + local.minute;
-      const fenetre = local.jourSemaine === 7 && minutesJour >= FENETRE_DEBUT && minutesJour <= FENETRE_FIN;
-      const bonMoment = local.heure === 20;
-      return { code: 0, sortie: fenetre && !bonMoment ? 'non' : 'oui' };
+      return { code: 0, sortie: doitTourner(profil.regles_studio, quand, { forcer: !!o.forcer }) ? 'oui' : 'non' };
     }
     if (!o.fiches || !o.entree || !o.sortie) return { code: 1, sortie: 'Il manque --fiches, --entree ou --sortie.' };
     const versions = new Map();

@@ -5,16 +5,22 @@ import { creneauxLibres } from '../logique/creneaux.js';
 import { debutSemaine, joursDeLaSemaine, cleJour, heureLocale, libelleJour, depuisSaisieLocale } from '../logique/dates.js';
 import { LIBELLES_FORMAT } from '../logique/fiche.js';
 import { prochaineAction, ACTIONS_SANS_SUITE } from '../logique/parcours.js';
+import { periodeAffichee } from '../logique/dossier.js';
+import { rangeeAnalyse, sectionAvis } from './panneau-analyse.js';
 
-export function vueSemaine({ profil, fiches, ancre, maintenant, bulletin, stats }, actions) {
+export function vueSemaine({ profil, fiches, ancre, maintenant, bulletin, stats, analyse, analyses, avisOuverts }, actions, capacites = {}) {
   const r = profil.regles_studio;
   const debut = debutSemaine(ancre, r.fuseau);
   const semaine = fichesDeLaSemaine(fiches, debut, r.fuseau);
   const libres = creneauxLibres(fiches, r, debut, maintenant ?? null);
   const semainePassee = maintenant != null && debut < debutSemaine(maintenant, r.fuseau);
   const maintenantIso = maintenant ?? new Date().toISOString();
-  const actionsParId = new Map(semaine.map(f => [f.id, prochaineAction(f, (stats ?? []).filter(s => s.fiche === f.id), maintenantIso, r.fuseau)]));
+  const viaDossier = !capacites.sample && !!capacites.dossier;
+  const traduire = a => (viaDossier && (a.cle === 'evaluer' || a.cle === 'reevaluer') ? { ...a, libelle: 'Analyser la semaine' } : a);
+  const actionsParId = new Map(semaine.map(f => [f.id, traduire(prochaineAction(f, (stats ?? []).filter(s => s.fiche === f.id), maintenantIso, r.fuseau))]));
   return h('div', { class: 'semaine' },
+    capacites.dossier ? rangeeAnalyse('Analyser la semaine', analyse, actions) : null,
+    sectionAvis(analyses, periodeAffichee('semaine', ancre, r.fuseau), fiches, r.fuseau, avisOuverts),
     bulletin === null && !semainePassee
       ? h('p', { class: 'sans-bulletin' }, 'Pas de bulletin pour cette semaine. ', h('button', { type: 'button', class: 'bouton-lien', onclick: () => actions.changerVue('bulletin') }, 'Voir l’onglet Bulletin'))
       : null,

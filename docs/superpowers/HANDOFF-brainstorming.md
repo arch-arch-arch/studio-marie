@@ -1,5 +1,7 @@
 # Passation : brainstorming Studio Contenu
 
+> Le fonctionnement actuel (Vercel, Supabase, analyse par dossier) est décrit dans la section « État des plans 7 et 8 » ; les passages sur les Artifacts et la routine cloud sont historiques.
+>
 > À lire par Claude Code pour reprendre la session de brainstorming (skill `superpowers:brainstorming`).
 > Démarrée le 2026-09-27 dans Claude (Cowork), avec Jean et la créatrice.
 
@@ -174,7 +176,7 @@ Elles sont toutes détaillées dans le registre de chaque plan (`.superpowers/sd
 - **Interface :** l'onglet Tableau de bord se met à jour sans reconstruire le formulaire du relevé du compte. `replaceChildren` natif n'aplatit pas les tableaux et affiche « null » : on ne lui passe que des nœuds filtrés.
 - **Veille :** elle lit `stats_contenu` et `releves_compte` par des requêtes bornées, et `--maintenant` est normalisé en ISO.
 - **Studio de test :** profil fictif v2 avec cibles, et relevés fictifs (`exemples/stats-fictives.json`).
-- **Studio réel :** page publiée ; cibles validées par Jean et écrites dans la base (profil version 2, la version 1 archivée) : 0,3 % d'abonnés par vue, 20 partages et envois par post, +125 abonnés nets par semaine, pas de cible de clics sur la porte.
+- **Studio réel :** page publiée ; cibles validées par Jean et écrites dans la base (profil version 2, la version 1 archivée) (valeurs dans la base uniquement, jamais dans le dépôt).
 
 ### Plan 5 : décisions prises à l'exécution
 - **Confirmations :** « Programmé » et « Publié » s'obtiennent par un formulaire daté avec une case obligatoire ; le contrôleur refuse de changer ces statuts sans confirmation. Programmation refusée dans le passé, publication refusée au-delà de maintenant + 5 min.
@@ -190,6 +192,23 @@ Elles sont toutes détaillées dans le registre de chaque plan (`.superpowers/sd
 - **Sauvegarde :** export complet (sauf fichiers des visuels), fichier `studio-contenu-AAAA-MM-JJ.json`, ignoré par git. Restauration : validation complète avant écriture, y compris le profil (`validerProfil` + version) ; verrou pendant export et restauration ; écritures locales vidées avant ; aucun document supprimé ; section Sauvegarde unique pour la session (survit à la reconstruction de l'onglet Profil).
 - **Pages publiées :** capacités `db`, `assets`, `sample`, `downloads`.
 - **Limites connues :** l'examen des idées de la veille indique 0 contenu comparé ; un visuel de type inconnu s'affiche « envoi d'images indisponible » ; si une écriture locale échoue pendant la préparation d'une restauration, sa relance différée peut réécrire une fiche restaurée.
+
+## État des plans 7 et 8 (mis à jour le 2026-10-12)
+
+Les deux plans sont livrés et relus, sur la branche `plan-7-vercel-supabase` (pas encore fusionnée dans `main`). `npm test` : **983 tests verts**.
+
+- **Plan 7 : Vercel et Supabase.** Page statique sur Vercel, base de documents Supabase (table unique, accès réservé aux comptes connectés), visuels dans un stockage privé, connexion par lien magique ou mot de passe, inscriptions fermées. Fonctions serveur `capacites`, `evaluer` et `veille`, éteintes tant qu'aucune clé Anthropic n'est configurée. Guide : `docs/mise-en-service-vercel-supabase.md`.
+- **Plan 8 : analyse par dossier.** Le studio fabrique un PDF de la semaine ou du mois (une carte par fiche avec sa référence écrite dans l'image), la créatrice le joint dans Claude ou ChatGPT, puis colle la réponse dans le studio, qui range l'avis dans chaque fiche. Aucune clé, aucun coût à l'usage. Le module `/dossier.js` est construit avec la page.
+- **Libellé.** Sans la capacité d'évaluation directe et avec l'analyse par dossier, la prochaine étape « Évaluer » ou « Réévaluer » s'affiche « Analyser la semaine » (liste « À faire cette semaine » et cartes).
+- **Un seul projet Supabase** sert à la production et à la prévisualisation, l'offre gratuite n'en permettant pas deux.
+
+### Reste à faire
+1. Essai réel sur iPhone (partage du dossier, collage du retour).
+2. Création du compte de la créatrice dans Supabase.
+3. Adresses de retour Supabase (Site URL et Redirect URLs).
+4. Variables secrètes Vercel pour la veille (`ANTHROPIC_API_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `CRON_SECRET`), quand la veille sera allumée.
+5. Désactivation de la routine cloud d'origine, au moment où la veille sera allumée sur Vercel.
+6. Fusion de la branche dans `main`, après l'essai réel.
 
 ### Prochaine étape
 1. **Jean** : checklist du plan 6 sur le studio de test (avis de Claude avec image puis vidéo, pourquoi des recommandations, tableau de bord, export puis restauration avec sauvegarde) ; checklists des plans 4 et 5 si pas encore faites.

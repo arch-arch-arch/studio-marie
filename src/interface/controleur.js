@@ -1,6 +1,6 @@
 import {
   nouvelId, nouvelleFiche, modifierFiche as appliquer, peutPasserA, changerStatut as appliquerStatut, deplacerFiche as deplacer,
-  appliquerEvaluation, confirmerProgrammation as confirmerProg, confirmerPublication as confirmerPub, effacementsPour,
+  appliquerEvaluation, confirmerProgrammation as confirmerProg, confirmerPublication as confirmerPub, effacementsPour, empreinte,
 } from '../logique/fiche.js';
 import { ajouterJours, ajouterMois, debutJour, debutSemaine, semainesDuMois } from '../logique/dates.js';
 import { verifierRegles } from '../logique/regles-score.js';
@@ -9,12 +9,15 @@ import { fichesDeLaSemaine } from '../logique/controle.js';
 import { construireDemande, validerReponse, messageErreurSample, CODES_INDISPONIBLES } from '../claude/evaluation.js';
 import { validerReference, ficheDeReference, verifierClassement } from '../logique/reference.js';
 import { RELEVES, validerReleveContenu, validerReleveCompte, documentReleveContenu, documentReleveCompte } from '../logique/indicateurs.js';
+import { periodeAffichee, choisirFiches, codeDossier, attribuerReferences, etatVisuel, contenuDossier, MESSAGE_A_COLLER } from '../logique/dossier.js';
+import { lireRetour, validerRetour } from '../logique/retour-dossier.js';
 import { COLLECTIONS_EXPORT, construireExport, validerExport, resumeRestauration, nomFichierExport } from '../logique/sauvegarde.js';
 
 const MESSAGES_TELEVERSEMENT = {
   too_large: 'Fichier trop lourd (20 Mo au maximum).',
   unsupported_type: 'Ce type de fichier n’est pas accepté.',
   rate_limited: 'Trop d’envois d’un coup : réessaie dans un instant.',
+  revoked: 'Ta session a expiré : reconnecte-toi puis réessaie.',
 };
 
 export function plageDeVue(vue, ancre, fuseau) {
@@ -46,7 +49,7 @@ async function chargerImageParDefaut(id) {
 
 const INDISPONIBLE = { ok: false, raison: 'L’évaluation par Claude n’est pas disponible dans cette vue.', indisponible: true };
 
-export function creerControleur({ etat, depot, enregistreur, assets, horloge, idAleatoire = nouvelId, sample = null, chargerImage = chargerImageParDefaut, downloads = null }) {
+export function creerControleur({ etat, depot, enregistreur, assets, horloge, idAleatoire = nouvelId, sample = null, chargerImage = chargerImageParDefaut, downloads = null, connexion = null, veille = null, dossier = null, aleatoire = Math.random, delaiAssistantMs = 10000 }) {
   const trouver = id => etat.lire().fiches.find(f => f.id === id);
   const fuseau = () => etat.lire().profil.regles_studio.fuseau;
   const remplacer = f => etat.modifier({ fiches: etat.lire().fiches.map(x => (x.id === f.id ? f : x)) });
@@ -338,13 +341,263 @@ export function creerControleur({ etat, depot, enregistreur, assets, horloge, id
     return { ok: true, message: `Restauration terminée : ${restaures} document(s) restauré(s).`, restaures };
   }
 
+  const ANALYSE_INDISPONIBLE = 'L’analyse par dossier n’est pas disponible dans cette vue.';
+  const SESSION_EXPIREE = { ok: false, raison: 'Ta session a expiré : recharge la page pour te reconnecter.' };
+  const ABANDON = Symbol('lecture abandonnée');
+
+  let generationAnalyse = 0;
+
+  // Les opérations qui lisent puis écrivent un document analyses s'exécutent l'une après l'autre, par code de dossier.
+  const files = new Map();
+  function enFile(code, tache) {
+    const precedente = files.get(code) ?? Promise.resolve();
+    const suite = precedente.catch(() => {}).then(tache);
+    files.set(code, suite);
+    suite.catch(() => {}).then(() => { if (files.get(code) === suite) files.delete(code); });
+    return suite;
+  }
+
+  function memeDossier(doc, periode, refs, versionProfil) {
+    return doc && !doc.retour && doc.periode?.type === periode.type && doc.periode?.cle === periode.cle
+      && (doc.version_profil ?? null) === versionProfil
+      && Array.isArray(doc.fiches) && doc.fiches.length === refs.length
+      && refs.every((r, k) => doc.fiches[k]?.ref === r.ref && doc.fiches[k]?.id === r.id && doc.fiches[k]?.empreinte === r.empreinte);
+  }
+
+  async function ouvrirAnalyse() {
+    // Sans await : fermerAnalyse() appelée juste après doit toujours invalider la préparation qui démarre.
+    fermerPanneau().catch(() => {});
+    if (!dossier) { etat.modifier({ analyse: { etape: 'erreur', message: ANALYSE_INDISPONIBLE } }); return; }
+    if (etat.lire().analyse?.etape === 'preparation') return;
+    const jeton = ++generationAnalyse;
+    const { profil, fiches, vue, ancre } = etat.lire();
+    const periode = periodeAffichee(vue, ancre, profil.regles_studio.fuseau);
+    const choix = choisirFiches(fiches, periode);
+    if (!choix.ok) { etat.modifier({ analyse: { etape: 'erreur', message: choix.raison } }); return; }
+    etat.modifier({ analyse: { etape: 'preparation' } });
+    try {
+      const refs = attribuerReferences(choix.fiches);
+      const versionProfil = profil.version ?? null;
+      let existant = null;
+      const candidat = (etat.lire().analyses ?? []).find(d => memeDossier(d, periode, refs, versionProfil));
+      if (candidat) {
+        try {
+          const frais = await depot.lireAnalyse(candidat.id);
+          if (memeDossier(frais, periode, refs, versionProfil)) existant = { id: candidat.id, assistant: frais.assistant };
+        } catch (e) { if (e?.code === 'revoked') throw e; existant = null; }
+      }
+      const code = existant ? existant.id : codeDossier(aleatoire);
+      const fabrique = await dossier.fabrique();
+      const provisoire = contenuDossier({ profil, entrees: choix.fiches.map((fiche, i) => ({ ref: refs[i].ref, fiche, etat: etatVisuel(fiche, null) })), periode, code, toutesLesFiches: fiches });
+      const demandes = choix.fiches
+        .map((fiche, i) => ({ ref: refs[i].ref, etiquette: provisoire.fiches[i].etiquette, visuel: fiche.visuel ?? null, type: fiche.visuel_type ?? null }))
+        .filter(d => d.visuel);
+      const cartes = await fabrique.preparerCartes(demandes, id => chargerImage(id));
+      const entrees = choix.fiches.map((fiche, i) => ({ ref: refs[i].ref, fiche, etat: etatVisuel(fiche, cartes.get(refs[i].ref) ?? null) }));
+      const contenu = contenuDossier({ profil, entrees, periode, code, toutesLesFiches: fiches });
+      const fichier = await fabrique.assemblerPdf(contenu, cartes);
+      if (jeton !== generationAnalyse) return;
+      await enFile(code, async () => {
+        if (jeton !== generationAnalyse) return;
+        const actuel = existant ? await depot.lireAnalyse(code) : null;
+        await depot.enregistrerAnalyse(code, {
+          periode: { type: periode.type, cle: periode.cle, debut: periode.debut, fin: periode.fin },
+          cree_le: horloge(),
+          assistant: actuel?.assistant ?? existant?.assistant ?? 'inconnu',
+          version_profil: versionProfil,
+          sections_profil: contenu.sectionsProfil,
+          fiches: entrees.map((e, i) => ({ ...refs[i], visuel: e.etat.visuel, raison_visuel: e.etat.raison_visuel })),
+          ...(actuel?.retour ? { retour: actuel.retour } : {}),
+        });
+      });
+      if (jeton !== generationAnalyse) return;
+      etat.modifier({ analyse: {
+        etape: 'pret', code, periode, nombre: entrees.length, fichier, nom: `analyse-${periode.cle}.pdf`, retour: null,
+        sansVisuel: entrees.filter(e => e.etat.visuel === 'non_joint').map(e => e.ref),
+      } });
+    } catch (e) {
+      const message = e?.code === 'revoked' ? SESSION_EXPIREE.raison : 'Le dossier n’a pas pu être préparé : réessaie.';
+      if (jeton === generationAnalyse) etat.modifier({ analyse: { etape: 'erreur', message } });
+    }
+  }
+
+  // Retour collé sans dossier prêt (onglet rechargé) : enregistrerRetour retrouve le dossier par son code.
+  function ouvrirRetour() {
+    fermerPanneau().catch(() => {});
+    generationAnalyse += 1;
+    etat.modifier({ analyse: { etape: 'retour' } });
+  }
+
+  function fermerAnalyse() {
+    generationAnalyse += 1;
+    etat.modifier({ analyse: null });
+  }
+
+  const analysePrete = () => (etat.lire().analyse?.etape === 'pret' ? etat.lire().analyse : null);
+
+  const peutPartagerDossier = () => { const a = analysePrete(); return !!a && !!dossier?.peutPartager(a.fichier); };
+
+  async function partagerDossier() {
+    const a = analysePrete();
+    if (!a || !dossier?.peutPartager(a.fichier)) return { ok: false, message: 'Le partage n’est pas disponible sur cet appareil : télécharge le dossier.' };
+    try { await dossier.partager(a.fichier, a.nom); return { ok: true, message: 'Dossier partagé.' }; }
+    catch (e) { return e?.name === 'AbortError' ? { ok: false, message: 'Partage annulé.' } : { ok: false, message: 'Le partage a échoué : télécharge le dossier.' }; }
+  }
+
+  async function telechargerDossier() {
+    const a = analysePrete();
+    if (!a || !downloads) return { ok: false, message: 'Le téléchargement n’est pas disponible dans cette vue.' };
+    try { await downloads.save({ filename: a.nom, data: a.fichier }); return { ok: true, message: 'Dossier téléchargé.' }; }
+    catch { return { ok: false, message: 'Le téléchargement a échoué : réessaie.' }; }
+  }
+
+  async function copierMessage() {
+    try { await dossier.copier(MESSAGE_A_COLLER); return { ok: true, message: 'Message copié.' }; }
+    catch { return { ok: false, message: MESSAGE_A_COLLER }; }
+  }
+
+  async function noterAssistant(nom) {
+    try {
+      const a = analysePrete();
+      if (!a || !['claude', 'chatgpt'].includes(nom)) return;
+      await enFile(a.code, async () => {
+        // Seule la lecture est bornée dans le temps : une écriture lancée est attendue par la file,
+        // pour qu'une écriture abandonnée ne puisse pas effacer plus tard un retour collé entre-temps.
+        let minuterie;
+        const lecture = depot.lireAnalyse(a.code);
+        lecture.catch(() => {});
+        const limite = new Promise(resolve => { minuterie = setTimeout(() => resolve(ABANDON), delaiAssistantMs); });
+        let doc;
+        try { doc = await Promise.race([lecture, limite]); } finally { clearTimeout(minuterie); }
+        if (doc && doc !== ABANDON) await depot.enregistrerAnalyse(a.code, { ...doc, assistant: nom });
+      });
+    } catch { /* l'assistant noté n'est qu'une indication : rien à signaler */ }
+  }
+
+  const interruption = (n, m) => ({ ok: false, raison: `L’enregistrement a été interrompu après ${n} fiche${n > 1 ? 's' : ''} sur ${m} : réessaie, les fiches déjà notées seront simplement réécrites.` });
+  const AVIS_VIDE = { avis: '', points_forts: [], risques: [], ordre_conseille: [] };
+
+  function enregistrerRetour(texte) {
+    const lu = lireRetour(texte);
+    if (!lu.ok) return Promise.resolve(lu);
+    return enFile(lu.dossier, () => appliquerRetour(lu));
+  }
+
+  async function appliquerRetour(lu) {
+    let analyse;
+    try { analyse = await depot.lireAnalyse(lu.dossier); }
+    catch (e) { return e?.code === 'revoked' ? SESSION_EXPIREE : { ok: false, raison: 'Le studio n’a pas pu lire le dossier : réessaie dans un instant.' }; }
+    if (!analyse) return { ok: false, raison: 'Ce retour ne correspond à aucun dossier produit par le studio.' };
+    const { profil } = etat.lire();
+    const v = validerRetour(lu, analyse);
+    const ecartees = [];
+    const aNoter = [];
+    for (const item of v.valides) {
+      let actuelle = trouver(item.id);
+      if (!actuelle && !supprimeesPendantSession.has(item.id)) {
+        await enregistreur.vider(item.id);
+        if (enregistreur.estEnAttente(item.id) || enregistreur.enEchec().includes(item.id)) return interruption(0, v.valides.length);
+        let relue;
+        try { relue = await depot.lireFiche(item.id); }
+        catch (e) { return e?.code === 'revoked' ? SESSION_EXPIREE : interruption(0, v.valides.length); }
+        actuelle = trouver(item.id) ?? (supprimeesPendantSession.has(item.id) ? null : relue);
+      }
+      if (!actuelle) { ecartees.push({ ref: item.ref, raison: 'fiche supprimée depuis le dossier' }); continue; }
+      if (actuelle.statut === 'publie') { ecartees.push({ ref: item.ref, raison: 'fiche publiée depuis le dossier' }); continue; }
+      if (empreinte(actuelle) !== item.empreinte) { ecartees.push({ ref: item.ref, raison: 'fiche modifiée depuis le dossier : refais une analyse' }); continue; }
+      aNoter.push({ item });
+    }
+    const appliquees = [];
+    const remarques = [];
+    let ecarteesEnEcriture = 0;
+    const ecarter = (item, raison) => { ecartees.push({ ref: item.ref, raison }); ecarteesEnEcriture += 1; };
+    for (const { item } of aNoter) {
+      // Une fiche sortie de l'état est relue en base (écritures en attente vidées d'abord) : jamais la capture du calcul.
+      let relue = null;
+      if (!trouver(item.id) && !supprimeesPendantSession.has(item.id)) {
+        await enregistreur.vider(item.id);
+        if (enregistreur.estEnAttente(item.id) || enregistreur.enEchec().includes(item.id)) return interruption(appliquees.length, aNoter.length - ecarteesEnEcriture);
+        try { relue = await depot.lireFiche(item.id); }
+        catch (e) { return e?.code === 'revoked' ? SESSION_EXPIREE : interruption(appliquees.length, aNoter.length - ecarteesEnEcriture); }
+      }
+      // Aucun await entre cette reprise de la fiche courante et remplacer(g) : rien ne peut s'intercaler.
+      const actuelle = supprimeesPendantSession.has(item.id) ? null : (trouver(item.id) ?? relue);
+      if (!actuelle) { ecarter(item, 'fiche supprimée depuis le dossier'); continue; }
+      if (actuelle.statut === 'publie') { ecarter(item, 'fiche publiée depuis le dossier'); continue; }
+      if (empreinte(actuelle) !== item.empreinte) { ecarter(item, 'fiche modifiée depuis le dossier : refais une analyse'); continue; }
+      const verification = verifierRegles(actuelle, profil.regles_studio);
+      const duDossier = analyse.fiches.find(f => f.ref === item.ref);
+      const examen = {
+        ...construireExamen({ visuel: duDossier.visuel, raison_visuel: duDossier.raison_visuel, version_profil: analyse.version_profil ?? profil.version ?? null, sections_profil: analyse.sections_profil ?? [], contenus_semaine: analyse.fiches.length - 1, verification }),
+        source: 'dossier', assistant: analyse.assistant ?? 'inconnu',
+      };
+      const score = composerScore({ fiche: actuelle, verification, jugement: item.jugement, versionProfil: profil.version, maintenant: horloge(), examen });
+      const g = verrouillerSiRouge(appliquerEvaluation(actuelle, {
+        score, variantes: item.jugement.captions,
+        suggestions: { accroches: item.jugement.accroches, hashtags: item.jugement.hashtags },
+        recommandations: item.jugement.recommandations,
+      }, horloge()));
+      remplacer(g);
+      await ecrireMaintenant(g);
+      if (enregistreur.enEchec().includes(g.id)) return interruption(appliquees.length, aNoter.length - ecarteesEnEcriture);
+      appliquees.push(item.id);
+      if (item.remarque) remarques.push({ ref: item.ref, texte: item.remarque });
+    }
+    const toutes = [...v.ecartees, ...ecartees].sort((a, b) => a.ref.localeCompare(b.ref));
+    const avecRemarques = remarques.length ? { remarques } : {};
+    const resultat = { ok: true, appliquees: appliquees.length, ecartees: toutes, avisRecu: !!v.periode, ...avecRemarques };
+    try {
+      const frais = (await depot.lireAnalyse(lu.dossier)) ?? analyse;
+      const avis = v.periode ?? (frais.retour?.avis ? {
+        avis: frais.retour.avis, points_forts: frais.retour.points_forts ?? [], risques: frais.retour.risques ?? [], ordre_conseille: frais.retour.ordre_conseille ?? [],
+      } : AVIS_VIDE);
+      await depot.enregistrerAnalyse(lu.dossier, { ...frais, retour: { recu_le: horloge(), ...avis, appliquees, ecartees: toutes, ...avecRemarques } });
+    } catch (e) {
+      if (e?.code === 'revoked') return SESSION_EXPIREE;
+      return { ok: false, raison: 'Les fiches sont notées, mais l’avis d’ensemble n’a pas pu être enregistré : réessaie.' };
+    }
+    if (etat.lire().analyse?.etape === 'pret') etat.modifier({ analyse: { ...etat.lire().analyse, retour: resultat } });
+    return resultat;
+  }
+
   return {
+    urlVisuel: async id => (typeof assets?.url === 'function' ? assets.url(id) : `/_blob/${id}`),
     ouvrirFiche: id => etat.modifier({ ficheOuverte: id, erreur: null }),
     fermerPanneau,
     modifierFiche,
     evaluerFiche,
     evaluationDisponible: () => !evaluationIndisponible,
+    seDeconnecter: async () => {
+      await enregistreur.viderTout();
+      if (enregistreur.enEchec().length > 0) {
+        etat.modifier({ erreur: 'Des modifications ne sont pas encore enregistrées : attends le retour de la connexion avant de te déconnecter.' });
+        return;
+      }
+      await connexion?.deconnecter();
+    },
     reverifierFiches,
+    ouvrirAnalyse,
+    ouvrirRetour,
+    fermerAnalyse,
+    partagerDossier,
+    peutPartagerDossier,
+    telechargerDossier,
+    copierMessage,
+    noterAssistant,
+    enregistrerRetour,
+    relancerVeille: async () => {
+      if (!veille) return { ok: false, raison: 'La veille n’est pas encore configurée.' };
+      if (etat.lire().veille?.enCours) return { ok: false, raison: 'Une veille est déjà en cours.' };
+      etat.modifier({ veille: { enCours: true, message: 'Veille en cours : cela peut prendre quelques minutes.' } });
+      let r;
+      try {
+        r = await veille.relancer();
+      } catch {
+        r = { ok: false, raison: 'La veille a échoué : réessaie dans quelques minutes. Rien n’a été modifié.' };
+      }
+      etat.modifier({ veille: { enCours: false, message: r.ok ? r.message : r.raison } });
+      return r;
+    },
     importerReference,
     verifierReference,
     arreterReference: () => controleurReference?.abort(),

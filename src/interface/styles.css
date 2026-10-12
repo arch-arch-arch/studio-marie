@@ -228,3 +228,23 @@ button, input, select, textarea { font: inherit; color: inherit; }
 
 .section-sauvegarde { display: grid; gap: 10px; }
 .apercu-restauration { display: grid; gap: 8px; }
+
+.connexion { max-width: 360px; margin: 12vh auto 0; padding: 0 16px; display: grid; gap: 16px; }
+.connexion form { display: grid; gap: 12px; }
+.compte { display: grid; justify-items: start; }
+.zone-analyse:empty { display: none; }
+.panneau-analyse { max-width: 720px; margin: 12px auto; padding: 16px; border: 1px solid var(--trait); border-radius: 10px; background: var(--surface); display: grid; gap: 10px; }
+.panneau-analyse > * { min-width: 0; margin: 0; }
+.panneau-analyse h2:focus { outline: none; }
+.panneau-analyse textarea { width: 100%; min-width: 0; box-sizing: border-box; font: inherit; }
+.panneau-analyse .erreur { color: var(--rouge); }
+.panneau-analyse .avertissement { color: var(--orange); font-weight: 600; }
+.rangee { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; min-width: 0; }
+.analyse-periode { margin-bottom: 8px; }
+.avis-periode { margin: 8px 0; padding: 8px 12px; border: 1px solid var(--trait); border-radius: 10px; }
+.avis-periode h4 { margin: 8px 0 4px; }
+.ecartees, ul.remarques { margin: 0; padding-left: 18px; }
+a.bouton-secondaire { text-decoration: none; color: inherit; }
+/* Une région d'état vide sort du flux sans être masquée : une région masquée puis remplie n'est pas annoncée de façon fiable. */
+.panneau-analyse { position: relative; }
+.panneau-analyse p:empty, .panneau-analyse .detail-retour:empty { position: absolute; width: 1px; height: 1px; margin: 0; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
