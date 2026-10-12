@@ -12,6 +12,8 @@ export const CATEGORIES = [
 const CLES = new Set(CATEGORIES.map(c => c.cle));
 const FIL = new Set(['reel', 'carrousel', 'post']);
 
+export const nomCategorie = cle => CATEGORIES.find(c => c.cle === cle)?.nom ?? cle;
+
 export function normaliserCategorie(valeur) {
   if (typeof valeur !== 'string') return null;
   const cle = valeur.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().replace(/\s+/g, '');

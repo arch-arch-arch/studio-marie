@@ -3,7 +3,7 @@ import fictif from '../../exemples/profil-fictif.json';
 import { depuisSaisieLocale } from '../../src/logique/dates.js';
 import { nouvelleFiche } from '../../src/logique/fiche.js';
 import {
-  CATEGORIES, categoriesDuProfil, normaliserCategorie, propositionCategorie, categorieAffichee, controlerCategories,
+  CATEGORIES, categoriesDuProfil, normaliserCategorie, propositionCategorie, categorieAffichee, controlerCategories, nomCategorie,
 } from '../../src/logique/categories.js';
 
 const FZ = fictif.regles_studio.fuseau;
@@ -177,5 +177,12 @@ describe('controlerCategories', () => {
     expect(controlerCategories([fiche('post', JOURS[0])], p, LUNDI))
       .toEqual([{ cle: 'non_rangees', libelle: 'Non rangées', valeur: '1', etat: 'orange' }]);
     expect(controlerCategories([], p, LUNDI)).toEqual([]);
+  });
+});
+
+describe('nomCategorie', () => {
+  it('donne le nom affiché, ou la clé si elle est inconnue', () => {
+    expect(nomCategorie('autorite')).toBe('Autorité');
+    expect(nomCategorie('inconnue')).toBe('inconnue');
   });
 });

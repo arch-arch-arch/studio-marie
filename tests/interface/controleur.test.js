@@ -5,7 +5,7 @@ import { creerDepot } from '../../src/donnees/depot.js';
 import { creerEnregistreur } from '../../src/donnees/enregistreur.js';
 import { creerEtat } from '../../src/interface/etat.js';
 import { creerControleur, plageDeVue, fusionnerInstantane } from '../../src/interface/controleur.js';
-import { nouvelleFiche, empreinte } from '../../src/logique/fiche.js';
+import { nouvelleFiche, empreinte, aReevaluer } from '../../src/logique/fiche.js';
 import { construireExport, COLLECTIONS_EXPORT } from '../../src/logique/sauvegarde.js';
 
 const T = '2026-09-28T08:00:00.000Z';
@@ -673,6 +673,39 @@ describe('analyse par dossier', () => {
     const r2 = await actions.enregistrerRetour(texte);
     expect(r1).toEqual({ ok: true, appliquees: 2, ecartees: [], avisRecu: true });
     expect(r2).toEqual(r1);
+    expect(db.lister('fiches')).toHaveLength(2);
+  });
+
+  // Même bloc que reponse(), avec une catégorie par fiche, dans l'ordre des références.
+  const avecCategories = (code, refs, categories) => {
+    const corps = JSON.parse(reponse(code, refs).slice('```json\n'.length, -'\n```'.length));
+    corps.fiches.forEach((f, i) => { f.categorie = categories[i]; });
+    return '```json\n' + JSON.stringify(corps) + '\n```';
+  };
+
+  it('une catégorie choisie après l’ouverture du dossier reste intacte : la proposition de l’analyse est ignorée', async () => {
+    const { actions, etat, db, a, b } = await avecDeuxFiches();
+    await actions.ouvrirAnalyse();
+    const { code } = etat.lire().analyse;
+    await actions.modifierFiche(a.id, { categorie: 'desir' });
+    const r = await actions.enregistrerRetour(avecCategories(code, ['F01', 'F02'], ['attraction', 'autorite']));
+    expect(r).toEqual({ ok: true, appliquees: 2, ecartees: [], avisRecu: true, categoriesProposees: [{ ref: 'F02', cle: 'autorite' }] });
+    expect(db.lire(`fiches/${a.id}`)).toMatchObject({ categorie: 'desir', categorie_proposee: null });
+    expect(db.lire(`fiches/${b.id}`)).toMatchObject({ categorie: null, categorie_proposee: { cle: 'autorite', source: 'analyse' } });
+  });
+
+  it('réapplique le même retour : même résultat, aucune fiche « dépassée »', async () => {
+    const { actions, etat, db, a } = await avecDeuxFiches();
+    await actions.ouvrirAnalyse();
+    const { code } = etat.lire().analyse;
+    const texte = avecCategories(code, ['F01', 'F02'], ['attraction', 'autorite']);
+    const r1 = await actions.enregistrerRetour(texte);
+    const r2 = await actions.enregistrerRetour(texte);
+    expect(r1.categoriesProposees).toEqual([{ ref: 'F01', cle: 'attraction' }, { ref: 'F02', cle: 'autorite' }]);
+    expect(r2).toEqual(r1);
+    const fiche = db.lire(`fiches/${a.id}`);
+    expect(fiche.categorie_proposee).toEqual({ cle: 'attraction', source: 'analyse' });
+    expect(aReevaluer(fiche)).toBe(false);
     expect(db.lister('fiches')).toHaveLength(2);
   });
 

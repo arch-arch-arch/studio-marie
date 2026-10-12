@@ -125,11 +125,11 @@ describe('assemblerPdf', () => {
 });
 
 describe('plan 9 tâche 5 : rangement par catégorie', () => {
-  const rangement = ['Rangement actuel, à vérifier. Ces lignes ne sont pas des états de cadence.', 'Attraction : F01 · cible : 3 contenus du fil'];
+  const rangement = ['Rangement actuel, à vérifier. Ces lignes ne sont pas des états de cadence.', 'Attraction : F01 · cible par semaine : 3 contenus du fil'];
   it('affiche le rangement après les règles, sous son titre', async () => {
     const texte = await brut(await assemblerPdf({ ...contenu(1), rangement }, new Map(), { jsPDF, compress: false }));
     expect(texte).toContain('(Rangement par catégorie)');
-    expect(texte).toContain('(Attraction : F01 · cible : 3 contenus du fil)');
+    expect(texte).toContain('(Attraction : F01 · cible par semaine : 3 contenus du fil)');
     expect(texte).toContain('(Rangement actuel, à vérifier. Ces lignes ne sont pas des états de cadence.)');
     expect(texte.indexOf('(Règles de la période)')).toBeLessThan(texte.indexOf('(Rangement par catégorie)'));
     expect(texte.indexOf('(Rangement par catégorie)')).toBeLessThan(texte.indexOf('(Fiche F01)'));

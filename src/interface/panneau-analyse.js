@@ -1,6 +1,6 @@
 import { h } from './h.js';
 import { nomAssistant } from '../logique/score.js';
-import { CATEGORIES } from '../logique/categories.js';
+import { nomCategorie } from '../logique/categories.js';
 
 const s = n => (n > 1 ? 's' : '');
 const MO = 1024 * 1024;
@@ -51,7 +51,7 @@ function blocRetour(actions) {
       detailRetour.replaceChildren(...[
         r.avisRecu ? null : h('p', { class: 'aide' }, 'L’avis d’ensemble manquait dans la réponse.'),
         remarques.length ? h('ul', { class: 'remarques' }, remarques.map(x => h('li', {}, `${x.ref} : ${x.texte}`))) : null,
-        r.categoriesProposees?.length ? h('p', {}, `Catégories proposées : ${r.categoriesProposees.map(x => `${x.ref} ${CATEGORIES.find(c => c.cle === x.cle)?.nom ?? x.cle}`).join(', ')}`) : null,
+        r.categoriesProposees?.length ? h('p', {}, `Catégories proposées : ${r.categoriesProposees.map(x => `${x.ref} ${nomCategorie(x.cle)}`).join(', ')}`) : null,
         ecartees.length ? h('ul', { class: 'ecartees' }, ecartees.map(e => h('li', {}, `${e.ref} : ${e.raison}${e.detail ? ` (${e.detail})` : ''}`))) : null,
         ecartees.length ? h('p', { class: 'aide' }, 'Pour les fiches non notées : demande à l’assistant de redonner seulement le bloc en corrigeant ces points, puis recolle-le ici.') : null,
       ].filter(Boolean));

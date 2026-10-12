@@ -2,7 +2,7 @@ import { debutSemaine, ajouterJours, debutMois, ajouterMois, cleSemaineIso, heur
 import { empreinte, LIBELLES_FORMAT } from './fiche.js';
 import { verifierRegles } from './regles-score.js';
 import { controlerSemaine, fichesDeLaSemaine } from './controle.js';
-import { CATEGORIES, categorieAffichee, categoriesDuProfil } from './categories.js';
+import { CATEGORIES, categorieAffichee, categoriesDuProfil, nomCategorie } from './categories.js';
 import { extraireProfilDetaille } from '../claude/evaluation.js';
 
 export const FICHES_MAX = 30;
@@ -168,12 +168,12 @@ function semainesDeLaPeriode(periode, fuseau) {
   return debuts;
 }
 
-const libelleCategorie = cle => CATEGORIES.find(c => c.cle === cle)?.nom ?? cle;
-
 // Catégorie choisie, proposée (par l'analyse ou par une règle), ou non rangée.
 function ligneCategorie(fiche) {
-  const { cle, etat } = categorieAffichee(fiche);
-  return cle === null ? 'catégorie : non rangée' : `catégorie : ${libelleCategorie(cle)} (${etat === 'choisie' ? 'choisie' : 'proposée'})`;
+  const { cle, etat, source } = categorieAffichee(fiche);
+  if (cle === null) return 'catégorie : non rangée';
+  const mention = etat === 'choisie' ? 'choisie' : source === 'analyse' ? 'proposée par l’analyse' : 'proposée par règle';
+  return `catégorie : ${nomCategorie(cle)} (${mention})`;
 }
 
 function blocFiche({ ref, fiche, etat }, profil) {
@@ -237,8 +237,9 @@ function cibleCategorie(c) {
   return morceaux;
 }
 
-// Rangement actuel : une ligne par catégorie (références, cible de la semaine si le profil en donne une), puis les non rangées.
+// Rangement actuel : une ligne par catégorie si le profil a sa section (références, cible par semaine si elle en donne une), puis les non rangées.
 function rangement(entrees, profil) {
+  const sectionPresente = profil.categories_de_contenu != null;
   const categories = categoriesDuProfil(profil);
   const parCle = new Map(categories.map(c => [c.cle, []]));
   const nonRangees = [];
@@ -248,11 +249,11 @@ function rangement(entrees, profil) {
   }
   return [
     'Rangement actuel, à vérifier. Ces lignes ne sont pas des états de cadence.',
-    ...categories.map(c => {
+    ...(sectionPresente ? categories.map(c => {
       const refs = parCle.get(c.cle);
       const cibles = cibleCategorie(c);
-      return `${c.nom} : ${refs.length ? refs.join(', ') : 'aucune'}${cibles.length ? ` · cible : ${cibles.join(' ; ')}` : ''}`;
-    }),
+      return `${c.nom} : ${refs.length ? refs.join(', ') : 'aucune'}${cibles.length ? ` · cible par semaine : ${cibles.join(' ; ')}` : ''}`;
+    }) : []),
     `Non rangées : ${nonRangees.length ? nonRangees.join(', ') : 'aucune'}`,
   ].map(versLatin1);
 }
@@ -260,12 +261,14 @@ function rangement(entrees, profil) {
 function consigne(entrees, code, profil) {
   const refs = entrees.map(e => e.ref);
   const courte = entrees.length > 10 ? ' Dans cette partie, au plus trois lignes par fiche.' : '';
+  // La demande de rangement vient avec la section de catégories ; les grilles s'y ajoutent seulement si le profil en a.
+  const demandeRangement = profil.categories_de_contenu != null;
   const grilles = grillesDuProfil(profil);
   const exemple = {
     dossier: code,
     fiches: [{
       id: refs[0],
-      categorie: 'connexion',
+      categorie: demandeRangement ? 'connexion' : null,
       notes: { accroche: 7, voix: 8, mecanique: 6 },
       phrases: { accroche: '…', voix: '…', mecanique: '…' },
       conformite: { etat: 'vert', causes: [] },
@@ -292,15 +295,14 @@ function consigne(entrees, code, profil) {
     'Les caractères que ce document ne sait pas écrire (émojis) sont notés par leur code entre crochets, par exemple [U+1F525].',
     'Dans tes captions et tes accroches, écris de vrais émojis si tu en utilises, jamais leur code entre crochets.',
     '',
-    ...(grilles ? [
+    ...(demandeRangement ? [
       'Avant de noter, range chaque fiche avec le test de rangement de la stratégie. Si la fiche a déjà une catégorie, vérifie-la et dis en une phrase pourquoi tu la changes ; si rien ne permet de trancher, écris « non déterminable ».',
-      'Juge chaque note avec la grille du format de la fiche et celle de sa catégorie, lues ci-dessous.',
-      ...lignesGrilles(grilles),
+      ...(grilles ? ['Juge chaque note avec la grille du format de la fiche et celle de sa catégorie, lues ci-dessous.', ...lignesGrilles(grilles)] : []),
       '',
     ] : []),
     'Ta réponse a deux parties.',
     `1. D’abord ton analyse en français courant, fiche par fiche, puis sur l’ensemble de la période.${courte}`,
-    ...(grilles ? ['   Commence chaque fiche par « Catégorie : … · Format : … », et finis l’analyse de la période par le rangement comparé aux cibles.'] : []),
+    ...(demandeRangement ? ['   Commence chaque fiche par « Catégorie : … · Format : … », et finis l’analyse de la période par le rangement comparé aux cibles.'] : []),
     '2. Ensuite, la phrase « Bloc à coller dans le studio : » suivie d’UN SEUL bloc de code JSON, de cette forme exacte :',
     '',
     JSON.stringify(exemple, null, 2),
