@@ -249,3 +249,16 @@ describe('confirmations', () => {
     expect(datePublication({ date_heure: 'a' })).toBe('a');
   });
 });
+
+describe('catégorie de fiche', () => {
+  it('nouvelleFiche : categorie et categorie_proposee à null', () => {
+    const f = base();
+    expect(f.categorie).toBeNull();
+    expect(f.categorie_proposee).toBeNull();
+  });
+
+  it('empreinte inchangée quand seule la catégorie change', () => {
+    const f = { ...base(), visuel: 'a1', caption: 'Une caption.' };
+    expect(empreinte({ ...f, categorie: 'desir' })).toBe(empreinte(f));
+  });
+});

@@ -14,6 +14,7 @@ export function nouvelleFiche({ id, format, date_heure, pilier = '', maintenant,
   if (!FORMATS.includes(format)) throw new Error(`Format inconnu : ${format}`);
   return {
     id, format, pilier, format_valide: '', role_caption: null, cta: false, ragebait: false, porte: false,
+    categorie: null, categorie_proposee: null,
     date_heure, statut: 'idee', programme_pour: null, publie_le: null, visuel: null, visuel_type: null, accroche: '', caption: '', variantes: [],
     hashtags: [], geotag: '', score: null, recommandations: [], origine,
     modifiee_depuis_creation: false, cree_le: maintenant, maj_le: maintenant,

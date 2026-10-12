@@ -1,8 +1,66 @@
 import { CIBLES } from './indicateurs.js';
+import { CATEGORIES } from './categories.js';
 
 const HEURE = /^([01]\d|2[0-3]):[0-5]\d$/;
 const COULEUR = /^#[0-9a-fA-F]{6}$/;
 const entier = (v, min = 0) => Number.isInteger(v) && v >= min;
+const objet = v => !!v && typeof v === 'object' && !Array.isArray(v);
+const textes = v => Array.isArray(v) && v.every(t => typeof t === 'string');
+const FORMATS_GRILLE = ['reel', 'carrousel', 'story', 'post'];
+
+function erreursCategories(s, erreurs) {
+  const p = 'categories_de_contenu';
+  const cles = CATEGORIES.map(c => c.cle);
+  if (!objet(s)) {
+    erreurs.push(`${p} : objet attendu.`);
+    return;
+  }
+  if (s.categories !== undefined) {
+    if (!Array.isArray(s.categories)) {
+      erreurs.push(`${p}.categories : liste attendue.`);
+    } else {
+      const vus = new Set();
+      s.categories.forEach((c, i) => {
+        const chemin = `${p}.categories[${i}]`;
+        if (!cles.includes(c?.cle)) {
+          erreurs.push(`${chemin}.cle : catégorie inconnue (attendu : ${cles.join(', ')}).`);
+        } else if (vus.has(c.cle)) {
+          erreurs.push(`${chemin}.cle : doublon de « ${c.cle} ».`);
+        } else {
+          vus.add(c.cle);
+        }
+        if (c?.couleur != null && !COULEUR.test(c.couleur)) erreurs.push(`${chemin}.couleur : doit être au format #rrggbb.`);
+        if (c?.cible_fil != null && !entier(c.cible_fil)) erreurs.push(`${chemin}.cible_fil : entier positif ou nul attendu.`);
+        const st = c?.cible_stories;
+        if (st != null && (!entier(st.min) || !entier(st.max) || st.min > st.max)) {
+          erreurs.push(`${chemin}.cible_stories : min et max entiers, avec min ≤ max.`);
+        }
+      });
+    }
+  }
+  if (s.grilles !== undefined) {
+    if (!objet(s.grilles)) {
+      erreurs.push(`${p}.grilles : objet attendu.`);
+      return;
+    }
+    if (s.grilles.par_format !== undefined && !objet(s.grilles.par_format)) {
+      erreurs.push(`${p}.grilles.par_format : objet attendu.`);
+    } else {
+      for (const [k, v] of Object.entries(s.grilles.par_format ?? {})) {
+        if (!FORMATS_GRILLE.includes(k)) erreurs.push(`${p}.grilles.par_format.${k} : format inconnu (reel, carrousel, story, post).`);
+        else if (!textes(v)) erreurs.push(`${p}.grilles.par_format.${k} : liste de textes attendue.`);
+      }
+    }
+    if (s.grilles.par_categorie !== undefined && !objet(s.grilles.par_categorie)) {
+      erreurs.push(`${p}.grilles.par_categorie : objet attendu.`);
+    } else {
+      for (const [k, v] of Object.entries(s.grilles.par_categorie ?? {})) {
+        if (!cles.includes(k)) erreurs.push(`${p}.grilles.par_categorie.${k} : catégorie inconnue.`);
+        else if (!textes(v)) erreurs.push(`${p}.grilles.par_categorie.${k} : liste de textes attendue.`);
+      }
+    }
+  }
+}
 
 export function fuseauValide(fuseau) {
   if (typeof fuseau !== 'string' || !fuseau) return false;
@@ -90,6 +148,8 @@ export function validerProfil(profil) {
       }
     }
   }
+
+  if (profil.categories_de_contenu !== undefined) erreursCategories(profil.categories_de_contenu, erreurs);
 
   return { ok: erreurs.length === 0, erreurs };
 }

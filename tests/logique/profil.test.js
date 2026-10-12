@@ -81,3 +81,73 @@ describe('validerProfil', () => {
     expect(validerProfil(p).erreurs).toEqual(['regles_studio.cibles doit être un objet.']);
   });
 });
+
+describe('categories_de_contenu', () => {
+  const sansSection = () => { const p = structuredClone(fictif); delete p.categories_de_contenu; return p; };
+  const avecSection = section => ({ ...sansSection(), categories_de_contenu: section });
+
+  it('section absente : valide', () => {
+    expect(validerProfil(sansSection())).toEqual({ ok: true, erreurs: [] });
+  });
+
+  it('section complète : valide', () => {
+    const section = {
+      principe: 'texte libre',
+      test_de_rangement: ['1. Exemple.'],
+      categories: [
+        { cle: 'attraction', couleur: '#d9622b', cible_fil: 3, cible_stories: null, reaction_voulue: 'texte libre' },
+        { cle: 'autorite', cible_fil: 0, cible_stories: null },
+        { cle: 'connexion', cible_fil: null, cible_stories: { min: 2, max: 2 } },
+      ],
+      grilles: {
+        par_format: { reel: ['Exemple.'], story: ['Exemple.'] },
+        par_categorie: { attraction: ['Exemple.'] },
+      },
+      garde_fous: ['Exemple.'],
+    };
+    expect(validerProfil(avecSection(section))).toEqual({ ok: true, erreurs: [] });
+  });
+
+  it('signale une clé de catégorie inconnue', () => {
+    const r = validerProfil(avecSection({ categories: [{ cle: 'humour' }] }));
+    expect(r.erreurs).toEqual(['categories_de_contenu.categories[0].cle : catégorie inconnue (attendu : attraction, autorite, connexion, desir, preuve, conversion).']);
+  });
+
+  it('signale un doublon de clé', () => {
+    const r = validerProfil(avecSection({ categories: [{ cle: 'desir' }, { cle: 'desir' }] }));
+    expect(r.erreurs).toEqual(['categories_de_contenu.categories[1].cle : doublon de « desir ».']);
+  });
+
+  it('signale une couleur hors #rrggbb', () => {
+    const r = validerProfil(avecSection({ categories: [{ cle: 'attraction', couleur: 'rouge' }] }));
+    expect(r.erreurs).toEqual(['categories_de_contenu.categories[0].couleur : doit être au format #rrggbb.']);
+  });
+
+  it('signale une cible_fil négative ou non entière', () => {
+    expect(validerProfil(avecSection({ categories: [{ cle: 'attraction', cible_fil: -1 }] })).erreurs)
+      .toEqual(['categories_de_contenu.categories[0].cible_fil : entier positif ou nul attendu.']);
+    expect(validerProfil(avecSection({ categories: [{ cle: 'attraction', cible_fil: 2.5 }] })).erreurs)
+      .toEqual(['categories_de_contenu.categories[0].cible_fil : entier positif ou nul attendu.']);
+  });
+
+  it('signale une cible_stories sans min/max entiers, ou avec min > max', () => {
+    const attendu = ['categories_de_contenu.categories[0].cible_stories : min et max entiers, avec min ≤ max.'];
+    expect(validerProfil(avecSection({ categories: [{ cle: 'connexion', cible_stories: { min: 2 } }] })).erreurs).toEqual(attendu);
+    expect(validerProfil(avecSection({ categories: [{ cle: 'connexion', cible_stories: { min: 3, max: 2 } }] })).erreurs).toEqual(attendu);
+  });
+
+  it('signale une clé de grilles.par_format inconnue', () => {
+    const r = validerProfil(avecSection({ grilles: { par_format: { video: ['Exemple.'] } } }));
+    expect(r.erreurs).toEqual(['categories_de_contenu.grilles.par_format.video : format inconnu (reel, carrousel, story, post).']);
+  });
+
+  it('signale une clé de grilles.par_categorie inconnue', () => {
+    const r = validerProfil(avecSection({ grilles: { par_categorie: { humour: ['Exemple.'] } } }));
+    expect(r.erreurs).toEqual(['categories_de_contenu.grilles.par_categorie.humour : catégorie inconnue.']);
+  });
+
+  it('signale une valeur de grille qui n’est pas une liste de textes', () => {
+    const r = validerProfil(avecSection({ grilles: { par_format: { reel: 'Exemple.' } } }));
+    expect(r.erreurs).toEqual(['categories_de_contenu.grilles.par_format.reel : liste de textes attendue.']);
+  });
+});

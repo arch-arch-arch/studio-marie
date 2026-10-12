@@ -26,5 +26,41 @@
     "hashtags": { "min": 3, "max": 5 },
     "accroche_mots_max": 15,
     "cibles": { "taux_abonnes_par_vue": 0.003, "partages_par_post": 20, "croissance_nette_semaine": 100, "clics_porte_semaine": 30 }
+  },
+  "categories_de_contenu": {
+    "principe": "Exemple : chaque contenu sert une étape de l’entonnoir, à choisir avant de le publier.",
+    "test_de_rangement": [
+      "1. Exemple : le contenu s’adresse-t-il à des inconnus ?",
+      "2. Exemple : montre-t-il une compétence précise ?",
+      "3. Exemple : reprend-il une situation que le public connaît ?",
+      "4. Exemple : propose-t-il une suite ou une offre ?",
+      "5. Exemple : s’appuie-t-il sur un fait vérifiable ?",
+      "6. Exemple : crée-t-il une envie sans demander d’action ?"
+    ],
+    "categories": [
+      { "cle": "attraction", "couleur": "#d9622b", "cible_fil": 3, "cible_stories": null, "reaction_voulue": "Exemple : envie de regarder jusqu’au bout." },
+      { "cle": "autorite", "cible_fil": 2, "cible_stories": null, "reaction_voulue": "Exemple : confiance dans le point de vue." },
+      { "cle": "connexion", "cible_fil": null, "cible_stories": { "min": 3, "max": 5 }, "reaction_voulue": "Exemple : sentiment d’être compris." },
+      { "cle": "desir", "cible_fil": 1, "cible_stories": null, "reaction_voulue": "Exemple : envie de ce qui est montré." },
+      { "cle": "preuve", "cible_fil": 1, "cible_stories": null, "reaction_voulue": "Exemple : constat que ça marche." },
+      { "cle": "conversion", "cible_fil": 1, "cible_stories": { "min": 2, "max": 3 }, "reaction_voulue": "Exemple : envie de passer à l’étape suivante." }
+    ],
+    "grilles": {
+      "par_format": {
+        "reel": ["Exemple : le début tient en deux secondes.", "Exemple : une seule idée par vidéo."],
+        "carrousel": ["Exemple : la première image donne envie d’aller plus loin.", "Exemple : chaque image apporte une chose."],
+        "story": ["Exemple : une question ou un geste simple.", "Exemple : un seul lien par story."],
+        "post": ["Exemple : le texte se lit en une fois.", "Exemple : l’image porte le message."]
+      },
+      "par_categorie": {
+        "attraction": ["Exemple : surprise ou curiosité dès le début."],
+        "autorite": ["Exemple : une expérience vérifiable est racontée."],
+        "connexion": ["Exemple : une situation que le public reconnaît."],
+        "desir": ["Exemple : ce qui est montré donne envie."],
+        "preuve": ["Exemple : un résultat concret est visible."],
+        "conversion": ["Exemple : l’action suivante est claire."]
+      }
+    },
+    "garde_fous": ["Exemple : un seul message par contenu."]
   }
 }
