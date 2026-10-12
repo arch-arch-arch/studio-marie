@@ -5,6 +5,7 @@ import { creerRendu } from './rendu.js';
 import { creerDepot } from '../donnees/depot.js';
 import { creerEnregistreur } from '../donnees/enregistreur.js';
 import { cleSemaineIso, debutSemaine } from '../logique/dates.js';
+import { APERCU_PAR_DEFAUT } from './vue-apercu.js';
 
 const MESSAGE_BASE_INDISPONIBLE = 'La base du studio ne répond pas. Recharge la page dans un instant.';
 
@@ -30,7 +31,7 @@ export async function demarrer(racine, claude, { horloge = () => new Date().toIS
   const connexion = (await claude.use('connexion')) ?? null;
   const dossier = (await claude.use('dossier')) ?? null;
   const depot = creerDepot(db);
-  const etat = creerEtat({ profil: undefined, fiches: [], vue: 'semaine', ancre: horloge(), ficheOuverte: null, erreur: null, sauvegarde: 'ok', reference: [], resultatReference: null, verificationReference: null, bulletin: undefined, configVeille: null, stats: undefined, relevesCompte: undefined, fichesRecentes: [], analyse: null, analyses: [], apercu: { periode: 'semaine', filtres: { story: true, reel: true, post: true } } });
+  const etat = creerEtat({ profil: undefined, fiches: [], vue: 'semaine', ancre: horloge(), ficheOuverte: null, erreur: null, sauvegarde: 'ok', reference: [], resultatReference: null, verificationReference: null, bulletin: undefined, configVeille: null, stats: undefined, relevesCompte: undefined, fichesRecentes: [], analyse: null, analyses: [], apercu: APERCU_PAR_DEFAUT });
   const enregistreur = creerEnregistreur(
     async fiche => {
       etat.modifier({ sauvegarde: 'en_cours' });

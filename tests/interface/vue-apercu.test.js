@@ -137,7 +137,7 @@ describe('vueApercu : miniatures', () => {
     expect(v.hasAttribute('playsinline')).toBe(true);
     expect(video.querySelector('.marque-lecture')).not.toBeNull();
     await vi.waitFor(() => expect(img.getAttribute('src')).toBe('https://stockage.test/a.png'));
-    await vi.waitFor(() => expect(v.getAttribute('src')).toBe('https://stockage.test/b.mp4'));
+    await vi.waitFor(() => expect(v.getAttribute('src')).toBe('https://stockage.test/b.mp4#t=0.001'));
   });
 
   it('sans visuel, la case montre l’accroche ou « Sans visuel »', () => {
@@ -240,5 +240,114 @@ describe('onglet Aperçu (rendu)', () => {
     expect(racine.querySelectorAll('button.miniature')).toHaveLength(2);
     rendre({ ...e, apercu: { periode: 'semaine', filtres: { story: true, reel: false, post: false } } });
     expect(racine.querySelectorAll('button.miniature')).toHaveLength(1);
+  });
+
+  it('le libellé de période suit l’Aperçu Mois', () => {
+    const { racine } = monter('apercu', { periode: 'mois', filtres: TOUS });
+    expect(racine.querySelector('.periode-libelle').textContent).toBe('octobre 2026');
+  });
+
+  it('une frappe dans une fiche ne reconstruit pas la grille : même miniature, même nœud', () => {
+    const { racine, rendre, e } = monter('apercu');
+    const avant = racine.querySelector('button.miniature');
+    rendre({ ...e, fiches: e.fiches.map(x => ({ ...x, caption: 'tapée' })) });
+    expect(racine.querySelector('button.miniature')).toBe(avant);
+  });
+
+  it('modifier l’accroche d’une fiche de la période reconstruit la grille', () => {
+    const { racine, rendre, e } = monter('apercu');
+    const avant = racine.querySelector('button.miniature');
+    rendre({ ...e, fiches: e.fiches.map(x => ({ ...x, accroche: 'nouvelle' })) });
+    expect(racine.querySelector('button.miniature')).not.toBe(avant);
+  });
+});
+
+describe('vueApercu : liens, focus, nom accessible (round 1)', () => {
+  it('chaque miniature a un nom accessible : date, format, accroche ou « Sans accroche », « Publié »', () => {
+    const el = vueApercu(etatApercu([
+      f('a', 'reel', '2026-10-12T10:00:00.000Z', { accroche: 'Le café' }),
+      f('b', 'story', '2026-10-13T10:00:00.000Z', { statut: 'publie', publie_le: '2026-10-13T10:00:00.000Z' }),
+    ]), actionsFactices());
+    const [a, b] = tuiles(el);
+    expect(a.getAttribute('aria-label')).toBe('lun. 12/10, Reel, Le café');
+    expect(b.getAttribute('aria-label')).toBe('mar. 13/10, Story, Sans accroche, Publié');
+  });
+
+  it('un lien expiré (plus de 50 minutes) est redemandé, un lien récent non', async () => {
+    let t = 0;
+    const cache = creerCacheVisuels({ maintenant: () => t });
+    const actions = actionsFactices();
+    const etat = etatApercu([f('a', 'post', '2026-10-12T10:00:00.000Z', { visuel: 'a.png', visuel_type: 'image' })], undefined, { cacheVisuels: cache });
+    vueApercu(etat, actions);
+    expect(actions.urlVisuel).toHaveBeenCalledTimes(1);
+    t = 49 * 60000;
+    vueApercu(etat, actions);
+    expect(actions.urlVisuel).toHaveBeenCalledTimes(1);
+    t = 51 * 60000;
+    const el = vueApercu(etat, actions);
+    expect(actions.urlVisuel).toHaveBeenCalledTimes(2);
+    await vi.waitFor(() => expect(el.querySelector('img').getAttribute('src')).toBe('https://stockage.test/a.png'));
+  });
+
+  it('une erreur de chargement de l’image refait un seul essai, puis affiche « Visuel indisponible »', async () => {
+    const cache = creerCacheVisuels();
+    const actions = actionsFactices();
+    const etat = etatApercu([f('a', 'post', '2026-10-12T10:00:00.000Z', { visuel: 'a.png', visuel_type: 'image' })], undefined, { cacheVisuels: cache });
+    const el = vueApercu(etat, actions);
+    const img = el.querySelector('img');
+    await vi.waitFor(() => expect(img.getAttribute('src')).toBe('https://stockage.test/a.png'));
+    img.dispatchEvent(new Event('error'));
+    await vi.waitFor(() => expect(actions.urlVisuel).toHaveBeenCalledTimes(2));
+    await vi.waitFor(() => expect(img.getAttribute('src')).toBe('https://stockage.test/a.png'));
+    img.dispatchEvent(new Event('error'));
+    await vi.waitFor(() => expect(el.querySelector('button.miniature').textContent).toContain('Visuel indisponible'));
+    expect(actions.urlVisuel).toHaveBeenCalledTimes(2);
+    // Un visuel marqué en échec n'est pas redemandé à la reconstruction suivante.
+    const suivante = vueApercu(etat, actions);
+    await vi.waitFor(() => expect(suivante.querySelector('button.miniature').textContent).toContain('Visuel indisponible'));
+    expect(actions.urlVisuel).toHaveBeenCalledTimes(2);
+  });
+
+  it('un lien en échec n’est pas redemandé à la reconstruction, mais l’est après un changement de période', async () => {
+    const cache = creerCacheVisuels();
+    const actions = actionsFactices({ urlVisuel: vi.fn(async () => { throw new Error('x'); }) });
+    const fiche = f('a', 'post', '2026-10-12T10:00:00.000Z', { visuel: 'a.png', visuel_type: 'image' });
+    const etat = etatApercu([fiche], undefined, { cacheVisuels: cache });
+    const premiere = vueApercu(etat, actions);
+    await vi.waitFor(() => expect(premiere.textContent).toContain('Visuel indisponible'));
+    const reconstruite = vueApercu({ ...etat, fiches: [{ ...fiche, caption: 'autre' }] }, actions);
+    await vi.waitFor(() => expect(reconstruite.textContent).toContain('Visuel indisponible'));
+    expect(actions.urlVisuel).toHaveBeenCalledTimes(1);
+    vueApercu({ ...etat, apercu: { periode: 'mois', filtres: TOUS } }, actions);
+    expect(actions.urlVisuel).toHaveBeenCalledTimes(2);
+  });
+
+  it('la légende ne compte que la sélection affichée', () => {
+    const el = vueApercu(etatApercu([
+      f('a', 'reel', '2026-10-12T10:00:00.000Z', { categorie: 'attraction' }),
+      f('b', 'story', '2026-10-13T10:00:00.000Z', { categorie: 'attraction' }),
+    ], { periode: 'semaine', filtres: { story: false, reel: true, post: false } }), actionsFactices());
+    expect(el.querySelector('[data-categorie="attraction"] .legende-compte').textContent).toBe('1');
+  });
+
+  it('après un changement de filtre, le focus revient sur la même case', () => {
+    const racine = document.createElement('div');
+    document.body.append(racine);
+    let e = { profil: PROFIL, fiches: [f('a', 'reel', '2026-10-12T10:00:00.000Z')], vue: 'apercu', ancre: ANCRE, apercu: { periode: 'semaine', filtres: TOUS }, sauvegarde: 'ok', erreur: null, ficheOuverte: null };
+    const actions = actionsFactices({ changerVue: vi.fn(), naviguer: vi.fn(), allerAujourdhui: vi.fn() });
+    actions.changerFiltresApercu = vi.fn(filtres => { e = { ...e, apercu: { ...e.apercu, filtres } }; rendre(e); });
+    actions.changerPeriodeApercu = vi.fn(periode => { e = { ...e, apercu: { ...e.apercu, periode } }; rendre(e); });
+    const rendre = creerRendu(racine, actions, {}, () => ANCRE);
+    rendre(e);
+    const reels = racine.querySelector('input[data-commande="format:reel"]');
+    reels.checked = false;
+    reels.dispatchEvent(new Event('change'));
+    const nouvelle = racine.querySelector('input[data-commande="format:reel"]');
+    expect(nouvelle).not.toBe(reels);
+    expect(document.activeElement).toBe(nouvelle);
+    const mois = racine.querySelector('input[data-commande="periode:mois"]');
+    mois.dispatchEvent(new Event('change'));
+    expect(document.activeElement).toBe(racine.querySelector('input[data-commande="periode:mois"]'));
+    racine.remove();
   });
 });

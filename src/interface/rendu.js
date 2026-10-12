@@ -2,7 +2,7 @@ import { h } from './h.js';
 import { debutSemaine, ajouterJours } from '../logique/dates.js';
 import { vueSemaine } from './vue-semaine.js';
 import { vueMois } from './vue-mois.js';
-import { vueApercu, creerCacheVisuels } from './vue-apercu.js';
+import { vueApercu, creerCacheVisuels, cleApercu } from './vue-apercu.js';
 import { vueJour } from './vue-jour.js';
 import { vueProfil, sectionSauvegarde } from './vue-profil.js';
 import { vueBulletin } from './vue-bulletin.js';
@@ -93,18 +93,21 @@ export function creerRendu(racine, actions, capacites, horloge) {
       && (memo.stats === undefined || memo.relevesCompte === undefined) && e.stats !== undefined && e.relevesCompte !== undefined;
     const panneauOuvert = e.analyse != null;
     let reconstructionRequise;
+    let cleApercuCourante = null;
     if (estVueProfil) {
       reconstructionRequise = memo.profil !== e.profil || memo.vue !== e.vue || memo.ancre !== e.ancre;
     } else if (estVueTableau) {
       // vueTableau ne lit ni fiches, ni bulletin, ni configVeille : ils ne doivent pas la reconstruire.
       reconstructionRequise = memo.profil !== e.profil || memo.vue !== e.vue || memo.ancre !== e.ancre || sortDuChargementTableau;
+    } else if (e.vue === 'apercu') {
+      // La grille ne se reconstruit que si ce qu'elle affiche change : une frappe dans une fiche ne recrée ni images ni vidéos.
+      cleApercuCourante = cleApercu(e);
+      reconstructionRequise = memo.profil !== e.profil || memo.vue !== e.vue || memo.cleApercu !== cleApercuCourante;
     } else {
       reconstructionRequise = memo.profil !== e.profil || memo.fiches !== e.fiches || memo.vue !== e.vue || memo.ancre !== e.ancre || memo.bulletin !== e.bulletin || memo.configVeille !== e.configVeille || memo.veille !== e.veille
         || (e.vue === 'semaine' && memo.stats !== e.stats)
         // Le bouton d'analyse et l'avis de la période n'existent qu'en Semaine et en Mois ; le panneau d'analyse, lui, n'en dépend pas.
-        || ((e.vue === 'semaine' || e.vue === 'mois') && (memo.analyses !== e.analyses || memo.panneauOuvert !== panneauOuvert))
-        // Les filtres et la période de l'aperçu vivent dans e.apercu : un changement reconstruit la grille.
-        || (e.vue === 'apercu' && memo.apercu !== e.apercu);
+        || ((e.vue === 'semaine' || e.vue === 'mois') && (memo.analyses !== e.analyses || memo.panneauOuvert !== panneauOuvert));
     }
     if (reconstructionRequise) {
       elementVue = contenuVue(e2, actions, capacites, { sauvegarde: sauvegarde() });
@@ -142,7 +145,7 @@ export function creerRendu(racine, actions, capacites, horloge) {
     if (panneauChange) panneau.replaceChildren(ouverte ? panneauFiche(ouverte, e.profil, actions, capacites, (e.stats ?? []).filter(s => s.fiche === ouverte.id)) : '');
     racine.classList.toggle('avec-panneau', !!ouverte);
     memo = {
-      profil: e.profil, fiches: e.fiches, vue: e.vue, ancre: e.ancre, ficheOuverte: e.ficheOuverte, panneauAffiche: !!ouverte, apercu: e.apercu,
+      profil: e.profil, fiches: e.fiches, vue: e.vue, ancre: e.ancre, ficheOuverte: e.ficheOuverte, panneauAffiche: !!ouverte, cleApercu: cleApercuCourante,
       cleAnalyse, etapeAnalyse: e.analyse?.etape ?? null, analyses: e.analyses, panneauOuvert,
       reference: e.reference, resultatReference: e.resultatReference, verificationReference: e.verificationReference,
       bulletin: e.bulletin, configVeille: e.configVeille, veille: e.veille,

@@ -12,6 +12,7 @@ import { RELEVES, validerReleveContenu, validerReleveCompte, documentReleveConte
 import { periodeAffichee, choisirFiches, codeDossier, attribuerReferences, etatVisuel, contenuDossier, MESSAGE_A_COLLER } from '../logique/dossier.js';
 import { lireRetour, validerRetour } from '../logique/retour-dossier.js';
 import { COLLECTIONS_EXPORT, construireExport, validerExport, resumeRestauration, nomFichierExport } from '../logique/sauvegarde.js';
+import { APERCU_PAR_DEFAUT } from './vue-apercu.js';
 
 const MESSAGES_TELEVERSEMENT = {
   too_large: 'Fichier trop lourd (20 Mo au maximum).',
@@ -19,8 +20,6 @@ const MESSAGES_TELEVERSEMENT = {
   rate_limited: 'Trop d’envois d’un coup : réessaie dans un instant.',
   revoked: 'Ta session a expiré : reconnecte-toi puis réessaie.',
 };
-
-const APERCU_PAR_DEFAUT = { periode: 'semaine', filtres: { story: true, reel: true, post: true } };
 
 export function plageDeVue(vue, ancre, fuseau) {
   // L'aperçu charge le mois : sa semaine ou son mois est toujours couvert, même une semaine à cheval sur deux mois.
