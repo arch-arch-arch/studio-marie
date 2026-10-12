@@ -306,3 +306,23 @@ describe('passe finale D4 : régions d’état vides', () => {
     for (const r of regle) expect(r).not.toMatch(/display:\s*none/);
   });
 });
+
+describe('plan 9 tâche 5 : catégories proposées dans le compte rendu', () => {
+  const avec = r => {
+    const a = actions({ enregistrerRetour: vi.fn(async () => r) });
+    const el = panneauAnalyse(pret, a, {});
+    el.querySelector('textarea.retour').value = 'x';
+    bouton(el, 'Enregistrer le retour').click();
+    return el;
+  };
+  it('nomme les catégories proposées, fiche par fiche', async () => {
+    const el = avec({ ok: true, appliquees: 2, avisRecu: true, ecartees: [], categoriesProposees: [{ ref: 'F01', cle: 'connexion' }, { ref: 'F02', cle: 'attraction' }] });
+    await vi.waitFor(() => expect(el.textContent).toContain('2 fiches mises à jour.'));
+    expect(el.textContent).toContain('Catégories proposées : F01 Connexion, F02 Attraction');
+  });
+  it('n’affiche rien sans catégorie proposée', async () => {
+    const el = avec({ ok: true, appliquees: 2, avisRecu: true, ecartees: [] });
+    await vi.waitFor(() => expect(el.textContent).toContain('2 fiches mises à jour.'));
+    expect(el.textContent).not.toContain('Catégories proposées');
+  });
+});

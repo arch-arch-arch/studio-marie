@@ -325,3 +325,86 @@ describe('retouche : causes des états qui ne se déduisent pas des nombres', ()
     expect(regles(fiches)).toContain('- Piliers présents : 2 sur 4 (rouge : un pilier domine plus de la moitié du fil)');
   });
 });
+
+describe('plan 9 tâche 5 : catégories, rangement et grilles', () => {
+  const periode = periodeAffichee('semaine', '2026-10-07T10:00:00.000Z', FZ);
+  const { categories_de_contenu: _section, ...sansSection } = profil;
+  const f1 = fiche('a', '2026-10-05T10:00:00.000Z', { categorie: 'attraction' });
+  const f2 = fiche('b', '2026-10-06T10:00:00.000Z', { categorie_proposee: { cle: 'autorite', source: 'analyse' } });
+  const f3 = fiche('c', '2026-10-07T10:00:00.000Z', { categorie: 'attraction', format: 'carrousel' });
+  const f4 = fiche('d', '2026-10-08T10:00:00.000Z', { format: 'story', porte: true });
+  const f5 = fiche('e', '2026-10-09T10:00:00.000Z');
+  const fiches = [f1, f2, f3, f4, f5];
+  const entrees = fiches.map((f, i) => ({ ref: `F0${i + 1}`, fiche: f, etat: etatVisuel(f, null) }));
+  const dossier = (p = profil, liste = entrees) => contenuDossier({ profil: p, entrees: liste, periode, code: 'D-abc123', toutesLesFiches: fiches });
+  const c = dossier();
+
+  it('ajoute la section de catégories à la stratégie, comme les autres', () => {
+    const titres = c.strategie.map(s => s.titre);
+    expect(titres).toContain('categories de contenu');
+    const section = c.strategie.find(s => s.titre === 'categories de contenu');
+    expect(section.lignes).toContain("- principe : Exemple : chaque contenu sert une étape de l'entonnoir, à choisir avant de le publier.");
+    expect(dossier(sansSection).strategie.map(s => s.titre)).not.toContain('categories de contenu');
+  });
+
+  it('écrit la catégorie de chaque fiche après le pilier : choisie, proposée ou non rangée', () => {
+    const ligne = i => {
+      const l = c.fiches[i].lignes;
+      return l[l.findIndex(x => x.startsWith('pilier : ')) + 1];
+    };
+    expect(ligne(0)).toBe('catégorie : Attraction (choisie)');
+    expect(ligne(1)).toBe('catégorie : Autorité (proposée)');
+    expect(ligne(3)).toBe('catégorie : Conversion (proposée)');
+    expect(ligne(4)).toBe('catégorie : non rangée');
+  });
+
+  it('range les fiches par catégorie avec les cibles de la semaine', () => {
+    const rangement = c.rangement.join('\n');
+    expect(c.rangement[0]).toBe('Rangement actuel, à vérifier. Ces lignes ne sont pas des états de cadence.');
+    expect(rangement).toContain('Attraction : F01, F03 · cible : 3 contenus du fil');
+    expect(rangement).toContain('Autorité : F02 · cible : 2 contenus du fil');
+    expect(rangement).toContain('Connexion : aucune · cible : 3 à 5 stories');
+    expect(rangement).toContain('Conversion : F04 · cible : 1 contenu du fil ; 2 à 3 stories');
+    expect(rangement).toContain('Désir : aucune · cible : 1 contenu du fil');
+    expect(c.rangement.at(-1)).toBe('Non rangées : F05');
+  });
+
+  it('sans section, les catégories restent listées sans cible, et « aucune » quand il n’y a rien à ranger', () => {
+    const r = dossier(sansSection).rangement.join('\n');
+    expect(r).toContain('Attraction : F01, F03');
+    expect(r).not.toContain('cible');
+    expect(r).toContain('Non rangées : F05');
+    const tout = contenuDossier({ profil: sansSection, entrees: entrees.slice(0, 1), periode, code: 'D-abc123', toutesLesFiches: [f1] });
+    expect(tout.rangement.at(-1)).toBe('Non rangées : aucune');
+  });
+
+  it('consigne avec grilles : ranger, juger, commencer par la catégorie et finir par le rangement', () => {
+    const texte = c.consigne.join('\n');
+    expect(texte).toContain('test de rangement de la stratégie');
+    expect(texte).toContain('« non déterminable »');
+    expect(texte).toContain('Catégorie : ... · Format : ...');
+    expect(texte).toContain('rangement comparé aux cibles');
+    expect(texte).toContain('Exemple : le début tient en deux secondes.');
+    expect(texte).toContain('Exemple : surprise ou curiosité dès le début.');
+    expect(texte.indexOf('Grilles par format :')).toBeLessThan(texte.indexOf('Grilles par catégorie :'));
+    expect(texte.indexOf('Reel :')).toBeLessThan(texte.indexOf('Carrousel :'));
+    expect(texte.indexOf('Attraction :')).toBeLessThan(texte.indexOf('Autorité :'));
+  });
+
+  it('consigne sans grilles : celle d’aujourd’hui, sans demande de catégorie', () => {
+    const sansGrilles = { ...profil, categories_de_contenu: { ...profil.categories_de_contenu, grilles: undefined } };
+    for (const p of [sansSection, sansGrilles]) {
+      const texte = dossier(p).consigne.join('\n');
+      expect(texte).not.toContain('non déterminable');
+      expect(texte).not.toContain('Grilles par');
+      expect(texte).not.toContain('Catégorie : ... · Format');
+      expect(texte).toContain('"categorie": "connexion"');
+    }
+  });
+
+  it('la consigne accepte les catégories du studio, ou null, dans le bloc', () => {
+    for (const p of [profil, sansSection]) {
+      expect(dossier(p).consigne.join('\n')).toContain('"categorie" parmi attraction, autorite, connexion, desir, preuve, conversion, ou null');
+    }
+  });
+});

@@ -487,6 +487,7 @@ export function creerControleur({ etat, depot, enregistreur, assets, horloge, id
     }
     const appliquees = [];
     const remarques = [];
+    const categoriesProposees = [];
     let ecarteesEnEcriture = 0;
     const ecarter = (item, raison) => { ecartees.push({ ref: item.ref, raison }); ecarteesEnEcriture += 1; };
     for (const { item } of aNoter) {
@@ -510,20 +511,25 @@ export function creerControleur({ etat, depot, enregistreur, assets, horloge, id
         source: 'dossier', assistant: analyse.assistant ?? 'inconnu',
       };
       const score = composerScore({ fiche: actuelle, verification, jugement: item.jugement, versionProfil: profil.version, maintenant: horloge(), examen });
-      const g = appliquerEvaluation(actuelle, {
+      const evaluee = appliquerEvaluation(actuelle, {
         score, variantes: item.jugement.captions,
         suggestions: { accroches: item.jugement.accroches, hashtags: item.jugement.hashtags },
         recommandations: item.jugement.recommandations,
       }, horloge());
+      // La proposition de l'analyse part dans la même écriture que le score ; une catégorie choisie n'est jamais touchée.
+      const proposee = item.categorie && !actuelle.categorie ? { cle: item.categorie, source: 'analyse' } : null;
+      const g = proposee ? { ...evaluee, categorie_proposee: proposee } : evaluee;
       remplacer(g);
       await ecrireMaintenant(g);
       if (enregistreur.enEchec().includes(g.id)) return interruption(appliquees.length, aNoter.length - ecarteesEnEcriture);
       appliquees.push(item.id);
+      if (proposee) categoriesProposees.push({ ref: item.ref, cle: proposee.cle });
       if (item.remarque) remarques.push({ ref: item.ref, texte: item.remarque });
     }
     const toutes = [...v.ecartees, ...ecartees].sort((a, b) => a.ref.localeCompare(b.ref));
     const avecRemarques = remarques.length ? { remarques } : {};
-    const resultat = { ok: true, appliquees: appliquees.length, ecartees: toutes, avisRecu: !!v.periode, ...avecRemarques };
+    const avecCategories = categoriesProposees.length ? { categoriesProposees } : {};
+    const resultat = { ok: true, appliquees: appliquees.length, ecartees: toutes, avisRecu: !!v.periode, ...avecRemarques, ...avecCategories };
     try {
       const frais = (await depot.lireAnalyse(lu.dossier)) ?? analyse;
       const avis = v.periode ?? (frais.retour?.avis ? {

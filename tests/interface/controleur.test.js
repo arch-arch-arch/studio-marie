@@ -1264,3 +1264,68 @@ describe('analyse par dossier : retour sans dossier prêt et saisie récente', (
     expect(JSON.stringify(dossier.appels.contenu)).toContain('Saisie toute fraîche');
   });
 });
+
+describe('plan 9 tâche 5 : catégorie proposée par l’analyse', () => {
+  async function deuxFiches() {
+    const dossier = fauxDossier();
+    const m = monter({ dossier, assets: { upload: vi.fn(), telecharger: vi.fn(async () => new Blob(['i'], { type: 'image/png' })) } });
+    await m.actions.creerFiche({ format: 'reel', date_heure: '2026-09-29T10:00:00.000Z' });
+    await m.actions.creerFiche({ format: 'story', date_heure: '2026-09-30T10:00:00.000Z' });
+    const [a, b] = m.etat.lire().fiches;
+    m.actions.modifierFiche(a.id, { accroche: 'Première', caption: 'Texte', visuel: 'v1', visuel_type: 'image' });
+    m.actions.modifierFiche(b.id, { accroche: 'Seconde', caption: 'Texte' });
+    await m.actions.fermerPanneau();
+    return { ...m, a, b };
+  }
+  // Même réponse que reponse(), avec une catégorie par référence (F01 → « Autorité », etc.).
+  const avecCategories = (code, cats) => {
+    const o = JSON.parse(reponse(code, ['F01', 'F02']).replace(/^```json\n|\n```$/g, ''));
+    for (const f of o.fiches) if (cats[f.id] !== undefined) f.categorie = cats[f.id];
+    return `\`\`\`json\n${JSON.stringify(o)}\n\`\`\``;
+  };
+
+  it('écrit la catégorie proposée avec le score, normalisée, et la nomme dans le résultat', async () => {
+    const { actions, etat, db, a } = await deuxFiches();
+    await actions.ouvrirAnalyse();
+    const { code } = etat.lire().analyse;
+    const r = await actions.enregistrerRetour(avecCategories(code, { F01: 'Autorité' }));
+    expect(r).toMatchObject({ ok: true, appliquees: 2, categoriesProposees: [{ ref: 'F01', cle: 'autorite' }] });
+    const fa = db.lire(`fiches/${a.id}`);
+    expect(fa.categorie_proposee).toEqual({ cle: 'autorite', source: 'analyse' });
+    expect(fa.score.total).toBeGreaterThan(0);
+  });
+
+  it('ne remplace jamais une catégorie choisie et n’écrit pas de proposition pour elle', async () => {
+    const { actions, etat, db, b } = await deuxFiches();
+    actions.modifierFiche(b.id, { categorie: 'desir' });
+    await actions.fermerPanneau();
+    await actions.ouvrirAnalyse();
+    const { code } = etat.lire().analyse;
+    const r = await actions.enregistrerRetour(avecCategories(code, { F02: 'connexion' }));
+    expect(r.ok).toBe(true);
+    expect(r).not.toHaveProperty('categoriesProposees');
+    const fb = db.lire(`fiches/${b.id}`);
+    expect(fb.categorie).toBe('desir');
+    expect(fb.categorie_proposee).toBeNull();
+  });
+
+  it('une catégorie absente ou null ne change pas la proposition déjà écrite', async () => {
+    const { actions, etat, db, a } = await deuxFiches();
+    actions.modifierFiche(a.id, { categorie_proposee: { cle: 'preuve', source: 'analyse' } });
+    await actions.fermerPanneau();
+    await actions.ouvrirAnalyse();
+    const { code } = etat.lire().analyse;
+    const r = await actions.enregistrerRetour(avecCategories(code, { F01: null }));
+    expect(r).not.toHaveProperty('categoriesProposees');
+    expect(db.lire(`fiches/${a.id}`).categorie_proposee).toEqual({ cle: 'preuve', source: 'analyse' });
+  });
+
+  it('une catégorie inconnue donne la remarque, sans écarter la fiche', async () => {
+    const { actions, etat, db, a } = await deuxFiches();
+    await actions.ouvrirAnalyse();
+    const { code } = etat.lire().analyse;
+    const r = await actions.enregistrerRetour(avecCategories(code, { F01: 'envoi' }));
+    expect(r).toMatchObject({ ok: true, appliquees: 2, ecartees: [], remarques: [{ ref: 'F01', texte: 'catégorie inconnue ignorée : envoi' }] });
+    expect(db.lire(`fiches/${a.id}`).categorie_proposee).toBeNull();
+  });
+});

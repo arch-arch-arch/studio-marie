@@ -1,5 +1,6 @@
 import { validerReponse } from '../claude/evaluation.js';
 import { couper } from './dossier.js';
+import { normaliserCategorie } from './categories.js';
 
 export const MESSAGE_SANS_BLOC = 'Je ne trouve pas le bloc à coller dans cette réponse. Copie toute la réponse de l’assistant, puis recolle-la.';
 export const MESSAGE_COUPE = `${MESSAGE_SANS_BLOC} Si la réponse a été coupée, demande à l’assistant de redonner seulement le bloc.`;
@@ -128,6 +129,14 @@ function trierCaptions(captions) {
   return { gardees, exact: captions.length === 2 && gardees.length === 2, remarque: remarques.length ? remarques.join(' ; ') : null };
 }
 
+// Vide : aucune catégorie. Connue : sa clé (casse et accents tolérés). Inconnue : ignorée avec une remarque.
+function categorieLue(valeur) {
+  const texte = typeof valeur === 'string' ? valeur.trim() : typeof valeur === 'number' ? String(valeur) : '';
+  if (!texte) return { cle: null, remarque: null };
+  const cle = normaliserCategorie(texte);
+  return cle ? { cle, remarque: null } : { cle: null, remarque: `catégorie inconnue ignorée : ${couper(texte, ELEMENT_MAX)}` };
+}
+
 export function validerRetour(retour, analyse) {
   const illisible = { valides: [], ecartees: [{ ref: '?', raison: 'retour illisible' }], periode: null };
   try {
@@ -158,7 +167,12 @@ export function validerRetour(retour, analyse) {
         } else if (!gardees.has(ref)) {
           gardees.add(ref);
           const jugement = partielle ? { ...v.jugement, captions: tri.gardees } : v.jugement;
-          valides.push({ ref, id: connue.id, empreinte: connue.empreinte, jugement, ...(partielle && tri.remarque ? { remarque: tri.remarque } : {}) });
+          const categorie = categorieLue(brute.categorie);
+          const remarques = [partielle ? tri.remarque : null, categorie.remarque].filter(Boolean);
+          valides.push({
+            ref, id: connue.id, empreinte: connue.empreinte, categorie: categorie.cle, jugement,
+            ...(remarques.length ? { remarque: remarques.join(' ; ') } : {}),
+          });
           continue;
         }
       }

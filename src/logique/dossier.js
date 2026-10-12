@@ -2,6 +2,7 @@ import { debutSemaine, ajouterJours, debutMois, ajouterMois, cleSemaineIso, heur
 import { empreinte, LIBELLES_FORMAT } from './fiche.js';
 import { verifierRegles } from './regles-score.js';
 import { controlerSemaine, fichesDeLaSemaine } from './controle.js';
+import { CATEGORIES, categorieAffichee, categoriesDuProfil } from './categories.js';
 import { extraireProfilDetaille } from '../claude/evaluation.js';
 
 export const FICHES_MAX = 30;
@@ -167,6 +168,14 @@ function semainesDeLaPeriode(periode, fuseau) {
   return debuts;
 }
 
+const libelleCategorie = cle => CATEGORIES.find(c => c.cle === cle)?.nom ?? cle;
+
+// Catégorie choisie, proposée (par l'analyse ou par une règle), ou non rangée.
+function ligneCategorie(fiche) {
+  const { cle, etat } = categorieAffichee(fiche);
+  return cle === null ? 'catégorie : non rangée' : `catégorie : ${libelleCategorie(cle)} (${etat === 'choisie' ? 'choisie' : 'proposée'})`;
+}
+
 function blocFiche({ ref, fiche, etat }, profil) {
   const regles = profil.regles_studio;
   const fz = regles.fuseau;
@@ -178,6 +187,7 @@ function blocFiche({ ref, fiche, etat }, profil) {
     `date : ${date(fiche.date_heure, fz, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}, ${heureLocale(fiche.date_heure, fz)}`,
     `format : ${LIBELLES_FORMAT[fiche.format] ?? fiche.format}`,
     `pilier : ${pilier}`,
+    ligneCategorie(fiche),
     `rôle de caption : ${fiche.role_caption ?? 'non choisi'}`,
     `appel vers l'offre : ${fiche.cta ? 'oui' : 'non'}`,
     `mène à la porte : ${fiche.porte ? 'oui' : 'non'}`,
@@ -197,13 +207,65 @@ function etiquette(ref, fiche, fz) {
   return versLatin1(`${ref} · ${JOURS_COURTS[p.jourSemaine - 1]} ${deux(p.jour)}/${deux(p.mois)} · ${LIBELLES_FORMAT[fiche.format] ?? fiche.format}`);
 }
 
-function consigne(entrees, code) {
+const FORMATS_GRILLE = ['reel', 'carrousel', 'story', 'post'];
+const lignesDe = xs => (Array.isArray(xs) ? xs.filter(x => typeof x === 'string' && x.trim() !== '') : []);
+
+// Grilles du profil, format par format puis catégorie par catégorie ; null si le profil n'en a aucune.
+function grillesDuProfil(profil) {
+  const grilles = profil.categories_de_contenu?.grilles;
+  if (!grilles || typeof grilles !== 'object') return null;
+  const parFormat = FORMATS_GRILLE.map(k => ({ nom: LIBELLES_FORMAT[k], lignes: lignesDe(grilles.par_format?.[k]) })).filter(g => g.lignes.length);
+  const parCategorie = CATEGORIES.map(c => ({ nom: c.nom, lignes: lignesDe(grilles.par_categorie?.[c.cle]) })).filter(g => g.lignes.length);
+  return parFormat.length || parCategorie.length ? { parFormat, parCategorie } : null;
+}
+
+function lignesGrilles({ parFormat, parCategorie }) {
+  const bloc = (titre, groupes) => (groupes.length
+    ? [titre, ...groupes.flatMap(g => [`${g.nom} :`, ...g.lignes.map(l => `- ${l.replace(/\s*\r?\n\s*/g, ' ')}`)])]
+    : []);
+  return [...bloc('Grilles par format :', parFormat), ...bloc('Grilles par catégorie :', parCategorie)];
+}
+
+// Cible de la semaine d'une catégorie, en texte : « 3 contenus du fil », « 3 à 5 stories ».
+function cibleCategorie(c) {
+  const morceaux = [];
+  if (c.cible_fil !== null) morceaux.push(`${c.cible_fil} ${c.cible_fil <= 1 ? 'contenu du fil' : 'contenus du fil'}`);
+  if (c.cible_stories !== null) {
+    const { min, max } = c.cible_stories;
+    morceaux.push(`${min === max ? min : `${min} à ${max}`} ${min === max && min === 1 ? 'story' : 'stories'}`);
+  }
+  return morceaux;
+}
+
+// Rangement actuel : une ligne par catégorie (références, cible de la semaine si le profil en donne une), puis les non rangées.
+function rangement(entrees, profil) {
+  const categories = categoriesDuProfil(profil);
+  const parCle = new Map(categories.map(c => [c.cle, []]));
+  const nonRangees = [];
+  for (const e of entrees) {
+    const { cle } = categorieAffichee(e.fiche);
+    if (cle === null) nonRangees.push(e.ref); else parCle.get(cle).push(e.ref);
+  }
+  return [
+    'Rangement actuel, à vérifier. Ces lignes ne sont pas des états de cadence.',
+    ...categories.map(c => {
+      const refs = parCle.get(c.cle);
+      const cibles = cibleCategorie(c);
+      return `${c.nom} : ${refs.length ? refs.join(', ') : 'aucune'}${cibles.length ? ` · cible : ${cibles.join(' ; ')}` : ''}`;
+    }),
+    `Non rangées : ${nonRangees.length ? nonRangees.join(', ') : 'aucune'}`,
+  ].map(versLatin1);
+}
+
+function consigne(entrees, code, profil) {
   const refs = entrees.map(e => e.ref);
   const courte = entrees.length > 10 ? ' Dans cette partie, au plus trois lignes par fiche.' : '';
+  const grilles = grillesDuProfil(profil);
   const exemple = {
     dossier: code,
     fiches: [{
       id: refs[0],
+      categorie: 'connexion',
       notes: { accroche: 7, voix: 8, mecanique: 6 },
       phrases: { accroche: '…', voix: '…', mecanique: '…' },
       conformite: { etat: 'vert', causes: [] },
@@ -230,13 +292,20 @@ function consigne(entrees, code) {
     'Les caractères que ce document ne sait pas écrire (émojis) sont notés par leur code entre crochets, par exemple [U+1F525].',
     'Dans tes captions et tes accroches, écris de vrais émojis si tu en utilises, jamais leur code entre crochets.',
     '',
+    ...(grilles ? [
+      'Avant de noter, range chaque fiche avec le test de rangement de la stratégie. Si la fiche a déjà une catégorie, vérifie-la et dis en une phrase pourquoi tu la changes ; si rien ne permet de trancher, écris « non déterminable ».',
+      'Juge chaque note avec la grille du format de la fiche et celle de sa catégorie, lues ci-dessous.',
+      ...lignesGrilles(grilles),
+      '',
+    ] : []),
     'Ta réponse a deux parties.',
     `1. D’abord ton analyse en français courant, fiche par fiche, puis sur l’ensemble de la période.${courte}`,
+    ...(grilles ? ['   Commence chaque fiche par « Catégorie : … · Format : … », et finis l’analyse de la période par le rangement comparé aux cibles.'] : []),
     '2. Ensuite, la phrase « Bloc à coller dans le studio : » suivie d’UN SEUL bloc de code JSON, de cette forme exacte :',
     '',
     JSON.stringify(exemple, null, 2),
     '',
-    `Contraintes du bloc : une entrée par fiche, dans l’ordre, avec les références recopiées telles quelles (${refs.length > 1 ? `${refs[0]} à ${refs.at(-1)}` : refs[0]}) ; une phrase par critère ; exactement 2 captions de rôles différents parmi ${ROLES.join(', ')} ; 2 ou 3 accroches ; hashtags sans # ; exactement 3 recommandations concrètes, chacune avec un pourquoi court qui cite ce que tu as observé ; "ordre_conseille" ne contient que des références du dossier ; tout en français ; aucun texte après le bloc.`,
+    `Contraintes du bloc : une entrée par fiche, dans l’ordre, avec les références recopiées telles quelles (${refs.length > 1 ? `${refs[0]} à ${refs.at(-1)}` : refs[0]}) ; une phrase par critère ; exactement 2 captions de rôles différents parmi ${ROLES.join(', ')} ; 2 ou 3 accroches ; hashtags sans # ; "categorie" parmi attraction, autorite, connexion, desir, preuve, conversion, ou null ; exactement 3 recommandations concrètes, chacune avec un pourquoi court qui cite ce que tu as observé ; "ordre_conseille" ne contient que des références du dossier ; tout en français ; aucun texte après le bloc.`,
   ].flatMap(l => l.split('\n')).map(versLatin1);
 }
 
@@ -244,7 +313,11 @@ export function contenuDossier({ profil, entrees, periode, code, toutesLesFiches
   const fz = profil.regles_studio.fuseau;
   const detail = extraireProfilDetaille(profil);
   const extrait = JSON.parse(detail.texte);
-  const strategie = detail.sections.map(cle => ({ titre: versLatin1(titreSection(cle)), lignes: enListes(extrait[cle]).map(versLatin1) }));
+  // La section de catégories figure dans le dossier seulement : le profil envoyé à l'évaluation ne la reprend pas.
+  const avecCategories = profil.categories_de_contenu != null;
+  const sections = avecCategories ? [...detail.sections, 'categories_de_contenu'] : detail.sections;
+  const valeurs = { ...extrait, categories_de_contenu: profil.categories_de_contenu };
+  const strategie = sections.map(cle => ({ titre: versLatin1(titreSection(cle)), lignes: enListes(valeurs[cle]).map(versLatin1) }));
   const regles = [LEGENDE_REGLES, ...semainesDeLaPeriode(periode, fz).flatMap(debut => [
     `Semaine ${cleSemaineIso(debut, fz)} :`,
     ...controlerSemaine(toutesLesFiches, profil.regles_studio, debut).map(p => `- ${ligneRegle(p, profil.regles_studio, fichesDeLaSemaine(toutesLesFiches, debut, fz))}`),
@@ -255,7 +328,8 @@ export function contenuDossier({ profil, entrees, periode, code, toutesLesFiches
     strategie,
     sectionsProfil: detail.sections,
     regles,
+    rangement: rangement(entrees, profil),
     fiches: entrees.map(e => ({ ref: e.ref, etiquette: etiquette(e.ref, e.fiche, fz), lignes: blocFiche(e, profil) })),
-    consigne: consigne(entrees, code),
+    consigne: consigne(entrees, code, profil),
   };
 }

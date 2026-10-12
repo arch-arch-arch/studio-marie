@@ -73,6 +73,11 @@ export async function assemblerPdf(contenu, cartes, { jsPDF, compress = true }) 
     ecrire('Règles de la période', { taille: 13, gras: true });
     for (const ligne of contenu.regles) ecrire(ligne);
   }
+  if (contenu.rangement?.length) {
+    espace(4);
+    ecrire('Rangement par catégorie', { taille: 13, gras: true });
+    for (const ligne of contenu.rangement) ecrire(ligne);
+  }
   for (const fiche of contenu.fiches) {
     saut();
     ecrire(`Fiche ${fiche.ref}`, { taille: 13, gras: true });

@@ -373,3 +373,38 @@ describe('retouche : tri des captions en tout nombre', () => {
     expect(cap([{ role: 'cta', texte: 'a' }], { accroches: ['Une'] }).ecartees[0].ref).toBe('F01');
   });
 });
+
+describe('plan 9 tâche 5 : catégorie lue avec tolérance', () => {
+  const cat = (categorie, extra = {}) => valides(bloc({ ...objet, fiches: [{ ...jugement('F01'), ...(categorie === undefined ? {} : { categorie }), ...extra }, jugement('F02')] }));
+  it('normalise la casse et les accents, et garde la clé', () => {
+    expect(cat('Autorité').valides[0].categorie).toBe('autorite');
+    expect(cat('CONNEXION').valides[0].categorie).toBe('connexion');
+    expect(cat('connexion').valides[0].categorie).toBe('connexion');
+    expect(cat('Autorité').valides[0].remarque).toBeUndefined();
+  });
+  it('met null quand la catégorie est absente, vide ou null, sans remarque', () => {
+    for (const categorie of [undefined, null, '', '   ']) {
+      const v = cat(categorie).valides[0];
+      expect(v.categorie).toBeNull();
+      expect('remarque' in v).toBe(false);
+    }
+  });
+  it('ignore une valeur inconnue avec une remarque, sans écarter la fiche', () => {
+    const r = cat('  envoi ');
+    expect(r.ecartees).toEqual([]);
+    expect(r.valides.map(v => v.ref)).toEqual(['F01', 'F02']);
+    expect(r.valides[0].categorie).toBeNull();
+    expect(r.valides[0].remarque).toBe('catégorie inconnue ignorée : envoi');
+    expect('remarque' in r.valides[1]).toBe(false);
+  });
+  it('met la remarque de catégorie après celle des captions', () => {
+    const r = cat('xyz', { captions: [{ role: 'envoi', texte: 'x' }, { role: 'cta', texte: 'y' }] });
+    expect(r.valides[0].remarque).toBe('variante de caption écartée : rôle inconnu envoi ; catégorie inconnue ignorée : xyz');
+    expect(r.valides[0].jugement.captions).toEqual([{ role: 'cta', texte: 'y' }]);
+  });
+  it('ne lit pas la catégorie dans la validation de la fiche', () => {
+    const r = cat(42);
+    expect(r.ecartees).toEqual([]);
+    expect(r.valides[0].remarque).toBe('catégorie inconnue ignorée : 42');
+  });
+});
