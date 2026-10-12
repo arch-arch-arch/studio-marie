@@ -368,9 +368,9 @@ describe('plan 9 tâche 5 : catégories, rangement et grilles', () => {
     const rangement = c.rangement.join('\n');
     expect(c.rangement[0]).toBe('Rangement actuel, à vérifier. Ces lignes ne sont pas des états de cadence.');
     expect(rangement).toContain('Attraction : F01, F03 · cible par semaine : 3 contenus du fil');
-    expect(rangement).toContain('Autorité : F02 · cible par semaine : 2 contenus du fil');
+    expect(rangement).toContain('Autorité : F02 (proposée) · cible par semaine : 2 contenus du fil');
     expect(rangement).toContain('Connexion : aucune · cible par semaine : 3 à 5 stories');
-    expect(rangement).toContain('Conversion : F04 · cible par semaine : 1 contenu du fil ; 2 à 3 stories');
+    expect(rangement).toContain('Conversion : F04 (proposée) · cible par semaine : 1 contenu du fil ; 2 à 3 stories');
     expect(rangement).toContain('Désir : aucune · cible par semaine : 1 contenu du fil');
     expect(c.rangement.at(-1)).toBe('Non rangées : F05');
   });
@@ -379,18 +379,23 @@ describe('plan 9 tâche 5 : catégories, rangement et grilles', () => {
     const mois = periodeAffichee('mois', '2026-10-15T10:00:00.000Z', FZ);
     const r = contenuDossier({ profil, entrees, periode: mois, code: 'D-abc123', toutesLesFiches: fiches }).rangement.join('\n');
     expect(r).toContain('Attraction : F01, F03 · cible par semaine : 3 contenus du fil');
-    expect(r).toContain('Conversion : F04 · cible par semaine : 1 contenu du fil ; 2 à 3 stories');
+    expect(r).toContain('Conversion : F04 (proposée) · cible par semaine : 1 contenu du fil ; 2 à 3 stories');
     expect(r).not.toContain(' · cible : ');
   });
 
-  it('sans section (absente ou nulle), le rangement ne garde que son en-tête et « Non rangées »', () => {
+  it('sans section (absente ou nulle), le rangement ne garde que les catégories non vides, puis « Non rangées »', () => {
     for (const p of [sansSection, { ...profil, categories_de_contenu: null }]) {
       const r = dossier(p).rangement;
-      expect(r).toHaveLength(2);
-      expect(r[0]).toBe('Rangement actuel, à vérifier. Ces lignes ne sont pas des états de cadence.');
-      expect(r[1]).toBe('Non rangées : F05');
+      expect(r).toEqual([
+        'Rangement actuel, à vérifier. Ces lignes ne sont pas des états de cadence.',
+        'Attraction : F01, F03',
+        'Autorité : F02 (proposée)',
+        'Conversion : F04 (proposée)',
+        'Non rangées : F05',
+      ]);
+      expect(r.slice(1, -1).some(l => l.endsWith(': aucune'))).toBe(false);
       const texte = r.join('\n');
-      for (const nom of ['Attraction : ', 'Autorité : ', 'Connexion : ', 'Désir : ', 'Preuve : ', 'Conversion : ']) expect(texte).not.toContain(nom);
+      for (const nom of ['Connexion : ', 'Désir : ', 'Preuve : ']) expect(texte).not.toContain(nom);
     }
     const tout = contenuDossier({ profil: sansSection, entrees: entrees.slice(0, 1), periode, code: 'D-abc123', toutesLesFiches: [f1] });
     expect(tout.rangement.at(-1)).toBe('Non rangées : aucune');
@@ -407,6 +412,23 @@ describe('plan 9 tâche 5 : catégories, rangement et grilles', () => {
     expect(texte.indexOf('Grilles par format :')).toBeLessThan(texte.indexOf('Grilles par catégorie :'));
     expect(texte.indexOf('Reel :')).toBeLessThan(texte.indexOf('Carrousel :'));
     expect(texte.indexOf('Attraction :')).toBeLessThan(texte.indexOf('Autorité :'));
+  });
+
+  it('la consigne dit où écrire « non déterminable » et quelle catégorie mettre dans le bloc', () => {
+    expect(c.consigne.join('\n')).toContain('écris « non déterminable » dans ton analyse et mets "categorie": null dans le bloc');
+  });
+
+  it('sans test de rangement utilisable, la consigne demande de ranger selon les définitions, et finit sans cibles par le rangement de la période', () => {
+    const { test_de_rangement: _test, ...sansTest } = profil.categories_de_contenu;
+    const avecCibles = dossier({ ...profil, categories_de_contenu: sansTest }).consigne.join('\n');
+    expect(avecCibles).toContain('range chaque fiche selon les définitions des catégories de la stratégie');
+    expect(avecCibles).not.toContain('test de rangement');
+    expect(avecCibles).toContain('rangement comparé aux cibles');
+    const sansCibles = dossier({ ...profil, categories_de_contenu: {} }).consigne.join('\n');
+    expect(sansCibles).toContain('range chaque fiche selon les définitions des catégories de la stratégie');
+    expect(sansCibles).not.toContain('test de rangement');
+    expect(sansCibles).toContain('le rangement de la période');
+    expect(sansCibles).not.toContain('rangement comparé aux cibles');
   });
 
   it('consigne sans section : celle d’aujourd’hui, sans demande de rangement', () => {

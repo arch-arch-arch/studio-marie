@@ -237,23 +237,25 @@ function cibleCategorie(c) {
   return morceaux;
 }
 
-// Rangement actuel : une ligne par catégorie si le profil a sa section (références, cible par semaine si elle en donne une), puis les non rangées.
+// Rangement actuel : une ligne par catégorie si le profil a sa section (références, cible par semaine si elle en donne une), sinon seulement les catégories non vides ; puis les non rangées.
+// Une référence dont la catégorie n'est que proposée porte « (proposée) ».
 function rangement(entrees, profil) {
   const sectionPresente = profil.categories_de_contenu != null;
   const categories = categoriesDuProfil(profil);
   const parCle = new Map(categories.map(c => [c.cle, []]));
   const nonRangees = [];
   for (const e of entrees) {
-    const { cle } = categorieAffichee(e.fiche);
-    if (cle === null) nonRangees.push(e.ref); else parCle.get(cle).push(e.ref);
+    const { cle, etat } = categorieAffichee(e.fiche);
+    if (cle === null) nonRangees.push(e.ref);
+    else parCle.get(cle).push(etat === 'proposee' ? `${e.ref} (proposée)` : e.ref);
   }
   return [
     'Rangement actuel, à vérifier. Ces lignes ne sont pas des états de cadence.',
-    ...(sectionPresente ? categories.map(c => {
+    ...categories.filter(c => sectionPresente || parCle.get(c.cle).length).map(c => {
       const refs = parCle.get(c.cle);
       const cibles = cibleCategorie(c);
       return `${c.nom} : ${refs.length ? refs.join(', ') : 'aucune'}${cibles.length ? ` · cible par semaine : ${cibles.join(' ; ')}` : ''}`;
-    }) : []),
+    }),
     `Non rangées : ${nonRangees.length ? nonRangees.join(', ') : 'aucune'}`,
   ].map(versLatin1);
 }
@@ -263,6 +265,9 @@ function consigne(entrees, code, profil) {
   const courte = entrees.length > 10 ? ' Dans cette partie, au plus trois lignes par fiche.' : '';
   // La demande de rangement vient avec la section de catégories ; les grilles s'y ajoutent seulement si le profil en a.
   const demandeRangement = profil.categories_de_contenu != null;
+  // Sans test de rangement utilisable, la demande s'appuie sur les définitions des catégories ; sans cible, la fin ne parle pas de cibles.
+  const testRangement = lignesDe(profil.categories_de_contenu?.test_de_rangement).length > 0;
+  const avecCibles = categoriesDuProfil(profil).some(c => c.cible_fil != null || c.cible_stories != null);
   const grilles = grillesDuProfil(profil);
   const exemple = {
     dossier: code,
@@ -296,13 +301,13 @@ function consigne(entrees, code, profil) {
     'Dans tes captions et tes accroches, écris de vrais émojis si tu en utilises, jamais leur code entre crochets.',
     '',
     ...(demandeRangement ? [
-      'Avant de noter, range chaque fiche avec le test de rangement de la stratégie. Si la fiche a déjà une catégorie, vérifie-la et dis en une phrase pourquoi tu la changes ; si rien ne permet de trancher, écris « non déterminable ».',
+      `Avant de noter, range chaque fiche ${testRangement ? 'avec le test de rangement de la stratégie' : 'selon les définitions des catégories de la stratégie'}. Si la fiche a déjà une catégorie, vérifie-la et dis en une phrase pourquoi tu la changes ; si rien ne permet de trancher, écris « non déterminable » dans ton analyse et mets "categorie": null dans le bloc.`,
       ...(grilles ? ['Juge chaque note avec la grille du format de la fiche et celle de sa catégorie, lues ci-dessous.', ...lignesGrilles(grilles)] : []),
       '',
     ] : []),
     'Ta réponse a deux parties.',
     `1. D’abord ton analyse en français courant, fiche par fiche, puis sur l’ensemble de la période.${courte}`,
-    ...(demandeRangement ? ['   Commence chaque fiche par « Catégorie : … · Format : … », et finis l’analyse de la période par le rangement comparé aux cibles.'] : []),
+    ...(demandeRangement ? [`   Commence chaque fiche par « Catégorie : … · Format : … », et finis l’analyse de la période par ${avecCibles ? 'le rangement comparé aux cibles' : 'le rangement de la période'}.`] : []),
     '2. Ensuite, la phrase « Bloc à coller dans le studio : » suivie d’UN SEUL bloc de code JSON, de cette forme exacte :',
     '',
     JSON.stringify(exemple, null, 2),

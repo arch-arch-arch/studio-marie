@@ -75,8 +75,10 @@ export function avertissementsFiche(fiche, regles) {
   if (fiche.format !== 'story' && !fiche.caption?.trim()) avertissements.push('Pas de caption');
   const calculees = regles ? verifierRegles(fiche, regles).conformite.causes : [];
   avertissements.push(...calculees);
-  const jugees = fiche.score?.conformite?.etat === 'rouge' ? (fiche.score.conformite.causes ?? []).filter(c => !calculees.includes(c)) : [];
+  const rouge = fiche.score?.conformite?.etat === 'rouge';
+  const jugees = rouge ? (fiche.score.conformite.causes ?? []).filter(c => !calculees.includes(c)) : [];
   if (jugees.length) avertissements.push(`Conformité jugée rouge par l’analyse : ${jugees.join(' ; ')}`);
+  else if (rouge && !calculees.length) avertissements.push('Conformité jugée rouge par l’analyse');
   if (!fiche.score) avertissements.push('Pas encore analysée');
   if (aReevaluer(fiche)) avertissements.push('Analyse dépassée : la fiche a changé depuis');
   return avertissements;

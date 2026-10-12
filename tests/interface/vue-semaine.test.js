@@ -139,12 +139,22 @@ describe('catégories dans la semaine', () => {
     expect(el.querySelector('.bandeau').nextElementSibling).toBe(legende);
   });
 
-  it('profil sans section : ni pastille ni légende nouvelles', () => {
+  it('profil sans section : ni pastille ni légende quand aucune fiche de la semaine n’est rangée', () => {
+    const sans = structuredClone(fictif);
+    delete sans.categories_de_contenu;
+    const el = vueSemaine({ profil: sans, fiches: [jour('a', '10')], ancre: ANCRE }, actionsFactices());
+    expect(el.querySelectorAll('.bandeau .pastille')).toHaveLength(8);
+    expect(el.querySelector('.legende-categories')).toBeNull();
+  });
+
+  it('profil sans section : la légende apparaît dès qu’une fiche de la semaine a une catégorie choisie', () => {
     const sans = structuredClone(fictif);
     delete sans.categories_de_contenu;
     const el = vueSemaine({ profil: sans, fiches: [jour('a', '10', { categorie: 'desir' })], ancre: ANCRE }, actionsFactices());
+    const legende = el.querySelector('.legende-categories');
+    expect(legende).not.toBeNull();
+    expect(legende.querySelector('[data-categorie="desir"]')).not.toBeNull();
     expect(el.querySelectorAll('.bandeau .pastille')).toHaveLength(8);
-    expect(el.querySelector('.legende-categories')).toBeNull();
   });
 });
 

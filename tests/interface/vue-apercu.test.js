@@ -209,6 +209,14 @@ describe('vueApercu : légende et compte', () => {
   });
 });
 
+describe('vueApercu : classe du conteneur', () => {
+  it('le conteneur de la vue porte la classe vue-apercu, pas apercu (réservée au visuel de la fiche)', () => {
+    const el = vueApercu(etatApercu([]), actionsFactices());
+    expect(el.classList.contains('vue-apercu')).toBe(true);
+    expect(el.classList.contains('apercu')).toBe(false);
+  });
+});
+
 describe('onglet Aperçu (rendu)', () => {
   const monter = (vue, apercu = { periode: 'semaine', filtres: TOUS }, fiches = [f('a', 'reel', '2026-10-12T10:00:00.000Z'), f('b', 'story', '2026-10-13T10:00:00.000Z')]) => {
     const racine = document.createElement('div');
@@ -294,6 +302,7 @@ describe('vueApercu : liens, focus, nom accessible (round 1)', () => {
     const actions = actionsFactices();
     const etat = etatApercu([f('a', 'post', '2026-10-12T10:00:00.000Z', { visuel: 'a.png', visuel_type: 'image' })], undefined, { cacheVisuels: cache });
     const el = vueApercu(etat, actions);
+    document.body.append(el);
     const img = el.querySelector('img');
     await vi.waitFor(() => expect(img.getAttribute('src')).toBe('https://stockage.test/a.png'));
     img.dispatchEvent(new Event('error'));
@@ -306,6 +315,22 @@ describe('vueApercu : liens, focus, nom accessible (round 1)', () => {
     const suivante = vueApercu(etat, actions);
     await vi.waitFor(() => expect(suivante.querySelector('button.miniature').textContent).toContain('Visuel indisponible'));
     expect(actions.urlVisuel).toHaveBeenCalledTimes(2);
+    el.remove();
+  });
+
+  it('une erreur sur un média détaché (remplacé par une reconstruction) ne touche ni ne supprime le cache', async () => {
+    const cache = creerCacheVisuels();
+    const actions = actionsFactices();
+    const etat = etatApercu([f('a', 'post', '2026-10-12T10:00:00.000Z', { visuel: 'a.png', visuel_type: 'image' })], undefined, { cacheVisuels: cache });
+    const el = vueApercu(etat, actions);
+    const img = el.querySelector('img');
+    await vi.waitFor(() => expect(img.getAttribute('src')).toBe('https://stockage.test/a.png'));
+    img.dispatchEvent(new Event('error'));
+    img.dispatchEvent(new Event('error'));
+    expect(cache.urls.has('a.png')).toBe(true);
+    expect(cache.urls.get('a.png').echec).toBe(false);
+    expect(actions.urlVisuel).toHaveBeenCalledTimes(1);
+    expect(el.querySelector('button.miniature').textContent).not.toContain('Visuel indisponible');
   });
 
   it('un lien en échec n’est pas redemandé à la reconstruction, mais l’est après un changement de période', async () => {

@@ -103,6 +103,8 @@ function visuelMiniature(f, cache, actions) {
   // Une erreur de chargement du média refait un seul essai avec un lien neuf ; si elle revient, le visuel est marqué en échec.
   let essais = 0;
   media.addEventListener('error', () => {
+    // Un média remplacé par une reconstruction n'a plus rien à réparer : le cache reste intact.
+    if (!media.isConnected) return;
     if (essais === 0) {
       essais = 1;
       cache.urls.delete(f.visuel);
@@ -139,7 +141,7 @@ function miniature(f, fz, cache, actions, couleur) {
 // Après un changement, la commande touchée est reconstruite : le focus revient sur la même (le rendu est synchrone).
 function focaliser(cle) {
   if (typeof document === 'undefined') return;
-  document.querySelector(`.apercu [data-commande="${cle}"]`)?.focus();
+  document.querySelector(`.vue-apercu [data-commande="${cle}"]`)?.focus();
 }
 
 function commandes(apercu, actions) {
@@ -203,7 +205,7 @@ export function vueApercu(etat, actions) {
   if (aucunFormat) contenu = h('p', { class: 'aide', role: 'status' }, 'Coche au moins un format.');
   else if (!filtrees.length) contenu = h('p', { class: 'aide', role: 'status' }, 'Rien de prévu sur cette période.');
   else contenu = h('div', { class: 'apercu-grille' }, filtrees.map(f => miniature(f, fz, cache, actions, couleurCategorie(f, categories))));
-  return h('div', { class: 'apercu' },
+  return h('div', { class: 'vue-apercu' },
     commandes(apercu, actions),
     legende(categories, aucunFormat ? [] : filtrees),
     contenu);

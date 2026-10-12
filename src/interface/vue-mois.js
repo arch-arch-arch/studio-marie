@@ -11,10 +11,11 @@ const ENTETES = ['lun.', 'mar.', 'mer.', 'jeu.', 'ven.', 'sam.', 'dim.'];
 const LETTRES = { reel: 'R', carrousel: 'C', story: 'S', post: 'P' };
 
 // Nom accessible de la case du jour : nombre de contenus, puis formats distincts.
-function libelleCase(cle, duJour) {
+function libelleCase(jour, duJour, fz) {
   const n = duJour.length;
   const formats = [...new Set(duJour.map(f => LIBELLES_FORMAT[f.format]))];
-  return `${cle}, ${n} contenu${n > 1 ? 's' : ''}${formats.length ? ` : ${formats.join(', ')}` : ''}`;
+  const date = new Intl.DateTimeFormat('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', timeZone: fz }).format(new Date(jour));
+  return `${date}, ${n} contenu${n > 1 ? 's' : ''}${formats.length ? ` : ${formats.join(', ')}` : ''}`;
 }
 
 export function vueMois({ profil, fiches, ancre, analyse, analyses, avisOuverts }, actions, capacites = {}) {
@@ -32,7 +33,7 @@ export function vueMois({ profil, fiches, ancre, analyse, analyses, avisOuverts 
         const duJour = fiches.filter(f => cleJour(f.date_heure, fz) === cle).sort((a, b) => a.date_heure.localeCompare(b.date_heure));
         return h('button', {
           type: 'button', class: p.mois === moisCourant ? 'mois-jour' : 'mois-jour hors-mois',
-          'aria-label': libelleCase(cle, duJour),
+          'aria-label': libelleCase(jour, duJour, fz),
           onclick: () => actions.changerVue('jour', jour),
         },
         h('span', { class: 'mois-num' }, String(p.jour)),

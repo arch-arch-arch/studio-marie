@@ -303,6 +303,18 @@ describe('validation libre', () => {
       .toEqual(['mot à éviter « mindset »']);
   });
 
+  it('avertissementsFiche : conformité rouge sans cause affichée, ni jugée ni calculée, le dit', () => {
+    const f = analysee(prete());
+    f.score.conformite = { etat: 'rouge', causes: [] };
+    expect(avertissementsFiche(f, R)).toEqual(['Conformité jugée rouge par l’analyse']);
+  });
+
+  it('avertissementsFiche : conformité rouge avec une cause calculée affichée, sans message de plus', () => {
+    const f = analysee({ ...base(), visuel: 'a1', caption: 'Le mindset du jour.' });
+    f.score.conformite = { etat: 'rouge', causes: [] };
+    expect(avertissementsFiche(f, { ...R, mots_a_eviter: ['mindset'] })).toEqual(['mot à éviter « mindset »']);
+  });
+
   it('avertissementsFiche : une analyse dépassée le signale', () => {
     expect(avertissementsFiche({ ...prete(), caption: 'modifiée' }, R)).toEqual(['Analyse dépassée : la fiche a changé depuis']);
   });

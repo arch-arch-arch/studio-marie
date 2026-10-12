@@ -7,7 +7,7 @@ import { LIBELLES_FORMAT } from '../logique/fiche.js';
 import { prochaineAction, ACTIONS_SANS_SUITE } from '../logique/parcours.js';
 import { periodeAffichee } from '../logique/dossier.js';
 import { rangeeAnalyse, sectionAvis } from './panneau-analyse.js';
-import { controlerCategories, categoriesDuProfil } from '../logique/categories.js';
+import { controlerCategories, categoriesDuProfil, categorieAffichee } from '../logique/categories.js';
 
 export function vueSemaine({ profil, fiches, ancre, maintenant, bulletin, stats, analyse, analyses, avisOuverts }, actions, capacites = {}) {
   const r = profil.regles_studio;
@@ -25,14 +25,14 @@ export function vueSemaine({ profil, fiches, ancre, maintenant, bulletin, stats,
       ? h('p', { class: 'sans-bulletin' }, 'Pas de bulletin pour cette semaine. ', h('button', { type: 'button', class: 'bouton-lien', onclick: () => actions.changerVue('bulletin') }, 'Voir l’onglet Bulletin'))
       : null,
     bandeau([...controlerSemaine(fiches, r, debut), ...controlerCategories(fiches, profil, debut)]),
-    legendeCategories(profil, categories),
+    legendeCategories(profil, categories, semaine),
     aFaire(semaine, actionsParId, r.fuseau, actions),
     h('div', { class: 'colonnes' }, joursDeLaSemaine(debut, r.fuseau).map(jour => colonne(jour, semaine, libres, r, actions, actionsParId, categories))));
 }
 
-// Légende sous le contrôle, seulement quand le profil a la section des catégories.
-function legendeCategories(profil, categories) {
-  if (!profil.categories_de_contenu) return null;
+// Légende sous le contrôle : quand le profil a la section des catégories, ou quand une fiche de la semaine est rangée.
+function legendeCategories(profil, categories, semaine) {
+  if (!profil.categories_de_contenu && !semaine.some(f => categorieAffichee(f).etat === 'choisie')) return null;
   return h('div', { class: 'legende-categories', role: 'group', 'aria-label': 'Catégories' },
     h('span', { class: 'legende-titre' }, 'Catégories'),
     categories.map(c => h('span', { class: 'legende-item', 'data-categorie': c.cle, style: { '--categorie': c.couleur } },

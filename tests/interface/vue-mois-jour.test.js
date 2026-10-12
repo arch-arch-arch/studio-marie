@@ -57,7 +57,7 @@ describe('couleurs de catégorie (Mois)', () => {
       fiches: [f('a', 'reel', '2026-10-01T10:00:00.000Z'), f('b', 'story', '2026-10-01T17:00:00.000Z'), f('c', 'reel', '2026-10-01T18:00:00.000Z')],
       ancre: '2026-10-15T10:00:00.000Z',
     }, actionsFactices());
-    expect(el.querySelectorAll('.mois-jour')[3].getAttribute('aria-label')).toBe('2026-10-01, 3 contenus : Reel, Story');
+    expect(el.querySelectorAll('.mois-jour')[3].getAttribute('aria-label')).toBe('jeudi 1 octobre, 3 contenus : Reel, Story');
   });
 
   it('une couleur de catégorie personnalisée par le profil s’applique au point', () => {
