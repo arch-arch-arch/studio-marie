@@ -10,6 +10,8 @@ Ce guide t'explique, pas à pas, comment installer le studio sur Vercel (le site
 
 ## 2. Supabase : créer les deux projets et installer la base
 
+Un seul projet Supabase peut servir à la production et à la prévisualisation quand l'offre gratuite n'en permet pas deux : c'est le cas retenu. Dans ce cas, crée un seul projet, fais les étapes ci-dessous une fois, et saisis les mêmes valeurs pour Production et Preview dans Vercel (section 3).
+
 Il faut deux projets Supabase : un projet « studio-test » (pour essayer sans risque) et un projet « studio-reel » (celui que la créatrice utilise vraiment). Répète les étapes ci-dessous pour chacun des deux.
 
 1. Crée le projet. Donne-lui le nom « studio-test » ou « studio-reel », choisis une région proche de toi et note le mot de passe de la base dans ton gestionnaire de mots de passe.
@@ -136,6 +138,10 @@ L'évaluation et la veille utilisent Claude. Elles restent éteintes tant qu'il 
 3. Redéploie le site pour qu'elle soit prise en compte. Toute variable ajoutée ou modifiée ne prend effet qu'après un redéploiement.
 4. Pour la veille, vérifie que `SUPABASE_SERVICE_ROLE_KEY` est saisie (section 3) : la veille en a besoin en plus de la clé Claude.
 5. Désactive la routine cloud d'origine au moment même où tu allumes la veille sur Vercel. Sinon, tu auras deux veilles.
+
+## 8bis. Analyse par dossier
+
+L'analyse par dossier ne demande aucune clé : elle marche sans `ANTHROPIC_API_KEY`. La créatrice prépare un PDF dans le studio, le joint dans Claude ou ChatGPT avec son propre abonnement, puis colle la réponse dans le studio. Le module `/dossier.js` est construit avec la page (`npm run build` produit `public/index.html` et `public/dossier.js`) : il n'y a rien à régler dans Vercel.
 
 ## 9. La veille planifiée
 

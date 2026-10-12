@@ -1,7 +1,7 @@
 {
   "nom": "Studio Contenu",
-  "version_du_document": "2026-09-29 (plan 6)",
-  "resume": "Page web privée (Artifact claude.ai) pour planifier, rédiger, évaluer et piloter le contenu Instagram d'une créatrice : calendrier, fiches contenu notées par Claude, veille hebdomadaire automatique et tableau de bord des statistiques.",
+  "version_du_document": "2026-10-12 (plans 7 et 8)",
+  "resume": "Page web privée, hébergée sur Vercel avec une base Supabase, pour planifier, rédiger, évaluer et piloter le contenu Instagram d'une créatrice : calendrier, fiches contenu, analyse par dossier (Claude ou ChatGPT, sans API), tableau de bord des statistiques ; évaluation directe et veille hebdomadaire éteintes tant qu'aucune clé Anthropic n'est configurée.",
   "objectifs": [
     "Savoir quoi poster : idées, accroches, captions, tendances.",
     "Organiser et publier avec régularité, en respectant la cadence du profil."
@@ -326,7 +326,9 @@
       "import automatique des statistiques"
     ],
     "plan_5": "Parcours d'une fiche — fusionné",
-    "plan_6": "Confiance dans les données — fusionné"
+    "plan_6": "Confiance dans les données — fusionné",
+    "plan_7": "Vercel et Supabase — livré et relu, fusion en attente de l'essai réel",
+    "plan_8": "Analyse par dossier — livré et relu, fusion en attente de l'essai réel"
   },
   "parcours_d_une_fiche": {
     "prochaine_action": "Calculée pour chaque fiche (src/logique/parcours.js) : terminer (visuel, caption), évaluer, réévaluer, corriger la conformité, valider, confirmer la programmation, reconfirmer, confirmer la publication, saisir les stats à 48 h / 7 jours, sinon « Programmé pour le … », « Prochain relevé le … » ou « Terminé ». Marquée en retard quand la date prévue ou l'échéance est passée.",
@@ -350,5 +352,20 @@
       "export": "JSON { format: studio-contenu-export, version 1, collections } via la capacité downloads ; visuels non inclus (identifiants seulement).",
       "restauration": "Validation complète (format, version, identifiants, profil valide) avant toute écriture ; aperçu ; sauvegarde préalable proposée ; réécriture par identifiant, aucune suppression ; arrêt avec compteur en cas d'échec ; verrou pendant l'opération."
     }
+  },
+  "plan_7_hebergement_et_base": {
+    "hebergement": "Page statique servie par Vercel (public/index.html construit par scripts/build.mjs, qui injecte l'URL Supabase et la clé publique lues dans l'environnement). Fonctions serveur dans api/ : capacites, evaluer, veille.",
+    "base": "Supabase : table unique « documents » (collection, id, data jsonb, maj_le), mêmes collections et mêmes identifiants qu'avant ; accès réservé au rôle authenticated ; Realtime ; adaptateur src/socle/base-supabase.js de même interface que l'ancienne capacité db. Un seul projet peut servir à la production et à la prévisualisation.",
+    "visuels": "Stockage Supabase privé « visuels », liens signés d'une heure, 20 Mo au plus.",
+    "connexion": "Supabase Auth : lien magique par e-mail, ou adresse et mot de passe en secours ; inscriptions et connexions anonymes désactivées ; comptes créés par Jean.",
+    "fonctions_eteintes": "L'évaluation directe (/api/evaluer) et la veille (/api/veille) exigent ANTHROPIC_API_KEY ; sans clé, « Évaluer » est masqué et la veille affiche « La veille n’est pas encore configurée. ». Elles s'allument en ajoutant la clé dans Vercel, sans changer le code.",
+    "migration": "scripts/migrer.mjs reprend l'export de l'ancien studio et les visuels ; guide pas à pas dans docs/mise-en-service-vercel-supabase.md."
+  },
+  "plan_8_analyse_par_dossier": {
+    "principe": "Le studio fabrique un PDF de la semaine ou du mois ; la créatrice le joint dans Claude ou ChatGPT (son abonnement, sans API) et colle la réponse dans le studio, qui range l'avis dans chaque fiche.",
+    "dossier": "30 fiches au plus, hors publiées ; référence F01, F02… écrite dans l'image de chaque carte (le modèle ne voit pas le nom des fichiers) ; stratégie du profil, règles de la période, une page par fiche, consigne finale ; code de dossier D- suivi de 6 caractères ; module /dossier.js construit avec la page.",
+    "reponse": "Analyse en français courant, puis un bloc JSON avec le code du dossier, les notes, phrases, rôles de caption autorisés (engagement, cta, deadpan) et recommandations ; une fiche modifiée depuis le dossier n'est jamais notée sur son ancien texte ; rien n'est écrit si le retour est illisible, les fiches valides sont appliquées et les écartées listées avec la raison.",
+    "libelle_semaine": "Sans la capacité sample et avec dossier, les prochaines étapes « Évaluer » et « Réévaluer » s'affichent « Analyser la semaine » dans « À faire cette semaine » et sur les cartes.",
+    "limites": "Un seul visuel par fiche ; émojis remplacés par leur code dans le PDF ; connecteur direct et envoi automatique hors périmètre."
   }
 }
