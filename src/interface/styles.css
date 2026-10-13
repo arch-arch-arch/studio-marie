@@ -92,12 +92,12 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .carte.statut-publie { opacity: .7; }
 .carte-tete { font-size: 12px; color: var(--texte-2); }
 .carte-pied { display: flex; justify-content: space-between; align-items: center; gap: 6px; font-size: 12px; color: var(--texte-2); }
-/* Chaque statut a sa forme, pas seulement sa couleur : idée = cercle creux, brouillon = cercle plein, validé = cercle accent,
+/* Chaque statut a sa forme, pas seulement sa couleur : idée = cercle creux, brouillon = cercle plein, validé = cercle plein accent cerclé d’un anneau,
    programmé = losange accent, publié = carré vert. */
 .point-statut { display: inline-block; box-sizing: border-box; width: 10px; height: 10px; border-radius: 50%; background: var(--texte-2); }
 .point-statut.statut-idee { background: transparent; border: 1px solid var(--texte-2); }
 .point-statut.statut-brouillon { background: var(--texte-2); }
-.point-statut.statut-valide { background: var(--accent); }
+.point-statut.statut-valide { background: var(--accent); box-shadow: 0 0 0 2px var(--surface), 0 0 0 3px var(--accent); }
 .point-statut.statut-programme { background: var(--accent); border-radius: 0; transform: rotate(45deg); }
 .point-statut.statut-publie { background: var(--vert); border-radius: 0; }
 .format { font-weight: 600; color: var(--texte); }

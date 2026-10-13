@@ -3,6 +3,7 @@ import { describe, it, expect, vi } from 'vitest';
 import fictif from '../../exemples/profil-fictif.json';
 import { nouvelleFiche } from '../../src/logique/fiche.js';
 import { vueBulletin } from '../../src/interface/vue-bulletin.js';
+import { creerRendu } from '../../src/interface/rendu.js';
 
 const ANCRE = '2026-10-06T10:00:00.000Z';
 const idee = { ...nouvelleFiche({ id: 'i1', format: 'reel', date_heure: '2026-10-05T10:00:00.000Z', pilier: 'nuit', maintenant: 'x' }), accroche: 'Idée de la veille' };
@@ -108,5 +109,41 @@ describe('relance depuis le site', () => {
     const fini = vueBulletin(etat({ bulletin: null, veille: { enCours: false, message: 'Bulletin 2026-W40 : 4 idée(s).' } }), actions(), { veille: true });
     expect([...fini.querySelectorAll('button')].find(b => b.textContent === 'Relancer la veille').disabled).toBe(false);
     expect(fini.textContent).toContain('Bulletin 2026-W40 : 4 idée(s).');
+  });
+});
+
+describe('volets du Bulletin : « Tout voir » gardé d’une reconstruction', () => {
+  const M = '2026-10-06T09:00:00.000Z';
+  const controle = [
+    { cle: 'croissance', libelle: 'Croissance', valeur: '80/100', etat: 'orange' },
+    { cle: 'regularite', libelle: 'Régularité', valeur: '3/3', etat: 'vert' },
+  ];
+  const monte = () => {
+    const racine = document.createElement('div');
+    document.body.append(racine);
+    const rendre = creerRendu(racine, actions(), {}, () => M);
+    const e = { profil: fictif, fiches: [idee], vue: 'bulletin', ancre: ANCRE, bulletin: bulletin({ controle }), configVeille: null, sauvegarde: 'ok', erreur: null, ficheOuverte: null, apercu: { periode: 'semaine', filtres: { story: true, reel: true, post: true } } };
+    return { racine, rendre, e };
+  };
+
+  it('« Tout voir » ouvert par l’utilisatrice reste ouvert quand une fiche change', () => {
+    const { racine, rendre, e } = monte();
+    rendre(e);
+    const d = racine.querySelector('details.bandeau-detail');
+    expect(d.open).toBe(false);
+    d.open = true;
+    d.dispatchEvent(new Event('toggle'));
+    rendre({ ...e, fiches: [{ ...idee, accroche: 'Frappée' }] });
+    expect(racine.querySelector('details.bandeau-detail').open).toBe(true);
+    racine.remove();
+  });
+
+  it('une vue qui ne lit pas le bulletin (Mois) ne se reconstruit pas quand seul le bulletin change', () => {
+    const { racine, rendre, e } = monte();
+    rendre({ ...e, vue: 'mois', bulletin: undefined });
+    const vue = racine.querySelector('.vue').firstElementChild;
+    rendre({ ...e, vue: 'mois', bulletin: null });
+    expect(racine.querySelector('.vue').firstElementChild).toBe(vue);
+    racine.remove();
   });
 });

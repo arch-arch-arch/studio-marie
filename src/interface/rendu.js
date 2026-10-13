@@ -106,8 +106,8 @@ export function creerRendu(racine, actions, capacites, horloge) {
       cleApercuCourante = cleApercu(e);
       reconstructionRequise = memo.profil !== e.profil || memo.vue !== e.vue || memo.cleApercu !== cleApercuCourante;
     } else {
-      // La Semaine ne lit pas le bulletin : seul l’onglet Bulletin (et les autres vues qui le lisent) se reconstruit à son changement.
-      reconstructionRequise = memo.profil !== e.profil || memo.fiches !== e.fiches || memo.vue !== e.vue || memo.ancre !== e.ancre || (e.vue !== 'semaine' && memo.bulletin !== e.bulletin) || memo.configVeille !== e.configVeille || memo.veille !== e.veille
+      // Seul l’onglet Bulletin lit le bulletin : c’est le seul à se reconstruire à son changement (vérifié : aucune autre vue ne le lit).
+      reconstructionRequise = memo.profil !== e.profil || memo.fiches !== e.fiches || memo.vue !== e.vue || memo.ancre !== e.ancre || (e.vue === 'bulletin' && memo.bulletin !== e.bulletin) || memo.configVeille !== e.configVeille || memo.veille !== e.veille
         || (e.vue === 'semaine' && memo.stats !== e.stats)
         // Le filtre de formats est partagé par Semaine, Jour, Mois et Aperçu : cocher un format reconstruit ces vues.
         || ((e.vue === 'semaine' || e.vue === 'jour' || e.vue === 'mois') && memo.apercu !== e.apercu)

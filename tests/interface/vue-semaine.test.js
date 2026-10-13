@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import fictif from '../../exemples/profil-fictif.json';
 import { nouvelleFiche, empreinte } from '../../src/logique/fiche.js';
 import { vueSemaine } from '../../src/interface/vue-semaine.js';
@@ -263,6 +263,9 @@ describe('cartes épurées (A5)', () => {
     expect(regle('brouillon')).toContain('--texte-2');
     expect(regle('valide')).not.toContain('--orange');
     expect(regle('valide')).toContain('--accent');
+    // Validé = cercle plein accent avec un anneau ; brouillon reste un cercle plein gris, sans anneau.
+    expect(regle('valide')).toContain('box-shadow');
+    expect(regle('brouillon')).not.toContain('box-shadow');
     expect(regle('programme')).toContain('rotate(45deg)');
     expect(regle('publie')).toContain('--vert');
   });
@@ -280,7 +283,7 @@ describe('à faire et créneaux (A4, A6, A7)', () => {
   it('« À faire (N) » est replié, et ouvert quand une ligne est en retard', () => {
     const el = vueSemaine({ profil: fictif, fiches: [reel('a', '2026-09-29T10:00:00.000Z')], ancre: ANCRE, maintenant: M, stats: [] }, actionsFactices());
     const d = el.querySelector('details.a-faire');
-    expect(d.querySelector('summary').textContent).toBe('À faire (1)');
+    expect(d.querySelector('summary').textContent).toBe('À faire (1, dont 1 en retard)');
     expect(d.open).toBe(true);
     const plusTard = vueSemaine({ profil: fictif, fiches: [reel('b', '2026-10-02T10:00:00.000Z')], ancre: ANCRE, maintenant: M, stats: [] }, actionsFactices());
     expect(plusTard.querySelector('details.a-faire').open).toBe(false);
@@ -315,7 +318,16 @@ describe('à faire et créneaux (A4, A6, A7)', () => {
 
   it('« À faire (N) » est un titre h3 dans le summary, pour la navigation par titres', () => {
     const el = vueSemaine({ profil: fictif, fiches: [reel('a', '2026-09-29T10:00:00.000Z')], ancre: ANCRE, maintenant: M, stats: [] }, actionsFactices());
-    expect(el.querySelector('details.a-faire summary h3').textContent).toBe('À faire (1)');
+    expect(el.querySelector('details.a-faire summary h3').textContent).toBe('À faire (1, dont 1 en retard)');
+  });
+
+  it('« À faire » compte les retards quand il y en a, et ne les compte pas sinon', () => {
+    const deux = vueSemaine({ profil: fictif, fiches: [reel('a', '2026-09-29T10:00:00.000Z'), reel('b', '2026-10-02T10:00:00.000Z'), reel('c', '2026-09-30T12:00:00.000Z')], ancre: ANCRE, maintenant: M, stats: [] }, actionsFactices());
+    expect(deux.querySelector('details.a-faire summary h3').textContent).toBe('À faire (3, dont 1 en retard)');
+    const plus = vueSemaine({ profil: fictif, fiches: [reel('a', '2026-09-29T10:00:00.000Z'), reel('d', '2026-09-29T11:00:00.000Z')], ancre: ANCRE, maintenant: M, stats: [] }, actionsFactices());
+    expect(plus.querySelector('details.a-faire summary h3').textContent).toBe('À faire (2, dont 2 en retard)');
+    const sans = vueSemaine({ profil: fictif, fiches: [reel('b', '2026-10-02T10:00:00.000Z')], ancre: ANCRE, maintenant: M, stats: [] }, actionsFactices());
+    expect(sans.querySelector('details.a-faire summary h3').textContent).toBe('À faire (1)');
   });
 
   it('le premier créneau du jour a un format masqué : le bouton propose le créneau visible plus tardif', () => {
@@ -550,8 +562,11 @@ describe('volets de la Semaine : état gardé d’une reconstruction', () => {
   const M = '2026-09-30T08:00:00.000Z';
   const TOUS = { story: true, reel: true, post: true };
   const e0 = (fiches, extra = {}) => ({ profil: fictif, fiches, vue: 'semaine', ancre: ANCRE, apercu: { periode: 'semaine', filtres: TOUS }, sauvegarde: 'ok', erreur: null, ficheOuverte: null, ...extra });
+  afterEach(() => { document.body.replaceChildren(); });
   const montee = () => {
     const racine = document.createElement('div');
+    // Attachée au document : le navigateur ne rapporte un choix que pour un volet connecté.
+    document.body.append(racine);
     const actions = { ...actionsFactices(), changerVue: vi.fn(), naviguer: vi.fn(), allerAujourdhui: vi.fn(), changerFiltresApercu: vi.fn() };
     return { racine, rendre: creerRendu(racine, actions, {}, () => M) };
   };
@@ -576,6 +591,30 @@ describe('volets de la Semaine : état gardé d’une reconstruction', () => {
     bascule(racine.querySelector('details.a-faire'), false);
     rendre(e0([{ ...fiche, accroche: 'Frappée' }], { stats: [] }));
     expect(racine.querySelector('details.a-faire').open).toBe(false);
+  });
+
+  it('une ouverture posée à la construction (retard) n’enregistre pas de choix', () => {
+    const { racine, rendre } = montee();
+    rendre(e0([reel('a', '2026-09-29T10:00:00.000Z')], { stats: [] }));
+    // Le navigateur émet toggle sans que l’utilisatrice ait rien changé : open reste ouvert, comme attendu.
+    racine.querySelector('details.a-faire').dispatchEvent(new Event('toggle'));
+    rendre(e0([reel('b', '2026-10-02T10:00:00.000Z')], { stats: [] }));
+    expect(racine.querySelector('details.a-faire').open).toBe(false);
+  });
+
+  it('un volet détaché ne note aucun choix', () => {
+    const volets = new Map();
+    const M = '2026-09-30T08:00:00.000Z';
+    const el = vueSemaine({ profil: fictif, fiches: [reel('a', '2026-09-29T10:00:00.000Z')], ancre: ANCRE, maintenant: M, stats: [], volets }, actionsFactices());
+    const d = el.querySelector('details.a-faire');
+    d.open = false;
+    d.dispatchEvent(new Event('toggle'));
+    expect(volets.has('a-faire')).toBe(false);
+    const tout = vueSemaine({ profil: fictif, fiches: [reel('b', '2026-10-01T10:00:00.000Z')], ancre: ANCRE, volets }, actionsFactices());
+    const bandeau = tout.querySelector('details.bandeau-detail');
+    bandeau.open = true;
+    bandeau.dispatchEvent(new Event('toggle'));
+    expect(volets.has('bandeau-detail')).toBe(false);
   });
 
   it('« À faire » sans choix enregistré : fermé sans retard', () => {

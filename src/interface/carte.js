@@ -55,21 +55,26 @@ export function carte(f, regles, actions, action = null, categories = CATEGORIES
 }
 
 // Contrôle de la semaine : seules les pastilles orange et rouges sont montrées ; les vertes sont dans « Tout voir ».
-// « volets » (optionnel) garde l’état ouvert de « Tout voir » d’une reconstruction à l’autre.
-export function bandeau(pastilles, volets = null) {
+// « volets » (optionnel) garde l’état ouvert de « Tout voir » d’une reconstruction à l’autre, sous la clé « cle ».
+export function bandeau(pastilles, volets = null, cle = 'bandeau-detail') {
   const alertes = pastilles.filter(p => p.etat !== 'vert');
   const vertes = pastilles.length - alertes.length;
   const pastille = p => h('li', { class: `pastille pastille-${p.etat}`, title: LIBELLES_ETAT[p.etat] },
     h('span', {}, p.libelle),
     h('span', { class: 'pastille-valeur' }, p.valeur),
     h('span', { class: 'visuellement-masque' }, ` : ${LIBELLES_ETAT[p.etat]}`));
-  const ouvert = volets?.has('bandeau-detail') ? volets.get('bandeau-detail') : false;
+  const ouvert = volets?.has(cle) ? volets.get(cle) : false;
   return h('div', { class: 'bandeau-zone' },
     h('p', { class: 'bandeau-resume' }, `${vertes} sur ${pastilles.length} au vert`),
     // Sans pastille orange ou rouge, la liste visible n’existe pas : rien à lire dans le contrôle, le détail suffit.
     alertes.length ? h('ul', { class: 'bandeau', 'aria-label': 'Contrôle de la semaine' }, alertes.map(pastille)) : null,
     vertes > 0
-      ? h('details', { class: 'bandeau-detail', open: ouvert, ontoggle: e => volets?.set('bandeau-detail', e.currentTarget.open) },
+      // Seul un volet connecté dont l’état diffère de l’attendu (ouvert par la construction, ou par l’utilisatrice) note un choix.
+      ? h('details', { class: 'bandeau-detail', open: ouvert, ontoggle: e => {
+        const d = e.currentTarget;
+        const avant = volets?.has(cle) ? volets.get(cle) : false;
+        if (volets && d.isConnected && d.open !== avant) volets.set(cle, d.open);
+      } },
         h('summary', {}, 'Tout voir'), h('ul', { class: 'bandeau-complet' }, pastilles.map(pastille)))
       : null);
 }

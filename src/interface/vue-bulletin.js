@@ -55,7 +55,7 @@ function sectionRetrospective(retro) {
     manquants.length ? h('p', { class: 'aide' }, `Relevés manquants : ${manquants.map(m => `${m.accroche || 'Sans accroche'} (${m.releve === '48h' ? '48 h' : '7 jours'})`).join(', ')}.`) : null);
 }
 
-export function vueBulletin({ profil, fiches, bulletin, configVeille, veille }, actions, capacites = {}) {
+export function vueBulletin({ profil, fiches, bulletin, configVeille, veille, volets }, actions, capacites = {}) {
   const fz = profil.regles_studio.fuseau;
   if (bulletin === undefined) return h('div', { class: 'bulletin' }, h('p', { class: 'aide' }, 'Chargement du bulletin…'));
   if (bulletin === null) {
@@ -95,5 +95,5 @@ export function vueBulletin({ profil, fiches, bulletin, configVeille, veille }, 
           (bulletin.hors_creneau ?? []).includes(id) ? h('span', { class: 'etiquette' }, 'Hors créneau') : null,
           h('button', { type: 'button', class: 'bouton-lien', onclick: () => actions.ouvrirFiche(id) }, 'Ouvrir'));
       }))),
-    bulletin.controle?.length ? h('section', {}, h('h3', {}, 'Contrôle de la semaine au moment du bulletin'), bandeau(bulletin.controle)) : null);
+    bulletin.controle?.length ? h('section', {}, h('h3', {}, 'Contrôle de la semaine au moment du bulletin'), bandeau(bulletin.controle, volets, 'bulletin-detail')) : null);
 }

@@ -112,11 +112,16 @@ function aFaire(semaine, actionsParId, fz, actions, volets) {
     .filter(({ a }) => !ACTIONS_SANS_SUITE.has(a.cle))
     .sort((x, y) => (Number(y.a.retard) - Number(x.a.retard)) || x.f.date_heure.localeCompare(y.f.date_heure));
   if (!lignes.length) return null;
-  const retard = lignes.some(({ a }) => a.retard);
+  const nRetards = lignes.filter(({ a }) => a.retard).length;
+  const retard = nRetards > 0;
   // Un choix déjà fait (volets) l’emporte sur l’ouverture d’office pour le retard.
   const ouvert = volets?.has('a-faire') ? volets.get('a-faire') : retard;
-  return h('details', { class: 'a-faire', open: ouvert, ontoggle: e => volets?.set('a-faire', e.currentTarget.open) },
-    h('summary', {}, h('h3', { class: 'a-faire-titre' }, `À faire (${lignes.length})`)),
+  return h('details', { class: 'a-faire', open: ouvert, ontoggle: e => {
+    const d = e.currentTarget;
+    const avant = volets?.has('a-faire') ? volets.get('a-faire') : retard;
+    if (volets && d.isConnected && d.open !== avant) volets.set('a-faire', d.open);
+  } },
+    h('summary', {}, h('h3', { class: 'a-faire-titre' }, `À faire (${lignes.length}${retard ? `, dont ${nRetards} en retard` : ''})`)),
     h('ul', {}, lignes.map(({ f, a }) => h('li', { class: a.retard ? 'action-retard' : null },
       h('span', {}, `${LIBELLES_FORMAT[f.format]} · ${libelleJour(f.date_heure, fz)} ${heureLocale(f.date_heure, fz)} · ${f.accroche || 'Sans accroche'}`),
       h('strong', {}, a.libelle),
