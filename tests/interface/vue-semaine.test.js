@@ -484,13 +484,19 @@ describe('vueSemaine : formats et miniatures', () => {
   const story = (id, date_heure, extra = {}) => ({ ...nouvelleFiche({ id, format: 'story', date_heure, pilier: 'nuit', maintenant: ANCRE }), ...extra });
 
   it('un format masqué disparaît des colonnes et de « À faire », mais le bandeau compte toujours la story', () => {
-    const fiches = [story('s', '2026-09-29T10:00:00.000Z'), reel('r', '2026-09-30T10:00:00.000Z'), ...storiesVertes()];
+    // Le 29 septembre n’a que la story « s » : sans elle, le décompte passe à 6/7. Elle reste donc nécessaire au résultat.
+    const sansJour29 = storiesVertes().filter(f => !f.date_heure.startsWith('2026-09-29'));
+    const fiches = [story('s', '2026-09-29T10:00:00.000Z'), reel('r', '2026-09-30T10:00:00.000Z'), ...sansJour29];
     const el = vueSemaine(etat(fiches, sansStory), avecUrls());
     expect(el.querySelector('.carte[data-id="s"]')).toBeNull();
     expect(el.querySelector('.carte[data-id="r"]')).not.toBeNull();
     expect(el.querySelector('.a-faire').textContent).not.toContain('Story');
+    expect(pastille(el, 'Jours avec stories')).toBe('7/7');
     const tout = vueSemaine(etat(fiches), avecUrls());
-    expect(pastille(el, 'Jours avec stories')).toBe(pastille(tout, 'Jours avec stories'));
+    expect(pastille(tout, 'Jours avec stories')).toBe('7/7');
+    const sansS = vueSemaine(etat(sansJour29, sansStory), avecUrls());
+    // Sans « s », la pastille tombe à 6/7 (orange) : elle est visible dans la liste des alertes.
+    expect(sansS.querySelector('.bandeau').textContent).toContain('Jours avec stories6/7');
     expect(el.querySelector('.bandeau-complet').textContent).toContain('Jours avec stories');
   });
 

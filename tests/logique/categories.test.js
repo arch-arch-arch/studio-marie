@@ -60,21 +60,15 @@ describe('normaliserCategorie', () => {
 });
 
 describe('propositionCategorie', () => {
-  it('la proposition de l’analyse passe avant les règles', () => {
-    expect(propositionCategorie({ ...base(), categorie_proposee: { cle: 'preuve', source: 'analyse' }, porte: true, ragebait: true }))
+  it('la proposition de l’analyse est la seule ; les anciens champs porte, cta, ragebait n’en font plus', () => {
+    expect(propositionCategorie({ ...base(), categorie_proposee: { cle: 'preuve', source: 'analyse' }, porte: true, cta: true, ragebait: true }))
       .toEqual({ cle: 'preuve', source: 'analyse', raison: 'proposée par l’analyse' });
   });
 
-  it('porte ou cta : conversion', () => {
-    const attendu = { cle: 'conversion', source: 'regle', raison: 'règle : mène vers l’offre' };
-    expect(propositionCategorie({ ...base(), porte: true })).toEqual(attendu);
-    expect(propositionCategorie({ ...base(), cta: true })).toEqual(attendu);
-  });
-
-  it('ragebait : attraction, après porte et cta', () => {
-    expect(propositionCategorie({ ...base(), ragebait: true }))
-      .toEqual({ cle: 'attraction', source: 'regle', raison: 'règle : ragebait' });
-    expect(propositionCategorie({ ...base(), ragebait: true, cta: true }).cle).toBe('conversion');
+  it('porte, cta ou ragebait seuls : aucune proposition', () => {
+    expect(propositionCategorie({ ...base(), porte: true })).toBeNull();
+    expect(propositionCategorie({ ...base(), cta: true })).toBeNull();
+    expect(propositionCategorie({ ...base(), ragebait: true })).toBeNull();
   });
 
   it('aucune règle : null', () => {
@@ -82,11 +76,11 @@ describe('propositionCategorie', () => {
   });
 
   it('catégorie choisie : jamais de proposition', () => {
-    expect(propositionCategorie({ ...base(), categorie: 'desir', porte: true })).toBeNull();
+    expect(propositionCategorie({ ...base(), categorie: 'desir', categorie_proposee: { cle: 'preuve', source: 'analyse' } })).toBeNull();
   });
 
   it('categorie_proposee invalide ignorée', () => {
-    expect(propositionCategorie({ ...base(), categorie_proposee: { cle: 'inconnue', source: 'analyse' }, ragebait: true }).cle).toBe('attraction');
+    expect(propositionCategorie({ ...base(), categorie_proposee: { cle: 'inconnue', source: 'analyse' }, ragebait: true })).toBeNull();
     expect(propositionCategorie({ ...base(), categorie_proposee: { cle: 'preuve', source: 'manuel' } })).toBeNull();
   });
 });
@@ -99,7 +93,7 @@ describe('categorieAffichee', () => {
 
   it('choisie, proposée ou non rangée', () => {
     expect(categorieAffichee({ ...base(), categorie: 'autorite' })).toEqual({ cle: 'autorite', etat: 'choisie' });
-    expect(categorieAffichee({ ...base(), porte: true })).toEqual({ cle: 'conversion', etat: 'proposee', source: 'regle' });
+    expect(categorieAffichee({ ...base(), porte: true })).toEqual({ cle: null, etat: 'non_rangee' });
     expect(categorieAffichee({ ...base(), categorie_proposee: { cle: 'preuve', source: 'analyse' } }))
       .toEqual({ cle: 'preuve', etat: 'proposee', source: 'analyse' });
     expect(categorieAffichee(base())).toEqual({ cle: null, etat: 'non_rangee' });

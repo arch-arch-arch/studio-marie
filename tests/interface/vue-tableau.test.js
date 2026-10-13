@@ -58,6 +58,18 @@ describe('vueTableau', () => {
   });
 });
 
+describe('résultats par contenu', () => {
+  it('la colonne s’appelle « Contenu » ; un ancien relevé garde son accroche, un nouveau sa première ligne de caption', () => {
+    const v = vueTableau(etat({ stats: [stat('ancien', { accroche: 'Vieille accroche' }), stat('nouveau', { accroche: 'Première ligne de caption' })] }), actions());
+    const entetes = [...v.querySelectorAll('.resultats-contenus thead th')].map(t => t.textContent);
+    expect(entetes[2]).toBe('Contenu');
+    expect(entetes).not.toContain('Caption');
+    const contenus = [...v.querySelectorAll('.resultats-contenus tbody tr')].map(tr => tr.children[2].textContent);
+    expect(contenus).toHaveLength(2);
+    expect(contenus).toEqual(expect.arrayContaining(['Vieille accroche', 'Première ligne de caption']));
+  });
+});
+
 describe('faible volume', () => {
   const cinq = ['a', 'b', 'c', 'd', 'e'].map((id, i) => stat(id, { nouveaux_abonnes: i + 1 }));
   it('affiche le volume, les tableaux, et masque les comparaisons sous le seuil', () => {

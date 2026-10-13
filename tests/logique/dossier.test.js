@@ -304,7 +304,7 @@ describe('plan 9 tâche 5 : catégories, rangement et grilles', () => {
   const f1 = fiche('a', '2026-10-05T10:00:00.000Z', { categorie: 'attraction' });
   const f2 = fiche('b', '2026-10-06T10:00:00.000Z', { categorie_proposee: { cle: 'autorite', source: 'analyse' } });
   const f3 = fiche('c', '2026-10-07T10:00:00.000Z', { categorie: 'attraction', format: 'carrousel' });
-  const f4 = fiche('d', '2026-10-08T10:00:00.000Z', { format: 'story', porte: true });
+  const f4 = fiche('d', '2026-10-08T10:00:00.000Z', { format: 'story', categorie_proposee: { cle: 'conversion', source: 'analyse' } });
   const f5 = fiche('e', '2026-10-09T10:00:00.000Z');
   const fiches = [f1, f2, f3, f4, f5];
   const entrees = fiches.map((f, i) => ({ ref: `F0${i + 1}`, fiche: f, etat: etatVisuel(f, null) }));
@@ -326,14 +326,15 @@ describe('plan 9 tâche 5 : catégories, rangement et grilles', () => {
     };
     expect(ligne(0)).toBe('catégorie : Attraction (choisie)');
     expect(ligne(1)).toBe('catégorie : Autorité (proposée par l\'analyse)');
-    expect(ligne(3)).toBe('catégorie : Conversion (proposée par règle)');
+    expect(ligne(3)).toBe('catégorie : Conversion (proposée par l\'analyse)');
     expect(ligne(4)).toBe('catégorie : non rangée');
   });
 
-  it('dit qui propose la catégorie : l’analyse ou une règle', () => {
-    const r = fiche('r', '2026-10-05T10:00:00.000Z', { ragebait: true });
+  it('une ancienne règle (ragebait, porte, cta) ne propose plus de catégorie : « non rangée »', () => {
+    const r = fiche('r', '2026-10-05T10:00:00.000Z', { ragebait: true, porte: true, cta: true });
     const lignes = contenuDossier({ profil, entrees: [{ ref: 'F01', fiche: r, etat: etatVisuel(r, null) }], periode, code: 'D-abc123', toutesLesFiches: [r] }).fiches[0].lignes;
-    expect(lignes).toContain('catégorie : Attraction (proposée par règle)');
+    expect(lignes).toContain('catégorie : non rangée');
+    expect(lignes.join('\n')).not.toContain('proposée par règle');
   });
 
   it('range les fiches par catégorie avec les cibles de la semaine', () => {

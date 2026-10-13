@@ -86,7 +86,7 @@ function tableaux(stats, fz) {
     h('section', { class: 'resultats-contenus' }, h('h3', {}, 'Résultats par contenu'),
       lignes.length
         ? h('table', {},
-          h('thead', {}, h('tr', {}, ['Date', 'Format', 'Caption', 'Vues', 'Nouveaux abonnés', 'Abonnés par vue', 'Partages et envois', 'Relevé'].map(t => h('th', {}, t)))),
+          h('thead', {}, h('tr', {}, ['Date', 'Format', 'Contenu', 'Vues', 'Nouveaux abonnés', 'Abonnés par vue', 'Partages et envois', 'Relevé'].map(t => h('th', {}, t)))),
           h('tbody', {}, lignes.map(l => h('tr', {}, cellules([
             jour(l.date), LIBELLES_FORMAT[l.format] ?? l.format, l.accroche || 'Sans caption', entier(l.vues), entier(l.nouveaux_abonnes),
             pct(l.taux), entier(l.partages_envois), l.releve === '48h' ? '48 h' : '7 jours',

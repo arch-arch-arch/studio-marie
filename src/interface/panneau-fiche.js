@@ -11,6 +11,8 @@ import { lignesExamen, nomAssistant } from '../logique/score.js';
 const LIBELLES_ROLE = { engagement: 'Engagement', cta: "Appel à l'action", deadpan: 'Deadpan' };
 const LIBELLES_CONFORMITE = { vert: 'conforme', orange: 'à surveiller', rouge: 'bloquante' };
 const LIBELLES_RELEVE = { '48h': 'Relevé à 48 h', '7j': 'Relevé à 7 jours' };
+// « Europe/Paris » -> « Paris », « America/Toronto » -> « Toronto », « America/Port_of_Spain » -> « Port of Spain ».
+const villeDuFuseau = fuseau => fuseau.split('/').pop().replace(/_/g, ' ');
 
 export function panneauFiche(fiche, profil, actions, capacites, releves = []) {
   const r = profil.regles_studio;
@@ -212,7 +214,7 @@ export function panneauFiche(fiche, profil, actions, capacites, releves = []) {
     h('h3', {}, titre),
     h('div', { class: 'grille-champs' },
       champ(publication ? 'Date de publication' : 'Date programmée', date),
-      champ(`Heure (${fz})`, heure)),
+      champ(`Heure (${villeDuFuseau(fz)})`, heure)),
     h('label', { class: 'case' }, coche, publication ? 'Le contenu est en ligne' : 'J’ai programmé ce contenu dans Meta Business Suite'),
     h('div', { class: 'evaluation-actions' },
       boutonEnvoyer,
@@ -234,7 +236,11 @@ export function panneauFiche(fiche, profil, actions, capacites, releves = []) {
   };
 
   const sectionType = () => h('div', { class: 'grille-champs' },
-    champ('Format', selection('format', brouillon.format, FORMATS.map(f => [f, LIBELLES_FORMAT[f]]), v => changer({ format: v }))));
+    champ('Format', selection('format', brouillon.format, FORMATS.map(f => [f, LIBELLES_FORMAT[f]]), v => {
+      changer({ format: v });
+      // Le titre et la section Statistiques dépendent du format : on reconstruit le panneau.
+      construire();
+    })));
 
   // Le fuseau du profil donne le libellé de l’heure ; « Paris » n’est répété en dessous que si le profil n’est pas à Paris.
   const sectionDate = () => {
@@ -248,8 +254,7 @@ export function panneauFiche(fiche, profil, actions, capacites, releves = []) {
     };
     date.addEventListener('change', maj);
     heure.addEventListener('change', maj);
-    const ville = fz.split('/').pop().replace(/_/g, ' ');
-    return h('div', { class: 'grille-champs' }, champ('Date', date), h('div', {}, champ(`Heure (${ville})`, heure), enParis));
+    return h('div', { class: 'grille-champs' }, champ('Date', date), h('div', {}, champ(`Heure (${villeDuFuseau(fz)})`, heure), enParis));
   };
 
   const sectionVisuel = () => {

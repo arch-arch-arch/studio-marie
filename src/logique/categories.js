@@ -41,8 +41,6 @@ export function propositionCategorie(fiche) {
   if (analyse?.source === 'analyse' && CLES.has(analyse.cle)) {
     return { cle: analyse.cle, source: 'analyse', raison: 'proposée par l’analyse' };
   }
-  if (fiche.porte || fiche.cta) return { cle: 'conversion', source: 'regle', raison: 'règle : mène vers l’offre' };
-  if (fiche.ragebait) return { cle: 'attraction', source: 'regle', raison: 'règle : ragebait' };
   return null;
 }
 

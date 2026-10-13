@@ -327,6 +327,14 @@ describe('section Statistiques', () => {
     const p = panneauFiche({ ...publiee(), format: 'story' }, fictif, actionsStats(), { assets: true });
     await vi.waitFor(() => expect(p.querySelector('input[name="48h-clics_porte"]')).not.toBeNull());
   });
+
+  it('changer de Reel à Story reconstruit le titre et la section Statistiques', async () => {
+    const p = panneauFiche(publiee(), fictif, actionsStats(), { assets: true });
+    expect(p.querySelector('h2').textContent).toBe('Reel');
+    saisir(p.querySelector('select[name="format"]'), 'story', 'change');
+    expect(p.querySelector('h2').textContent).toBe('Story');
+    await vi.waitFor(() => expect(p.querySelector('input[name="48h-clics_porte"]')).not.toBeNull());
+  });
 });
 
 describe('parcours dans la fiche', () => {
@@ -574,14 +582,20 @@ describe('catégorie de la fiche', () => {
     expect(actions.modifierFiche).toHaveBeenLastCalledWith('f1', { categorie: null });
   });
 
-  it('règle porte : propose Conversion ; « Confirmer » range la fiche', () => {
+  it('proposition de l’analyse : « Confirmer » range la fiche', () => {
     const actions = actionsFactices();
-    const p = panneauFiche(fiche({ porte: true }), fictif, actions, { assets: true });
-    expect(p.textContent).toContain('Proposée : Conversion (règle : mène vers l’offre)');
+    const p = panneauFiche(fiche({ categorie_proposee: { cle: 'conversion', source: 'analyse' } }), fictif, actions, { assets: true });
+    expect(p.textContent).toContain('Proposée : Conversion (proposée par l’analyse)');
     bouton(p, 'Confirmer').click();
     expect(actions.modifierFiche).toHaveBeenCalledWith('f1', { categorie: 'conversion' });
     expect(p.querySelector('select[name="categorie"]').value).toBe('conversion');
     expect(p.textContent).not.toContain('Proposée :');
+  });
+
+  it('les anciens champs porte, cta, ragebait ne proposent plus de catégorie', () => {
+    const p = panneauFiche(fiche({ porte: true, cta: true, ragebait: true }), fictif, actionsFactices(), { assets: true });
+    expect(p.textContent).not.toContain('Proposée');
+    expect(bouton(p, 'Confirmer')).toBeUndefined();
   });
 
   it('proposition de l’analyse : « (proposée par l’analyse) »', () => {
@@ -590,7 +604,7 @@ describe('catégorie de la fiche', () => {
   });
 
   it('après « Confirmer », le focus revient sur le menu « Catégorie »', () => {
-    const p = panneauFiche(fiche({ porte: true }), fictif, actionsFactices(), { assets: true });
+    const p = panneauFiche(fiche({ categorie_proposee: { cle: 'conversion', source: 'analyse' } }), fictif, actionsFactices(), { assets: true });
     document.body.append(p);
     bouton(p, 'Confirmer').click();
     expect(document.activeElement).toBe(p.querySelector('select[name="categorie"]'));
@@ -616,7 +630,7 @@ describe('catégorie de la fiche', () => {
   });
 
   it('fiche rangée : aucune proposition, même si une règle s’applique', () => {
-    const p = panneauFiche(fiche({ porte: true, categorie: 'desir' }), fictif, actionsFactices(), { assets: true });
+    const p = panneauFiche(fiche({ categorie: 'desir', categorie_proposee: { cle: 'conversion', source: 'analyse' } }), fictif, actionsFactices(), { assets: true });
     expect(p.textContent).not.toContain('Proposée');
     expect(bouton(p, 'Confirmer')).toBeUndefined();
   });
@@ -705,6 +719,13 @@ describe('fiche allégée', () => {
   it('n’ajoute aucune ligne quand le fuseau du profil est Paris', () => {
     const p = panneauFiche(fiche(), fictif, actionsFactices(), { assets: true });
     expect(p.querySelector('p.heure-paris')).toBeNull();
+  });
+
+  it('la confirmation de programmation nomme la ville de l’heure, comme la fiche', () => {
+    const p = panneauFiche(fiche({ date_heure: '2026-10-13T16:00:00.000Z' }), toronto, actionsFactices(), { assets: true });
+    bouton(p, 'Programmé').click();
+    const heure = p.querySelector('input[name="confirmation-heure"]');
+    expect(heure.closest('label').textContent).toContain('Heure (Toronto)');
   });
 
   it('une accroche proposée se copie (« Copier »), une caption proposée s’utilise toujours (« Utiliser »)', async () => {

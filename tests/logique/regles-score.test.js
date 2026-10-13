@@ -77,6 +77,68 @@ describe('verifierRegles', () => {
     expect(verifierRegles(fiche({ format: 'reel', porte: true, caption: 'https://exemple.test/moi' }), R).conformite.etat).toBe('rouge');
   });
 
+  it('détecte les domaines de link-in-bio connus et les domaines nus dans une extension sûre', () => {
+    expect(verifierRegles(fiche({ caption: 'Mon lien : linktr.ee/moi' }), R).conformite.etat).toBe('rouge');
+    expect(verifierRegles(fiche({ caption: 'beacons.ai' }), R).conformite.etat).toBe('rouge');
+    expect(verifierRegles(fiche({ caption: 'Va sur moi.xyz' }), R).conformite.etat).toBe('rouge');
+    expect(verifierRegles(fiche({ caption: 'www.exemple.fr' }), R).conformite.etat).toBe('rouge');
+  });
+
+  it('ne bloque pas une phrase ressemblant à un domaine sans être un lien', () => {
+    expect(verifierRegles(fiche({ caption: 'Je rentre vraiment.Me voilà' }), R).conformite.etat).toBe('vert');
+    expect(verifierRegles(fiche({ caption: 'On a fini.Co-working demain' }), R).conformite.etat).toBe('vert');
+  });
+
+  it('ne bloque pas un domaine de link-in-bio connu caché dans un autre mot', () => {
+    expect(verifierRegles(fiche({ caption: 'mon habit.Lyon' }), R).conformite.etat).toBe('vert');
+    expect(verifierRegles(fiche({ caption: 'bit.ly/x' }), R).conformite.etat).toBe('rouge');
+  });
+
+  it('bloque un géotag plus précis que la ville', () => {
+    expect(verifierRegles(fiche({ geotag: 'Paris' }), R).conformite.etat).toBe('vert');
+    expect(verifierRegles(fiche({ geotag: '12 rue des Lilas' }), R).conformite.causes)
+      .toEqual(['géotag trop précis « 12 rue des Lilas » (reste au niveau de la ville)']);
+    expect(verifierRegles(fiche({ geotag: 'Chez moi' }), R).conformite.etat).toBe('rouge');
+  });
+
+  it('détecte les types de voie et les codes postaux, mais pas un chiffre seul', () => {
+    expect(verifierRegles(fiche({ geotag: '12 av. Foch' }), R).conformite.etat).toBe('rouge');
+    expect(verifierRegles(fiche({ geotag: 'Quai de Valmy' }), R).conformite.etat).toBe('rouge');
+    expect(verifierRegles(fiche({ geotag: '75011 Paris' }), R).conformite.etat).toBe('rouge');
+    expect(verifierRegles(fiche({ geotag: '3 bis, rue X' }), R).conformite.etat).toBe('rouge');
+    expect(verifierRegles(fiche({ geotag: 'Paris 11e' }), R).conformite.etat).toBe('vert');
+    expect(verifierRegles(fiche({ geotag: 'Lyon' }), R).conformite.etat).toBe('vert');
+  });
+
+  it('ne remonte pas un numéro isolé d’un type de voie comme un numéro de voie', () => {
+    expect(verifierRegles(fiche({ geotag: 'Festival 2024 Avignon' }), R).conformite.etat).toBe('vert');
+    expect(verifierRegles(fiche({ geotag: 'Paris 3 Villages' }), R).conformite.etat).toBe('vert');
+    expect(verifierRegles(fiche({ geotag: 'Bordeaux 33 Bdx' }), R).conformite.etat).toBe('vert');
+    expect(verifierRegles(fiche({ geotag: '12 av. Foch' }), R).conformite.etat).toBe('rouge');
+    expect(verifierRegles(fiche({ geotag: '3 bis, rue X' }), R).conformite.etat).toBe('rouge');
+  });
+
+  it('tronque un géotag trop long dans la cause affichée', () => {
+    const geotag = `12 rue ${'x'.repeat(300)}`;
+    const causes = verifierRegles(fiche({ geotag }), R).conformite.causes;
+    expect(causes).toHaveLength(1);
+    expect(causes[0].length).toBeLessThan(120);
+    expect(causes[0]).toContain('…');
+  });
+
+  it('reste rapide sur un géotag pensé pour faire reculer le moteur de regex', () => {
+    const geotag = '1' + ' '.repeat(5000) + 'x';
+    const debut = performance.now();
+    verifierRegles(fiche({ geotag }), R);
+    expect(performance.now() - debut).toBeLessThan(50);
+  });
+
+  it('détecte un géotag sans accent, insensible à la casse, après normalisation', () => {
+    expect(verifierRegles(fiche({ geotag: 'Allee des Pins' }), R).conformite.etat).toBe('rouge');
+    expect(verifierRegles(fiche({ geotag: 'Residence les Tilleuls' }), R).conformite.etat).toBe('rouge');
+    expect(verifierRegles(fiche({ geotag: 'Cite U' }), R).conformite.etat).toBe('rouge');
+  });
+
   it('cumule plusieurs causes', () => {
     expect(verifierRegles(fiche({ caption: 'mindset https://exemple.test', geotag: '3 place X' }), R).conformite.causes).toHaveLength(3);
   });

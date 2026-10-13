@@ -149,11 +149,11 @@ function semainesDeLaPeriode(periode, fuseau) {
   return debuts;
 }
 
-// Catégorie choisie, proposée (par l'analyse ou par une règle), ou non rangée.
+// Catégorie choisie, proposée par l’analyse, ou non rangée.
 function ligneCategorie(fiche) {
-  const { cle, etat, source } = categorieAffichee(fiche);
+  const { cle, etat } = categorieAffichee(fiche);
   if (cle === null) return 'catégorie : non rangée';
-  const mention = etat === 'choisie' ? 'choisie' : source === 'analyse' ? 'proposée par l’analyse' : 'proposée par règle';
+  const mention = etat === 'choisie' ? 'choisie' : 'proposée par l’analyse';
   return `catégorie : ${nomCategorie(cle)} (${mention})`;
 }
 
