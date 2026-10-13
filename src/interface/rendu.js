@@ -106,6 +106,8 @@ export function creerRendu(racine, actions, capacites, horloge) {
     } else {
       reconstructionRequise = memo.profil !== e.profil || memo.fiches !== e.fiches || memo.vue !== e.vue || memo.ancre !== e.ancre || memo.bulletin !== e.bulletin || memo.configVeille !== e.configVeille || memo.veille !== e.veille
         || (e.vue === 'semaine' && memo.stats !== e.stats)
+        // Le filtre de formats est partagé par Semaine, Jour, Mois et Aperçu : cocher un format reconstruit ces vues.
+        || ((e.vue === 'semaine' || e.vue === 'jour' || e.vue === 'mois') && memo.apercu !== e.apercu)
         // Le bouton d'analyse et l'avis de la période n'existent qu'en Semaine et en Mois ; le panneau d'analyse, lui, n'en dépend pas.
         || ((e.vue === 'semaine' || e.vue === 'mois') && (memo.analyses !== e.analyses || memo.panneauOuvert !== panneauOuvert));
     }
@@ -145,7 +147,7 @@ export function creerRendu(racine, actions, capacites, horloge) {
     if (panneauChange) panneau.replaceChildren(ouverte ? panneauFiche(ouverte, e.profil, actions, capacites, (e.stats ?? []).filter(s => s.fiche === ouverte.id)) : '');
     racine.classList.toggle('avec-panneau', !!ouverte);
     memo = {
-      profil: e.profil, fiches: e.fiches, vue: e.vue, ancre: e.ancre, ficheOuverte: e.ficheOuverte, panneauAffiche: !!ouverte, cleApercu: cleApercuCourante,
+      profil: e.profil, fiches: e.fiches, vue: e.vue, ancre: e.ancre, ficheOuverte: e.ficheOuverte, panneauAffiche: !!ouverte, cleApercu: cleApercuCourante, apercu: e.apercu,
       cleAnalyse, etapeAnalyse: e.analyse?.etape ?? null, analyses: e.analyses, panneauOuvert,
       reference: e.reference, resultatReference: e.resultatReference, verificationReference: e.verificationReference,
       bulletin: e.bulletin, configVeille: e.configVeille, veille: e.veille,

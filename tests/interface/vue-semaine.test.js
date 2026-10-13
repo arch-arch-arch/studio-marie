@@ -3,6 +3,8 @@ import { describe, it, expect, vi } from 'vitest';
 import fictif from '../../exemples/profil-fictif.json';
 import { nouvelleFiche, empreinte } from '../../src/logique/fiche.js';
 import { vueSemaine } from '../../src/interface/vue-semaine.js';
+import { creerCacheVisuels } from '../../src/interface/vue-apercu.js';
+import { creerRendu } from '../../src/interface/rendu.js';
 
 const ANCRE = '2026-09-30T10:00:00.000Z';
 const actionsFactices = () => ({ ouvrirFiche: vi.fn(), creerFiche: vi.fn(), deplacerFiche: vi.fn() });
@@ -265,5 +267,85 @@ describe('« Valider la fiche » et ses avertissements', () => {
   it('propose « Valider la fiche » sans aucune capacité', () => {
     const el = rendre({});
     expect([...el.querySelectorAll('.a-faire li strong')].map(s => s.textContent)).toEqual(['Valider la fiche', 'Valider la fiche']);
+  });
+});
+
+describe('vueSemaine : formats et miniatures', () => {
+  const TOUS = { story: true, reel: true, post: true };
+  const sansStory = { periode: 'semaine', filtres: { story: false, reel: true, post: true } };
+  const DEBUT_SUIVANT = '2026-10-07T10:00:00.000Z';
+  const pastille = (el, libelle) => [...el.querySelectorAll('.bandeau .pastille')].find(p => p.children[0].textContent === libelle)?.children[1].textContent;
+  const avecUrls = (extra = {}) => ({ ...actionsFactices(), urlVisuel: vi.fn(async id => `https://stockage.test/${id}`), ...extra });
+  const etat = (fiches, apercu = { periode: 'semaine', filtres: TOUS }, extra = {}) => ({ profil: fictif, fiches, ancre: ANCRE, apercu, ...extra });
+  const story = (id, date_heure, extra = {}) => ({ ...nouvelleFiche({ id, format: 'story', date_heure, pilier: 'nuit', maintenant: ANCRE }), ...extra });
+
+  it('un format masqué disparaît des colonnes et de « À faire », mais le bandeau compte toujours la story', () => {
+    const fiches = [story('s', '2026-09-29T10:00:00.000Z'), reel('r', '2026-09-30T10:00:00.000Z')];
+    const el = vueSemaine(etat(fiches, sansStory), avecUrls());
+    expect(el.querySelector('.carte[data-id="s"]')).toBeNull();
+    expect(el.querySelector('.carte[data-id="r"]')).not.toBeNull();
+    expect(el.querySelector('.a-faire').textContent).not.toContain('Story');
+    const tout = vueSemaine(etat(fiches), avecUrls());
+    expect(pastille(el, 'Jours avec stories')).toBe(pastille(tout, 'Jours avec stories'));
+    expect(el.querySelector('.bandeau').textContent).toContain('Jours avec stories');
+  });
+
+  it('la mention du filtre s’affiche sous la barre quand un format est masqué', () => {
+    const el = vueSemaine(etat([], sansStory), avecUrls());
+    expect(el.querySelector('.barre-formats .mention-filtre').textContent).toBe('Filtre actif : Stories masquées');
+  });
+
+  it('une carte dont la fiche a un visuel image l’affiche en haut, et demande le lien', async () => {
+    const actions = avecUrls();
+    const el = vueSemaine(etat([reel('a', '2026-09-29T10:00:00.000Z', { visuel: 'a.png', visuel_type: 'image' })]), actions);
+    const img = el.querySelector('.carte[data-id="a"] .carte-visuel img');
+    expect(img).not.toBeNull();
+    expect(el.querySelector('.carte[data-id="a"]').firstElementChild.classList.contains('carte-visuel')).toBe(true);
+    expect(actions.urlVisuel).toHaveBeenCalledWith('a.png');
+    await vi.waitFor(() => expect(img.getAttribute('src')).toBe('https://stockage.test/a.png'));
+  });
+
+  it('un visuel vidéo s’affiche comme une vidéo', () => {
+    const el = vueSemaine(etat([reel('v', '2026-09-29T10:00:00.000Z', { visuel: 'v.mp4', visuel_type: 'video' })]), avecUrls());
+    expect(el.querySelector('.carte[data-id="v"] .carte-visuel video')).not.toBeNull();
+  });
+
+  it('une fiche sans visuel n’a pas de zone visuelle', () => {
+    const el = vueSemaine(etat([reel('a', '2026-09-29T10:00:00.000Z', { accroche: 'Sans image' })]), avecUrls());
+    expect(el.querySelector('.carte[data-id="a"] .carte-visuel')).toBeNull();
+    expect(el.querySelector('.carte[data-id="a"] .carte-accroche').textContent).toBe('Sans image');
+  });
+
+  it('une frappe dans une fiche réutilise le même nœud image : pas de rechargement', () => {
+    const cache = creerCacheVisuels();
+    const actions = avecUrls();
+    const fiche = reel('a', '2026-09-29T10:00:00.000Z', { visuel: 'a.png', visuel_type: 'image', accroche: 'Première' });
+    const premiere = vueSemaine(etat([fiche], undefined, { cacheVisuels: cache }), actions);
+    const img = premiere.querySelector('img');
+    const seconde = vueSemaine(etat([{ ...fiche, accroche: 'Frappée' }], undefined, { cacheVisuels: cache }), actions);
+    expect(seconde.querySelector('img')).toBe(img);
+    expect(actions.urlVisuel).toHaveBeenCalledTimes(1);
+  });
+
+  it('au changement de semaine, la fiche reçoit un nouveau nœud image', () => {
+    const cache = creerCacheVisuels();
+    const actions = avecUrls();
+    const premiere = vueSemaine(etat([reel('a', '2026-09-29T10:00:00.000Z', { visuel: 'a.png', visuel_type: 'image' })], undefined, { cacheVisuels: cache }), actions);
+    const img = premiere.querySelector('img');
+    const suivante = vueSemaine({ ...etat([reel('a', '2026-10-06T10:00:00.000Z', { visuel: 'a.png', visuel_type: 'image' })], undefined, { cacheVisuels: cache }), ancre: DEBUT_SUIVANT }, actions);
+    expect(suivante.querySelector('img')).not.toBe(img);
+  });
+
+  it('changer le filtre dans l’état reconstruit la vue Semaine (rendu)', () => {
+    const racine = document.createElement('div');
+    const actions = avecUrls({ changerVue: vi.fn(), naviguer: vi.fn(), allerAujourdhui: vi.fn(), changerFiltresApercu: vi.fn() });
+    const rendre = creerRendu(racine, actions, {}, () => ANCRE);
+    const fiches = [story('s', '2026-09-29T10:00:00.000Z'), reel('r', '2026-09-30T10:00:00.000Z')];
+    const e = { profil: fictif, fiches, vue: 'semaine', ancre: ANCRE, apercu: { periode: 'semaine', filtres: TOUS }, sauvegarde: 'ok', erreur: null, ficheOuverte: null };
+    rendre(e);
+    expect(racine.querySelector('.carte[data-id="s"]')).not.toBeNull();
+    rendre({ ...e, apercu: sansStory });
+    expect(racine.querySelector('.carte[data-id="s"]')).toBeNull();
+    expect(racine.querySelector('.carte[data-id="r"]')).not.toBeNull();
   });
 });

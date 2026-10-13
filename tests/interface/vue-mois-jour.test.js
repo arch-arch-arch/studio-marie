@@ -4,6 +4,7 @@ import fictif from '../../exemples/profil-fictif.json';
 import { nouvelleFiche } from '../../src/logique/fiche.js';
 import { vueMois } from '../../src/interface/vue-mois.js';
 import { vueJour } from '../../src/interface/vue-jour.js';
+import { creerCacheVisuels } from '../../src/interface/vue-apercu.js';
 
 const f = (id, format, date_heure, accroche = '') => ({ ...nouvelleFiche({ id, format, date_heure, pilier: 'socio', maintenant: 'x' }), accroche });
 const actionsFactices = () => ({ changerVue: vi.fn(), creerFiche: vi.fn(), ouvrirFiche: vi.fn() });
@@ -18,7 +19,7 @@ describe('vueMois', () => {
     expect(jours[0].classList.contains('hors-mois')).toBe(true);
     const premierOctobre = jours[3];
     expect(premierOctobre.querySelector('.mois-num').textContent).toBe('1');
-    expect([...premierOctobre.querySelectorAll('.point-format')].map(p => p.className)).toEqual(['point-format format-reel', 'point-format format-story']);
+    expect([...premierOctobre.querySelectorAll('.vignette')].map(p => p.querySelector('.vignette-lettre').textContent)).toEqual(['R', 'S']);
     premierOctobre.click();
     expect(actions.changerVue).toHaveBeenCalledWith('jour', '2026-09-30T22:00:00.000Z');
   });
@@ -31,13 +32,13 @@ describe('couleurs de catégorie (Mois)', () => {
       fiches: [{ ...f('a', 'reel', '2026-10-01T10:00:00.000Z'), categorie: 'desir' }, { ...f('b', 'story', '2026-10-01T17:00:00.000Z'), cta: true }],
       ancre: '2026-10-15T10:00:00.000Z',
     }, actionsFactices());
-    const points = el.querySelectorAll('.mois-jour')[3].querySelectorAll('.point-format');
+    const points = el.querySelectorAll('.mois-jour')[3].querySelectorAll('.vignette');
     expect([...points].map(p => p.style.getPropertyValue('--categorie'))).toEqual(['#b3125a', 'var(--texte-2)']);
   });
 
   it('un point non rangé porte la couleur neutre marquée, pas le gris du bord des cartes', () => {
     const el = vueMois({ profil: fictif, fiches: [f('a', 'post', '2026-10-01T10:00:00.000Z')], ancre: '2026-10-15T10:00:00.000Z' }, actionsFactices());
-    expect(el.querySelector('.point-format').style.getPropertyValue('--categorie')).toBe('var(--texte-2)');
+    expect(el.querySelector('.vignette').style.getPropertyValue('--categorie')).toBe('var(--texte-2)');
   });
 
   it('chaque point porte la lettre de son format, en lecture seule pour les lecteurs d’écran', () => {
@@ -46,9 +47,11 @@ describe('couleurs de catégorie (Mois)', () => {
       fiches: [f('a', 'reel', '2026-10-01T10:00:00.000Z'), f('b', 'carrousel', '2026-10-01T11:00:00.000Z'), f('c', 'story', '2026-10-01T12:00:00.000Z'), f('d', 'post', '2026-10-01T13:00:00.000Z')],
       ancre: '2026-10-15T10:00:00.000Z',
     }, actionsFactices());
-    const points = [...el.querySelectorAll('.mois-jour')[3].querySelectorAll('.point-format')];
-    expect(points.map(p => p.querySelector('.point-lettre').textContent)).toEqual(['R', 'C', 'S', 'P']);
-    expect(points[0].querySelector('.point-lettre').getAttribute('aria-hidden')).toBe('true');
+    const points = [...el.querySelectorAll('.mois-jour')[3].querySelectorAll('.vignette')];
+    // Trois vignettes au plus : la quatrième fiche du jour devient « +1 ».
+    expect(points.map(p => p.querySelector('.vignette-lettre').textContent)).toEqual(['R', 'C', 'S']);
+    expect(el.querySelectorAll('.mois-jour')[3].querySelector('.vignette-plus').textContent).toBe('+1');
+    expect(points[0].querySelector('.vignette-lettre').getAttribute('aria-hidden')).toBe('true');
   });
 
   it('la case du jour cite les formats distincts', () => {
@@ -64,7 +67,7 @@ describe('couleurs de catégorie (Mois)', () => {
     const perso = structuredClone(fictif);
     perso.categories_de_contenu.categories = [{ cle: 'attraction', couleur: '#123456' }];
     const el = vueMois({ profil: perso, fiches: [{ ...f('a', 'reel', '2026-10-01T10:00:00.000Z'), categorie: 'attraction' }], ancre: '2026-10-15T10:00:00.000Z' }, actionsFactices());
-    expect(el.querySelector('.point-format').style.getPropertyValue('--categorie')).toBe('#123456');
+    expect(el.querySelector('.vignette').style.getPropertyValue('--categorie')).toBe('#123456');
   });
 });
 
@@ -123,5 +126,102 @@ describe('coller un retour (Mois)', () => {
     b.click();
     expect(a.ouvrirRetour).toHaveBeenCalled();
     expect(trouver(vueMois({ profil: fictif, fiches: [], ancre: '2026-10-15T10:00:00.000Z' }, a, {}))).toBeUndefined();
+  });
+});
+
+describe('vueMois : vignettes, formats et visuels', () => {
+  const ancre = '2026-10-15T10:00:00.000Z';
+  const TOUS = { story: true, reel: true, post: true };
+  const avecUrls = () => ({ ...actionsFactices(), urlVisuel: vi.fn(async id => `https://stockage.test/${id}`) });
+  const jour = el => el.querySelectorAll('.mois-jour')[3];
+  const vignettes = el => [...jour(el).querySelectorAll('.vignette')];
+  const etat = (fiches, apercu, extra = {}) => ({ profil: fictif, fiches, ancre, apercu, ...extra });
+
+  it('affiche au plus trois vignettes par jour, puis « +N » pour le reste', () => {
+    const fiches = [10, 11, 12, 13, 14].map((h, i) => f(`f${i}`, 'reel', `2026-10-01T${h}:00:00.000Z`));
+    const el = vueMois(etat(fiches), actionsFactices());
+    expect(vignettes(el)).toHaveLength(3);
+    expect(jour(el).querySelector('.vignette-plus').textContent).toBe('+2');
+  });
+
+  it('pas de « +N » quand il y a trois fiches ou moins', () => {
+    const el = vueMois(etat([f('a', 'reel', '2026-10-01T10:00:00.000Z'), f('b', 'post', '2026-10-01T11:00:00.000Z')]), actionsFactices());
+    expect(vignettes(el)).toHaveLength(2);
+    expect(jour(el).querySelector('.vignette-plus')).toBeNull();
+  });
+
+  it('une fiche avec visuel donne une vignette avec l’image, sans lettre, et demande le lien', async () => {
+    const actions = avecUrls();
+    const el = vueMois(etat([{ ...f('a', 'post', '2026-10-01T10:00:00.000Z'), visuel: 'a.png', visuel_type: 'image' }]), actions);
+    const v = vignettes(el)[0];
+    expect(v.querySelector('img')).not.toBeNull();
+    expect(v.querySelector('.vignette-lettre')).toBeNull();
+    expect(actions.urlVisuel).toHaveBeenCalledWith('a.png');
+    await vi.waitFor(() => expect(v.querySelector('img').getAttribute('src')).toBe('https://stockage.test/a.png'));
+  });
+
+  it('une vignette vidéo montre une vidéo muette', () => {
+    const el = vueMois(etat([{ ...f('v', 'reel', '2026-10-01T10:00:00.000Z'), visuel: 'v.mp4', visuel_type: 'video' }]), avecUrls());
+    expect(vignettes(el)[0].querySelector('video').hasAttribute('muted')).toBe(true);
+  });
+
+  it('le filtre masque les fiches de la case, et le nom accessible ne compte que les fiches affichées', () => {
+    const fiches = [f('r', 'reel', '2026-10-01T10:00:00.000Z'), f('s', 'story', '2026-10-01T11:00:00.000Z')];
+    const el = vueMois(etat(fiches, { periode: 'semaine', filtres: { story: false, reel: true, post: true } }), actionsFactices());
+    expect(vignettes(el)).toHaveLength(1);
+    expect(jour(el).getAttribute('aria-label')).toBe('jeudi 1 octobre, 1 contenu : Reel');
+  });
+
+  it('la vignette sans visuel prend la couleur de la catégorie choisie et reste hors de tout bouton', () => {
+    const el = vueMois(etat([{ ...f('a', 'reel', '2026-10-01T10:00:00.000Z'), categorie: 'desir' }]), actionsFactices());
+    const v = vignettes(el)[0];
+    expect(v.tagName).toBe('SPAN');
+    expect(v.style.getPropertyValue('--categorie')).toBe('#b3125a');
+    expect(jour(el).querySelectorAll('button')).toHaveLength(0);
+  });
+
+  it('la barre de formats est en haut de la vue, et son filtre s’applique à la case', () => {
+    const actions = { ...actionsFactices(), changerFiltresApercu: vi.fn() };
+    const el = vueMois(etat([f('s', 'story', '2026-10-01T10:00:00.000Z')], { periode: 'semaine', filtres: { story: false, reel: true, post: true } }), actions);
+    expect(el.firstElementChild.classList.contains('barre-formats')).toBe(true);
+    expect(el.querySelector('input[data-commande="format:story"]').checked).toBe(false);
+    expect(vignettes(el)).toHaveLength(0);
+  });
+
+  it('réutilise le même nœud image quand la vue est reconstruite après une frappe', () => {
+    const cache = creerCacheVisuels();
+    const actions = avecUrls();
+    const fiche = { ...f('a', 'post', '2026-10-01T10:00:00.000Z'), visuel: 'a.png', visuel_type: 'image' };
+    const premiere = vueMois(etat([fiche], undefined, { cacheVisuels: cache }), actions);
+    const img = premiere.querySelector('img');
+    const seconde = vueMois(etat([{ ...fiche, accroche: 'frappée' }], undefined, { cacheVisuels: cache }), actions);
+    expect(seconde.querySelector('img')).toBe(img);
+    expect(actions.urlVisuel).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('vueJour : formats et visuels', () => {
+  const ancre = '2026-09-28T08:00:00.000Z';
+  const avecUrls = () => ({ ...actionsFactices(), urlVisuel: vi.fn(async id => `https://stockage.test/${id}`) });
+
+  it('n’affiche que les formats cochés, et la barre est en haut de la vue', () => {
+    const actions = { ...actionsFactices(), changerFiltresApercu: vi.fn() };
+    const el = vueJour({
+      profil: fictif,
+      fiches: [f('r', 'reel', '2026-09-28T10:00:00.000Z'), f('s', 'story', '2026-09-28T17:00:00.000Z')],
+      ancre,
+      apercu: { periode: 'semaine', filtres: { story: false, reel: true, post: true } },
+    }, actions);
+    expect(el.firstElementChild.classList.contains('barre-formats')).toBe(true);
+    expect([...el.querySelectorAll('.frise-heure')].map(x => x.textContent)).toEqual(['12:00']);
+  });
+
+  it('la carte affiche le visuel de la fiche et demande son lien', async () => {
+    const actions = avecUrls();
+    const el = vueJour({ profil: fictif, fiches: [{ ...f('a', 'reel', '2026-09-28T10:00:00.000Z'), visuel: 'a.png', visuel_type: 'image' }], ancre }, actions);
+    const img = el.querySelector('.carte .carte-visuel img');
+    expect(img).not.toBeNull();
+    expect(actions.urlVisuel).toHaveBeenCalledWith('a.png');
+    await vi.waitFor(() => expect(img.getAttribute('src')).toBe('https://stockage.test/a.png'));
   });
 });

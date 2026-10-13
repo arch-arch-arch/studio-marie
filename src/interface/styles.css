@@ -87,6 +87,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .format { font-weight: 600; color: var(--texte); }
 .heure { font-family: var(--mono); }
 .carte-accroche { margin: 0; font-size: 13px; overflow-wrap: anywhere; }
+/* Visuel en haut de la carte : pleine largeur, hauteur bornée à 120px, sans débordement. */
+.carte-visuel { position: relative; width: 100%; height: 120px; overflow: hidden; border-radius: 6px; background: var(--surface-2); }
 .badge { font-family: var(--mono); font-size: 12px; padding: 1px 6px; border-radius: 4px; background: var(--surface-2); display: inline-flex; align-items: center; gap: 4px; }
 .badge-bloque { background: color-mix(in srgb, var(--rouge) 18%, var(--surface)); color: var(--rouge); }
 .badge .point { width: 6px; height: 6px; border-radius: 50%; background: var(--orange); }
@@ -101,11 +103,13 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .mois-jour.hors-mois { opacity: .45; }
 .mois-num { font-family: var(--mono); font-size: 12px; }
 .points { display: flex; flex-wrap: wrap; gap: 3px; }
-.point-format { width: 16px; height: 16px; border-radius: 50%; background: var(--categorie, var(--texte-2)); display: grid; place-items: center; }
-.point-lettre { color: var(--accent-texte); font: 700 11px/1 var(--mono); }
-/* Sur fond sombre, les points de catégorie sont éclaircis comme les bords des cartes ; la lettre garde le contraste. */
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .point-format { background: color-mix(in srgb, var(--categorie, var(--texte-2)) 65%, #ffffff); } }
-:root[data-theme="dark"] .point-format { background: color-mix(in srgb, var(--categorie, var(--texte-2)) 65%, #ffffff); }
+/* Vignette du Mois : carré, bord de la couleur de catégorie, visuel ou lettre du format. */
+.vignette { position: relative; display: block; flex: 0 0 auto; width: 22px; height: 22px; box-sizing: border-box; border: 2px solid var(--categorie, var(--texte-2)); border-radius: 4px; overflow: hidden; background: var(--surface-2); }
+.vignette-lettre { display: grid; place-items: center; height: 100%; color: var(--texte); font: 700 11px/1 var(--mono); }
+.vignette-plus { align-self: center; font: 600 11px/1 var(--mono); color: var(--texte-2); }
+/* Sur fond sombre, les bords de catégorie sont éclaircis comme ceux des cartes. */
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .vignette { border-color: color-mix(in srgb, var(--categorie, var(--texte-2)) 65%, #ffffff); } }
+:root[data-theme="dark"] .vignette { border-color: color-mix(in srgb, var(--categorie, var(--texte-2)) 65%, #ffffff); }
 
 /* Jour */
 .frise { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 8px; max-width: 640px; }
@@ -270,8 +274,11 @@ a.bouton-secondaire { text-decoration: none; color: inherit; }
 /* Aperçu : miniatures carrées, bordure de la couleur de catégorie, aucun défilement horizontal sur téléphone. */
 .vue-apercu { display: grid; gap: 8px; min-width: 0; }
 .apercu-commandes { display: flex; flex-wrap: wrap; gap: 8px 16px; min-width: 0; }
-.apercu-commandes fieldset { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; min-width: 0; margin: 0; padding: 2px 10px 6px; border: 1px solid var(--trait); border-radius: var(--rayon); }
-.apercu-commandes legend { padding: 0 4px; font-size: 12px; color: var(--texte-2); }
+.apercu-commandes fieldset, .barre-formats fieldset { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; min-width: 0; margin: 0; padding: 2px 10px 6px; border: 1px solid var(--trait); border-radius: var(--rayon); }
+.apercu-commandes legend, .barre-formats legend { padding: 0 4px; font-size: 12px; color: var(--texte-2); }
+/* Filtre de formats commun à Semaine, Jour, Mois et Aperçu ; la mention dit ce qui est masqué. */
+.barre-formats { display: grid; gap: 4px; min-width: 0; margin: 0 0 8px; }
+.mention-filtre { margin: 0; font-size: 13px; color: var(--texte-2); overflow-wrap: anywhere; }
 .choix { display: inline-flex; align-items: center; gap: 4px; font-size: 14px; }
 .legende-compte { font-family: var(--mono); }
 .apercu-grille { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 6px; min-width: 0; }

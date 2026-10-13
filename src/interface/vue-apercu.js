@@ -3,18 +3,16 @@ import { datePublication, LIBELLES_FORMAT } from '../logique/fiche.js';
 import { periodeAffichee } from '../logique/dossier.js';
 import { categoriesDuProfil, categorieAffichee } from '../logique/categories.js';
 import { couleurCategorie } from './carte.js';
+import { creerCacheVisuels, oublierEchecs, visuelMiniature } from './visuels.js';
+import { formatVisible, barreFormats } from './filtre-formats.js';
+
+export { creerCacheVisuels };
 
 // Valeurs initiales de l'aperçu, partagées par l'état de l'application et le contrôleur.
 export const APERCU_PAR_DEFAUT = Object.freeze({
   periode: 'semaine',
   filtres: Object.freeze({ story: true, reel: true, post: true }),
 });
-
-const LIMITE_DEMANDES = 4;
-// Les liens de stockage expirent au bout d'une heure : on les renouvelle avant.
-const DUREE_LIEN_MS = 50 * 60000;
-// « Posts » couvre les carrousels et les photos.
-const CLE_FILTRE = { story: 'story', reel: 'reel', carrousel: 'post', post: 'post' };
 
 const instant = f => new Date(datePublication(f)).getTime();
 
@@ -25,7 +23,7 @@ export function filtrerApercu(fiches, { debut, fin }, filtres) {
   return fiches
     .filter(f => {
       const t = instant(f);
-      return t >= debutMs && t < finMs && !!filtres[CLE_FILTRE[f.format]];
+      return t >= debutMs && t < finMs && formatVisible(f, filtres);
     })
     .sort((a, b) => instant(a) - instant(b) || a.id.localeCompare(b.id));
 }
@@ -41,84 +39,6 @@ export function cleApercu(etat) {
   return JSON.stringify([etat.ancre, apercu.periode, periode.debut, periode.fin, apercu.filtres.story, apercu.filtres.reel, apercu.filtres.post, visibles]);
 }
 
-// Les liens signés sont demandés un par un, au plus LIMITE_DEMANDES à la fois. Le cache garde, par visuel,
-// la demande (en cours ou obtenue) et sa date ; une demande en échec reste marquée jusqu'au changement de période.
-export function creerCacheVisuels({ maintenant = () => Date.now() } = {}) {
-  return { urls: new Map(), enCours: 0, attente: [], maintenant, periodeCle: null };
-}
-
-function demanderSuivantes(cache) {
-  while (cache.enCours < LIMITE_DEMANDES && cache.attente.length) {
-    const { id, demander, resoudre, rejeter } = cache.attente.shift();
-    cache.enCours += 1;
-    let promesse;
-    try { promesse = Promise.resolve(demander(id)); } catch (e) { promesse = Promise.reject(e); }
-    promesse.then(resoudre, rejeter).finally(() => {
-      cache.enCours -= 1;
-      demanderSuivantes(cache);
-    });
-  }
-}
-
-function lienVisuel(cache, demander, id) {
-  const entree = cache.urls.get(id);
-  // Un visuel en échec reste en échec jusqu'au changement de période : pas de nouvelle demande à chaque reconstruction.
-  if (entree?.echec) return Promise.reject(new Error('Visuel en échec'));
-  if (entree && cache.maintenant() - entree.obtenuLe < DUREE_LIEN_MS) return entree.promesse;
-  const nouvelle = { obtenuLe: cache.maintenant(), echec: false, promesse: null };
-  nouvelle.promesse = new Promise((resoudre, rejeter) => cache.attente.push({ id, demander, resoudre, rejeter }));
-  nouvelle.promesse.catch(() => { nouvelle.echec = true; });
-  cache.urls.set(id, nouvelle);
-  demanderSuivantes(cache);
-  return nouvelle.promesse;
-}
-
-// Au changement de période, les visuels en échec sont de nouveau demandés.
-function oublierEchecs(cache, cle) {
-  if (cache.periodeCle === cle) return;
-  cache.periodeCle = cle;
-  for (const [id, entree] of cache.urls) if (entree.echec) cache.urls.delete(id);
-}
-
-function visuelMiniature(f, cache, actions) {
-  if (!f.visuel) return h('span', { class: 'miniature-vide' }, f.accroche || 'Sans visuel');
-  const video = f.visuel_type === 'video';
-  const media = video ? h('video') : h('img');
-  media.setAttribute('alt', '');
-  if (video) {
-    media.muted = true;
-    media.setAttribute('muted', '');
-    media.setAttribute('playsinline', '');
-    media.setAttribute('preload', 'metadata');
-  } else {
-    media.setAttribute('loading', 'lazy');
-  }
-  const zone = h('span', { class: 'miniature-media' }, media, video ? h('span', { class: 'marque-lecture', 'aria-hidden': 'true' }) : null);
-  const indisponible = () => zone.replaceChildren(h('span', { class: 'miniature-indisponible' }, 'Visuel indisponible'));
-  // Safari n'affiche souvent rien d'une vidéo avant la lecture : le fragment #t=0.001 force la première image.
-  const charger = () => lienVisuel(cache, id => actions.urlVisuel(id), f.visuel).then(
-    url => media.setAttribute('src', video ? `${url}#t=0.001` : url),
-    indisponible,
-  );
-  // Une erreur de chargement du média refait un seul essai avec un lien neuf ; si elle revient, le visuel est marqué en échec.
-  let essais = 0;
-  media.addEventListener('error', () => {
-    // Un média remplacé par une reconstruction n'a plus rien à réparer : le cache reste intact.
-    if (!media.isConnected) return;
-    if (essais === 0) {
-      essais = 1;
-      cache.urls.delete(f.visuel);
-      charger();
-      return;
-    }
-    const entree = cache.urls.get(f.visuel);
-    if (entree) entree.echec = true;
-    indisponible();
-  });
-  charger();
-  return zone;
-}
-
 const dateCourte = (iso, fz) => new Intl.DateTimeFormat('fr-FR', { timeZone: fz, weekday: 'short', day: 'numeric', month: 'numeric' }).format(new Date(iso));
 
 function libelleMiniature(f, fz) {
@@ -131,7 +51,7 @@ function miniature(f, fz, cache, actions, couleur) {
     type: 'button', class: 'miniature', style: { '--categorie': couleur }, 'aria-label': libelleMiniature(f, fz),
     onclick: () => actions.ouvrirFiche(f.id),
   },
-  visuelMiniature(f, cache, actions),
+  visuelMiniature(f, cache, actions, 'apercu'),
   h('span', { class: 'miniature-pied', 'aria-hidden': 'true' },
     h('span', {}, dateCourte(datePublication(f), fz)),
     h('span', {}, LIBELLES_FORMAT[f.format]),
@@ -152,26 +72,9 @@ function commandes(apercu, actions) {
       onchange: () => { actions.changerPeriodeApercu(valeur); focaliser(`periode:${valeur}`); },
     }),
     libelle);
-  const choixFormat = (cle, libelle) => h('label', { class: 'choix' },
-    h('input', {
-      type: 'checkbox', checked: !!filtres[cle], 'data-commande': `format:${cle}`,
-      onchange: e => { actions.changerFiltresApercu({ ...filtres, [cle]: e.target.checked }); focaliser(`format:${cle}`); },
-    }),
-    libelle);
-  const tous = !!(filtres.story && filtres.reel && filtres.post);
   return h('div', { class: 'apercu-commandes' },
     h('fieldset', { class: 'apercu-periode' }, h('legend', {}, 'Période'), choixPeriode('semaine', 'Semaine'), choixPeriode('mois', 'Mois')),
-    h('fieldset', { class: 'apercu-formats' }, h('legend', {}, 'Formats'),
-      h('label', { class: 'choix' },
-        h('input', {
-          type: 'checkbox', checked: tous, 'data-commande': 'format:tout',
-          onchange: e => {
-            actions.changerFiltresApercu({ story: e.target.checked, reel: e.target.checked, post: e.target.checked });
-            focaliser('format:tout');
-          },
-        }),
-        'Tout'),
-      choixFormat('story', 'Stories'), choixFormat('reel', 'Reels'), choixFormat('post', 'Posts')));
+    barreFormats(filtres, actions));
 }
 
 // Compte les fiches affichées par catégorie choisie ; une proposition non confirmée compte parmi les non rangées.
@@ -201,10 +104,13 @@ export function vueApercu(etat, actions) {
   oublierEchecs(cache, `${apercu.periode}|${periode.debut}`);
   const filtrees = filtrerApercu(fiches, periode, apercu.filtres);
   const aucunFormat = !(apercu.filtres.story || apercu.filtres.reel || apercu.filtres.post);
-  let contenu;
-  if (aucunFormat) contenu = h('p', { class: 'aide', role: 'status' }, 'Coche au moins un format.');
-  else if (!filtrees.length) contenu = h('p', { class: 'aide', role: 'status' }, 'Rien de prévu sur cette période.');
-  else contenu = h('div', { class: 'apercu-grille' }, filtrees.map(f => miniature(f, fz, cache, actions, couleurCategorie(f, categories))));
+  // Sans format coché, la barre affiche « Coche au moins un format. » : la grille reste vide.
+  let contenu = null;
+  if (!aucunFormat) {
+    contenu = !filtrees.length
+      ? h('p', { class: 'aide', role: 'status' }, 'Rien de prévu sur cette période.')
+      : h('div', { class: 'apercu-grille' }, filtrees.map(f => miniature(f, fz, cache, actions, couleurCategorie(f, categories))));
+  }
   return h('div', { class: 'vue-apercu' },
     commandes(apercu, actions),
     legende(categories, aucunFormat ? [] : filtrees),

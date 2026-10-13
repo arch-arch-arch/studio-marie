@@ -31,7 +31,8 @@ export function couleurCategorie(f, categories = CATEGORIES, neutre = 'var(--tra
   return categories.find(c => c.cle === cle)?.couleur ?? neutre;
 }
 
-export function carte(f, regles, actions, action = null, categories = CATEGORIES) {
+// Le visuel (media) de la fiche, s’il existe, est en haut de la carte.
+export function carte(f, regles, actions, action = null, categories = CATEGORIES, media = null) {
   const pilier = regles.piliers.find(p => p.cle === f.pilier);
   return h('article', {
     class: `carte statut-${f.statut}`, draggable: true, tabindex: '0', 'data-id': f.id,
@@ -40,6 +41,7 @@ export function carte(f, regles, actions, action = null, categories = CATEGORIES
     onclick: () => actions.ouvrirFiche(f.id),
     onkeydown: e => { if (e.key === 'Enter') actions.ouvrirFiche(f.id); },
   },
+  media ? h('div', { class: 'carte-visuel' }, media) : null,
   h('div', { class: 'carte-tete' },
     h('span', { class: 'format' }, LIBELLES_FORMAT[f.format]),
     h('span', { class: 'heure' }, heureLocale(f.date_heure, regles.fuseau))),
