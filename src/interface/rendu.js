@@ -17,7 +17,8 @@ function libellePeriode(vue, ancre, fz) {
   if (vue === 'mois') return f({ month: 'long', year: 'numeric' }).format(new Date(ancre));
   if (vue === 'jour') return f({ weekday: 'long', day: 'numeric', month: 'long' }).format(new Date(ancre));
   const debut = debutSemaine(ancre, fz);
-  const fin = ajouterJours(debut, 6, fz);
+  // La vue Semaine montre deux semaines ; l’aperçu, lui, garde sa semaine.
+  const fin = ajouterJours(debut, vue === 'semaine' ? 13 : 6, fz);
   return `${f({ day: 'numeric', month: 'short' }).format(new Date(debut))} – ${f({ day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(fin))}`;
 }
 

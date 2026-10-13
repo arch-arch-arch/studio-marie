@@ -251,7 +251,8 @@ describe('demarrer', () => {
     const app = await demarrer(racine, { use: async nom => (nom === 'db' ? db : null) }, { horloge });
     await app.actions.importerProfil(JSON.stringify(fictif));
 
-    const f = ficheValideDirecte({ id: 'f-loin', date_heure: '2026-10-05T10:00:00.000Z', caption: 'Une ligne. Dis-moi en commentaire.' });
+    // Adapté : la vue Semaine charge deux semaines (28 sept. au 11 oct.) ; la fiche est donc hors de la vue au départ, et entre par navigation (5 au 18 oct.).
+    const f = ficheValideDirecte({ id: 'f-loin', date_heure: '2026-10-14T10:00:00.000Z', caption: 'Une ligne. Dis-moi en commentaire.' });
     const { id, ...corps } = f;
     await db.doc(`fiches/${id}`).set(corps);
 

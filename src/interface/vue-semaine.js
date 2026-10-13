@@ -2,7 +2,7 @@ import { h } from './h.js';
 import { carte, bandeau, LIBELLES_ETAT } from './carte.js';
 import { controlerSemaine, fichesDeLaSemaine } from '../logique/controle.js';
 import { creneauxLibres } from '../logique/creneaux.js';
-import { debutSemaine, joursDeLaSemaine, cleJour, heureLocale, libelleJour, depuisSaisieLocale } from '../logique/dates.js';
+import { debutSemaine, ajouterJours, joursDeLaSemaine, cleJour, heureLocale, libelleJour, depuisSaisieLocale, partiesLocales } from '../logique/dates.js';
 import { LIBELLES_FORMAT, texteCourt } from '../logique/fiche.js';
 import { prochaineAction, ACTIONS_SANS_SUITE } from '../logique/parcours.js';
 import { periodeAffichee } from '../logique/dossier.js';
@@ -12,27 +12,44 @@ import { APERCU_PAR_DEFAUT } from './vue-apercu.js';
 import { creerCacheVisuels, oublierEchecs, visuelMiniature } from './visuels.js';
 import { formatVisible, barreFormats } from './filtre-formats.js';
 
+// La vue montre deux semaines : celle de l’ancre, puis la suivante, chacune dans son bloc.
 export function vueSemaine({ profil, fiches, ancre, maintenant, stats, analyse, analyses, avisOuverts, apercu, cacheVisuels, volets }, actions, capacites = {}) {
   const r = profil.regles_studio;
   const debut = debutSemaine(ancre, r.fuseau);
+  const semaines = [debut, ajouterJours(debut, 7, r.fuseau)];
   const filtres = (apercu ?? APERCU_PAR_DEFAUT).filtres;
   const cache = cacheVisuels ?? creerCacheVisuels();
   oublierEchecs(cache, `semaine|${debut}`);
-  const semaine = fichesDeLaSemaine(fiches, debut, r.fuseau);
-  // Seules les fiches des formats cochés sont affichées ; le contrôle et la légende comptent toutes les fiches.
-  const visibles = semaine.filter(f => formatVisible(f, filtres));
-  const libres = creneauxLibres(fiches, r, debut, maintenant ?? null);
+  // Chaque semaine a ses fiches, ses créneaux libres et son contrôle ; le contrôle et la légende comptent toutes les fiches.
+  const parSemaine = semaines.map(d => fichesDeLaSemaine(fiches, d, r.fuseau));
+  const libresParSemaine = semaines.map(d => creneauxLibres(fiches, r, d, maintenant ?? null));
+  // Seules les fiches des formats cochés sont affichées.
+  const visiblesParSemaine = parSemaine.map(semaine => semaine.filter(f => formatVisible(f, filtres)));
   const maintenantIso = maintenant ?? new Date().toISOString();
-  const actionsParId = new Map(semaine.map(f => [f.id, prochaineAction(f, (stats ?? []).filter(s => s.fiche === f.id), maintenantIso, r.fuseau, r)]));
+  const toutes = parSemaine.flat();
+  const actionsParId = new Map(toutes.map(f => [f.id, prochaineAction(f, (stats ?? []).filter(s => s.fiche === f.id), maintenantIso, r.fuseau, r)]));
   const categories = categoriesDuProfil(profil);
   return h('div', { class: 'semaine' },
     capacites.dossier ? rangeeAnalyse('Analyser la semaine', analyse, actions) : null,
     barreFormats(filtres, actions),
     sectionAvis(analyses, periodeAffichee('semaine', ancre, r.fuseau), fiches, r.fuseau, avisOuverts),
-    bandeau(controlerSemaine(fiches, r, debut), volets),
-    legendeCategories(profil, categories, semaine, controlerCategories(fiches, profil, debut)),
-    aFaire(visibles, actionsParId, r.fuseau, actions, volets),
-    h('div', { class: 'colonnes' }, joursDeLaSemaine(debut, r.fuseau).map(jour => colonne(jour, visibles, libres, r, actions, actionsParId, categories, cache, filtres))));
+    aFaire(visiblesParSemaine.flat(), actionsParId, r.fuseau, actions, volets),
+    semaines.map((d, i) => h('section', { class: 'semaine-bloc' },
+      h('h2', { class: 'semaine-titre' }, titreSemaine(d, r.fuseau)),
+      bandeau(controlerSemaine(fiches, r, d), volets, `bandeau-detail:${d}`),
+      legendeCategories(profil, categories, parSemaine[i], controlerCategories(fiches, profil, d)),
+      h('div', { class: 'colonnes' }, joursDeLaSemaine(d, r.fuseau).map(jour => colonne(jour, visiblesParSemaine[i], libresParSemaine[i], r, actions, actionsParId, categories, cache, filtres))))));
+}
+
+const MOIS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+
+// « Semaine du 12 au 18 octobre », ou « Semaine du 26 octobre au 1er novembre » à cheval sur deux mois.
+function titreSemaine(debut, fuseau) {
+  const a = partiesLocales(debut, fuseau);
+  const b = partiesLocales(ajouterJours(debut, 6, fuseau), fuseau);
+  const jour = n => (n === 1 ? '1er' : String(n));
+  const premier = a.mois === b.mois ? jour(a.jour) : `${jour(a.jour)} ${MOIS[a.mois - 1]}`;
+  return `Semaine du ${premier} au ${jour(b.jour)} ${MOIS[b.mois - 1]}`;
 }
 
 // Valeur courte d’une pastille de catégorie : « n/cible » pour le fil, « n/min-max » ou « n/min » pour les stories.

@@ -23,7 +23,8 @@ function monter({ assets = null, dossier = null, delaiAssistantMs } = {}) {
 
 describe('plageDeVue', () => {
   it('couvre la semaine, le mois et le jour', () => {
-    expect(plageDeVue('semaine', T, FZ)).toEqual(['2026-09-27T22:00:00.000Z', '2026-10-04T22:00:00.000Z']);
+    // Adapté : la vue Semaine montre deux semaines, la plage couvre donc 14 jours.
+    expect(plageDeVue('semaine', T, FZ)).toEqual(['2026-09-27T22:00:00.000Z', '2026-10-11T22:00:00.000Z']);
     expect(plageDeVue('jour', T, FZ)).toEqual(['2026-09-27T22:00:00.000Z', '2026-09-28T22:00:00.000Z']);
     expect(plageDeVue('mois', '2026-10-15T10:00:00.000Z', FZ)).toEqual(['2026-09-27T22:00:00.000Z', '2026-11-01T23:00:00.000Z']);
   });
@@ -1018,12 +1019,13 @@ describe('analyse par dossier', () => {
     brancherEcoute(m);
     await m.actions.ouvrirAnalyse();
     const { code } = m.etat.lire().analyse;
-    agirPendantEcriture(m, () => m.actions.deplacerFiche(m.b.id, '2026-10-06T10:00:00.000Z'));
+    // Adapté : la vue Semaine charge deux semaines (jusqu’au 11 octobre) ; la fiche part donc après, le 13 octobre.
+    agirPendantEcriture(m, () => m.actions.deplacerFiche(m.b.id, '2026-10-13T10:00:00.000Z'));
     const r = await m.actions.enregistrerRetour(reponse(code, ['F01', 'F02']));
     expect(dansEtat(m, m.b.id)).toBe(false);
     expect(r).toEqual({ ok: true, appliquees: 2, avisRecu: true, ecartees: [] });
     const enBase = m.db.lire(`fiches/${m.b.id}`);
-    expect(enBase.date_heure.startsWith('2026-10-06')).toBe(true);
+    expect(enBase.date_heure.startsWith('2026-10-13')).toBe(true);
     expect(enBase.score.total).toBeGreaterThan(0);
   });
 

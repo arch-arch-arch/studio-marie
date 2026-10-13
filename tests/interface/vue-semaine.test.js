@@ -18,11 +18,13 @@ const reel = (id, date_heure, extra = {}) => ({ ...nouvelleFiche({ id, format: '
 const storiesVertes = () => ['28', '29', '30', '1', '2', '3', '4'].map((j, i) => nouvelleFiche({ id: `v${i}`, format: 'story', date_heure: `${i < 3 ? '2026-09-' : '2026-10-0'}${j}T10:00:00.000Z`, pilier: 'nuit', maintenant: ANCRE }));
 
 describe('vueSemaine', () => {
-  it('affiche le bandeau et 7 colonnes', () => {
+  // Adapté : la vue montre deux semaines (14 colonnes, deux bandeaux) au lieu d’une (7 colonnes, un bandeau).
+  it('affiche deux bandeaux et 14 colonnes', () => {
     const el = vueSemaine({ profil: fictif, fiches: storiesVertes(), ancre: ANCRE }, actionsFactices());
     // Le bandeau ne porte que le contrôle de la semaine (3 pastilles) ; les catégories sont dans la légende.
     expect(el.querySelectorAll('.bandeau-complet .pastille')).toHaveLength(3);
-    expect([...el.querySelectorAll('.jour')].map(j => j.dataset.jour)).toEqual(['2026-09-28', '2026-09-29', '2026-09-30', '2026-10-01', '2026-10-02', '2026-10-03', '2026-10-04']);
+    expect(el.querySelectorAll('.bandeau-zone')).toHaveLength(2);
+    expect([...el.querySelectorAll('.jour')].map(j => j.dataset.jour)).toEqual(['2026-09-28', '2026-09-29', '2026-09-30', '2026-10-01', '2026-10-02', '2026-10-03', '2026-10-04', '2026-10-05', '2026-10-06', '2026-10-07', '2026-10-08', '2026-10-09', '2026-10-10', '2026-10-11']);
   });
 
   it('place une carte dans la bonne colonne et l’ouvre au clic', () => {
@@ -41,7 +43,8 @@ describe('vueSemaine', () => {
     const actions = actionsFactices();
     const el = vueSemaine({ profil: fictif, fiches: [], ancre: ANCRE }, actions);
     const vides = el.querySelectorAll('.creneau-vide');
-    expect(vides).toHaveLength(3);
+    // Adapté : trois créneaux libres par semaine (lundi, mardi, jeudi), donc six pour les deux semaines.
+    expect(vides).toHaveLength(6);
     expect(vides[0].textContent).toBe('+ Reel · 12:00');
     vides[0].click();
     expect(actions.creerFiche).toHaveBeenCalledWith({ format: 'reel', date_heure: '2026-09-28T10:00:00.000Z' });
@@ -80,7 +83,8 @@ describe('vueSemaine', () => {
     const actions = actionsFactices();
     const el = vueSemaine({ profil: fictif, fiches: [], ancre: ANCRE, maintenant: '2026-09-29T11:00:00.000Z' }, actions);
     const vides = el.querySelectorAll('.creneau-vide');
-    expect(vides).toHaveLength(1);
+    // Adapté : la semaine 1 n’a plus que jeudi 1er octobre (un créneau), la semaine 2 en garde trois.
+    expect(vides).toHaveLength(4);
     expect(vides[0].textContent).toBe('+ Reel · 12:00');
     expect(vides[0].closest('[data-jour]').dataset.jour).toBe('2026-10-01');
   });
@@ -658,5 +662,75 @@ describe('carte : heure de Paris et caption (fiche allégée)', () => {
   it('montre la première ligne de la caption, « Sans caption » sinon, sans l’accroche', () => {
     expect(carte(reelA({ accroche: 'Ancienne', caption: '  Première\nSeconde' }), regles, actions).querySelector('.carte-accroche').textContent).toBe('Première');
     expect(carte(reelA({ accroche: 'Ancienne' }), regles, actions).querySelector('.carte-accroche').textContent).toBe('Sans caption');
+  });
+});
+
+describe('vue Semaine : deux semaines visibles', () => {
+  const M = '2026-09-30T08:00:00.000Z';
+  const TOUS = { story: true, reel: true, post: true };
+  const TITRES = el => [...el.querySelectorAll('.semaine-bloc > h2')].map(t => t.textContent);
+  const blocs = el => [...el.querySelectorAll('.semaine-bloc')];
+  const bascule = (d, ouvert) => { d.open = ouvert; d.dispatchEvent(new Event('toggle')); };
+  // Sept stories de la semaine suivante (5 au 11 octobre) : la pastille « stories » passe au vert dans le second bloc.
+  const storiesSemaine2 = () => ['05', '06', '07', '08', '09', '10', '11'].map((j, i) => nouvelleFiche({ id: `s2-${i}`, format: 'story', date_heure: `2026-10-${j}T10:00:00.000Z`, pilier: 'nuit', maintenant: ANCRE }));
+  afterEach(() => { document.body.replaceChildren(); });
+
+  it('deux blocs de semaine, chacun titré avec son intervalle', () => {
+    const el = vueSemaine({ profil: fictif, fiches: [], ancre: ANCRE }, actionsFactices());
+    expect(el.querySelectorAll('section.semaine-bloc')).toHaveLength(2);
+    expect(TITRES(el)).toEqual(['Semaine du 28 septembre au 4 octobre', 'Semaine du 5 au 11 octobre']);
+  });
+
+  it('titre à cheval sur deux mois, et « 1er » pour le premier du mois', () => {
+    const fin = vueSemaine({ profil: fictif, fiches: [], ancre: '2026-10-28T10:00:00.000Z' }, actionsFactices());
+    expect(TITRES(fin)).toEqual(['Semaine du 26 octobre au 1er novembre', 'Semaine du 2 au 8 novembre']);
+    const debut = vueSemaine({ profil: fictif, fiches: [], ancre: '2026-06-03T10:00:00.000Z' }, actionsFactices());
+    expect(TITRES(debut)).toEqual(['Semaine du 1er au 7 juin', 'Semaine du 8 au 14 juin']);
+  });
+
+  it('14 colonnes, une par jour, réparties en deux blocs de 7', () => {
+    const el = vueSemaine({ profil: fictif, fiches: [], ancre: ANCRE }, actionsFactices());
+    expect([...el.querySelectorAll('.jour')]).toHaveLength(14);
+    expect(blocs(el).map(b => b.querySelectorAll('.jour').length)).toEqual([7, 7]);
+  });
+
+  it('une fiche de la seconde semaine apparaît dans le second bloc seulement', () => {
+    const el = vueSemaine({ profil: fictif, fiches: [reel('x', '2026-10-07T10:00:00.000Z')], ancre: ANCRE }, actionsFactices());
+    expect(blocs(el)[0].querySelector('.carte[data-id="x"]')).toBeNull();
+    expect(blocs(el)[1].querySelector('.carte[data-id="x"]')).not.toBeNull();
+  });
+
+  it('le contrôle de chaque bloc compte ses propres fiches', () => {
+    const el = vueSemaine({ profil: fictif, fiches: storiesSemaine2(), ancre: ANCRE }, actionsFactices());
+    expect(blocs(el).map(b => b.querySelector('.bandeau-resume').textContent)).toEqual(['0 sur 3 au vert', '1 sur 3 au vert']);
+  });
+
+  it('« À faire » couvre les deux semaines : une action de la seconde y figure, une seule section', () => {
+    const el = vueSemaine({ profil: fictif, fiches: [reel('x', '2026-10-07T10:00:00.000Z', { caption: 'Semaine deux' })], ancre: ANCRE, maintenant: M, stats: [] }, actionsFactices());
+    expect(el.querySelectorAll('.a-faire')).toHaveLength(1);
+    expect(el.querySelector('.a-faire summary h3').textContent).toBe('À faire (1)');
+    expect(el.querySelector('.a-faire li').textContent).toContain('Semaine deux');
+  });
+
+  it('« Tout voir » de la semaine 2 est séparé de celui de la semaine 1, et survit à une reconstruction', () => {
+    const racine = document.createElement('div');
+    document.body.append(racine);
+    const actions = { ...actionsFactices(), changerVue: vi.fn(), naviguer: vi.fn(), allerAujourdhui: vi.fn(), changerFiltresApercu: vi.fn() };
+    const rendre = creerRendu(racine, actions, {}, () => M);
+    const e = { profil: fictif, vue: 'semaine', ancre: ANCRE, apercu: { periode: 'semaine', filtres: TOUS }, sauvegarde: 'ok', erreur: null, ficheOuverte: null };
+    const volets = () => [...racine.querySelectorAll('details.bandeau-detail')];
+    rendre({ ...e, fiches: [...storiesVertes(), ...storiesSemaine2()] });
+    expect(volets().map(d => d.open)).toEqual([false, false]);
+    bascule(volets()[1], true);
+    rendre({ ...e, fiches: [...storiesVertes(), ...storiesSemaine2()] });
+    expect(volets().map(d => d.open)).toEqual([false, true]);
+  });
+
+  it('le libellé de période de la barre du haut couvre les deux semaines', () => {
+    const racine = document.createElement('div');
+    const actions = { ...actionsFactices(), changerVue: vi.fn(), naviguer: vi.fn(), allerAujourdhui: vi.fn(), changerFiltresApercu: vi.fn() };
+    const rendre = creerRendu(racine, actions, {}, () => M);
+    rendre({ profil: fictif, fiches: [], vue: 'semaine', ancre: ANCRE, apercu: { periode: 'semaine', filtres: TOUS }, sauvegarde: 'ok', erreur: null, ficheOuverte: null });
+    expect(racine.querySelector('.periode-libelle').textContent).toBe('28 sept. – 11 oct. 2026');
   });
 });

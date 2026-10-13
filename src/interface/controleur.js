@@ -31,8 +31,9 @@ export function plageDeVue(vue, ancre, fuseau) {
     const d = debutJour(ancre, fuseau);
     return [d, ajouterJours(d, 1, fuseau)];
   }
+  // La vue Semaine montre deux semaines : la seconde doit être chargée aussi.
   const d = debutSemaine(ancre, fuseau);
-  return [d, ajouterJours(d, 7, fuseau)];
+  return [d, ajouterJours(d, vue === 'semaine' ? 14 : 7, fuseau)];
 }
 
 export function fusionnerInstantane(recues, locales, estEnAttente) {
