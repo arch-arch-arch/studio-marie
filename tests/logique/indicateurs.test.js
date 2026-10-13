@@ -4,7 +4,7 @@ import {
   documentReleveContenu, documentReleveCompte, formaterValeur,
 } from '../../src/logique/indicateurs.js';
 
-const publiee = { id: 'f1', statut: 'publie', date_heure: '2026-09-20T10:00:00.000Z', format: 'reel', pilier: 'socio', accroche: 'Accroche', score: { total: 72 } };
+const publiee = { id: 'f1', statut: 'publie', date_heure: '2026-09-20T10:00:00.000Z', format: 'reel', pilier: 'socio', caption: 'Accroche', score: { total: 72 } };
 
 describe('validerReleveContenu', () => {
   it('accepte des entiers, des textes avec espaces et des champs facultatifs vides', () => {
@@ -100,5 +100,11 @@ describe('formaterValeur', () => {
     expect(formaterValeur('taux_abonnes_par_vue', 0.0042)).toBe('0,42 %');
     expect(formaterValeur('partages_par_post', 12.4)).toBe('12');
     expect(formaterValeur('croissance_nette_semaine', null)).toBe('—');
+  });
+});
+
+describe('documentReleveContenu : caption au lieu de l’accroche (fiche allégée)', () => {
+  it('garde la première ligne de la caption comme libellé du contenu', () => {
+    expect(documentReleveContenu({ ...publiee, accroche: 'Ancienne', caption: '  Légende\nsuite' }, '48h', {}, '2026-09-22T10:00:00.000Z').accroche).toBe('Légende');
   });
 });

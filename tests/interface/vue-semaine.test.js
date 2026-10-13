@@ -6,7 +6,7 @@ import { vueSemaine } from '../../src/interface/vue-semaine.js';
 import { creerCacheVisuels } from '../../src/interface/vue-apercu.js';
 import { creerRendu } from '../../src/interface/rendu.js';
 import { creerCacheVisuels as creerCacheDeVisuels } from '../../src/interface/visuels.js';
-import { bandeau } from '../../src/interface/carte.js';
+import { bandeau, carte } from '../../src/interface/carte.js';
 import { libelleJour } from '../../src/logique/dates.js';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -14,18 +14,20 @@ import { resolve } from 'node:path';
 const ANCRE = '2026-09-30T10:00:00.000Z';
 const actionsFactices = () => ({ ouvrirFiche: vi.fn(), creerFiche: vi.fn(), deplacerFiche: vi.fn() });
 const reel = (id, date_heure, extra = {}) => ({ ...nouvelleFiche({ id, format: 'reel', date_heure, pilier: 'nuit', maintenant: ANCRE }), ...extra });
+// Sept stories, une par jour de la semaine d’ANCRE : la pastille « stories » passe au vert, donc le détail du bandeau existe.
+const storiesVertes = () => ['28', '29', '30', '1', '2', '3', '4'].map((j, i) => nouvelleFiche({ id: `v${i}`, format: 'story', date_heure: `${i < 3 ? '2026-09-' : '2026-10-0'}${j}T10:00:00.000Z`, pilier: 'nuit', maintenant: ANCRE }));
 
 describe('vueSemaine', () => {
   it('affiche le bandeau et 7 colonnes', () => {
-    const el = vueSemaine({ profil: fictif, fiches: [], ancre: ANCRE }, actionsFactices());
-    // Le bandeau ne porte que le contrôle de la semaine (8 pastilles) ; les catégories sont dans la légende.
-    expect(el.querySelectorAll('.bandeau-complet .pastille')).toHaveLength(8);
+    const el = vueSemaine({ profil: fictif, fiches: storiesVertes(), ancre: ANCRE }, actionsFactices());
+    // Le bandeau ne porte que le contrôle de la semaine (3 pastilles) ; les catégories sont dans la légende.
+    expect(el.querySelectorAll('.bandeau-complet .pastille')).toHaveLength(3);
     expect([...el.querySelectorAll('.jour')].map(j => j.dataset.jour)).toEqual(['2026-09-28', '2026-09-29', '2026-09-30', '2026-10-01', '2026-10-02', '2026-10-03', '2026-10-04']);
   });
 
   it('place une carte dans la bonne colonne et l’ouvre au clic', () => {
     const actions = actionsFactices();
-    const el = vueSemaine({ profil: fictif, fiches: [reel('a', '2026-10-01T16:00:00.000Z', { accroche: 'Ma phrase' })], ancre: ANCRE }, actions);
+    const el = vueSemaine({ profil: fictif, fiches: [reel('a', '2026-10-01T16:00:00.000Z', { caption: 'Ma phrase' })], ancre: ANCRE }, actions);
     const colonne = el.querySelector('[data-jour="2026-10-01"]');
     const c = colonne.querySelector('.carte');
     expect(c.textContent).toContain('Ma phrase');
@@ -67,7 +69,7 @@ describe('vueSemaine', () => {
   });
 
   it('rend l’état des pastilles lisible sans la couleur', () => {
-    const el = vueSemaine({ profil: fictif, fiches: [], ancre: ANCRE }, actionsFactices());
+    const el = vueSemaine({ profil: fictif, fiches: storiesVertes(), ancre: ANCRE }, actionsFactices());
     const rouge = el.querySelector('.pastille-rouge');
     const vert = el.querySelector('.pastille-vert');
     expect(rouge.querySelector('.visuellement-masque').textContent).toBe(' : hors cible');
@@ -203,19 +205,19 @@ describe('catégories dans la semaine', () => {
   it('profil sans section : ni légende quand aucune fiche de la semaine n’est rangée', () => {
     const sans = structuredClone(fictif);
     delete sans.categories_de_contenu;
-    const el = vueSemaine({ profil: sans, fiches: [jour('a', '10')], ancre: ANCRE }, actionsFactices());
-    expect(el.querySelectorAll('.bandeau-complet .pastille')).toHaveLength(8);
+    const el = vueSemaine({ profil: sans, fiches: [jour('a', '10'), ...storiesVertes()], ancre: ANCRE }, actionsFactices());
+    expect(el.querySelectorAll('.bandeau-complet .pastille')).toHaveLength(3);
     expect(el.querySelector('.legende-categories')).toBeNull();
   });
 
   it('profil sans section : la légende apparaît dès qu’une fiche de la semaine a une catégorie choisie', () => {
     const sans = structuredClone(fictif);
     delete sans.categories_de_contenu;
-    const el = vueSemaine({ profil: sans, fiches: [jour('a', '10', { categorie: 'desir' })], ancre: ANCRE }, actionsFactices());
+    const el = vueSemaine({ profil: sans, fiches: [jour('a', '10', { categorie: 'desir' }), ...storiesVertes()], ancre: ANCRE }, actionsFactices());
     const legende = el.querySelector('.legende-categories');
     expect(legende).not.toBeNull();
     expect(legende.querySelector('[data-categorie="desir"]')).not.toBeNull();
-    expect(el.querySelectorAll('.bandeau-complet .pastille')).toHaveLength(8);
+    expect(el.querySelectorAll('.bandeau-complet .pastille')).toHaveLength(3);
   });
 
   it('une fiche masquée compte toujours dans la légende', () => {
@@ -368,7 +370,7 @@ describe('parcours dans la semaine', () => {
 
   it('liste « À faire cette semaine », retards d’abord, et ouvre la fiche', () => {
     const actions = actionsFactices();
-    const el = vueSemaine({ profil: fictif, fiches: [reel('b', '2026-10-02T10:00:00.000Z', { accroche: 'Plus tard' }), reel('a', '2026-09-29T10:00:00.000Z', { accroche: 'En retard' })], ancre: ANCRE, maintenant: M, stats: [] }, actions);
+    const el = vueSemaine({ profil: fictif, fiches: [reel('b', '2026-10-02T10:00:00.000Z', { caption: 'Plus tard' }), reel('a', '2026-09-29T10:00:00.000Z', { caption: 'En retard' })], ancre: ANCRE, maintenant: M, stats: [] }, actions);
     const lignes = [...el.querySelectorAll('.a-faire li')];
     expect(lignes.map(l => l.textContent.includes('En retard'))).toEqual([true, false]);
     expect(lignes[0].classList.contains('action-retard')).toBe(true);
@@ -478,7 +480,7 @@ describe('vueSemaine : formats et miniatures', () => {
   const story = (id, date_heure, extra = {}) => ({ ...nouvelleFiche({ id, format: 'story', date_heure, pilier: 'nuit', maintenant: ANCRE }), ...extra });
 
   it('un format masqué disparaît des colonnes et de « À faire », mais le bandeau compte toujours la story', () => {
-    const fiches = [story('s', '2026-09-29T10:00:00.000Z'), reel('r', '2026-09-30T10:00:00.000Z')];
+    const fiches = [story('s', '2026-09-29T10:00:00.000Z'), reel('r', '2026-09-30T10:00:00.000Z'), ...storiesVertes()];
     const el = vueSemaine(etat(fiches, sansStory), avecUrls());
     expect(el.querySelector('.carte[data-id="s"]')).toBeNull();
     expect(el.querySelector('.carte[data-id="r"]')).not.toBeNull();
@@ -509,7 +511,7 @@ describe('vueSemaine : formats et miniatures', () => {
   });
 
   it('une fiche sans visuel n’a pas de zone visuelle', () => {
-    const el = vueSemaine(etat([reel('a', '2026-09-29T10:00:00.000Z', { accroche: 'Sans image' })]), avecUrls());
+    const el = vueSemaine(etat([reel('a', '2026-09-29T10:00:00.000Z', { caption: 'Sans image' })]), avecUrls());
     expect(el.querySelector('.carte[data-id="a"] .carte-visuel')).toBeNull();
     expect(el.querySelector('.carte[data-id="a"] .carte-accroche').textContent).toBe('Sans image');
   });
@@ -576,10 +578,10 @@ describe('volets de la Semaine : état gardé d’une reconstruction', () => {
   it('« Tout voir » ouvert par l’utilisatrice reste ouvert quand une fiche change', () => {
     const { racine, rendre } = montee();
     const fiche = reel('a', '2026-10-01T10:00:00.000Z');
-    rendre(e0([fiche]));
+    rendre(e0([fiche, ...storiesVertes()]));
     expect(racine.querySelector('details.bandeau-detail').open).toBe(false);
     bascule(racine.querySelector('details.bandeau-detail'), true);
-    rendre(e0([{ ...fiche, accroche: 'Frappée' }]));
+    rendre(e0([{ ...fiche, caption: 'Frappée' }, ...storiesVertes()]));
     expect(racine.querySelector('details.bandeau-detail').open).toBe(true);
   });
 
@@ -610,7 +612,7 @@ describe('volets de la Semaine : état gardé d’une reconstruction', () => {
     d.open = false;
     d.dispatchEvent(new Event('toggle'));
     expect(volets.has('a-faire')).toBe(false);
-    const tout = vueSemaine({ profil: fictif, fiches: [reel('b', '2026-10-01T10:00:00.000Z')], ancre: ANCRE, volets }, actionsFactices());
+    const tout = vueSemaine({ profil: fictif, fiches: [reel('b', '2026-10-01T10:00:00.000Z'), ...storiesVertes()], ancre: ANCRE, volets }, actionsFactices());
     const bandeau = tout.querySelector('details.bandeau-detail');
     bandeau.open = true;
     bandeau.dispatchEvent(new Event('toggle'));
@@ -624,7 +626,7 @@ describe('volets de la Semaine : état gardé d’une reconstruction', () => {
   });
 
   it('sans volets (vueSemaine seule) : « Tout voir » fermé par défaut', () => {
-    const el = vueSemaine({ profil: fictif, fiches: [reel('a', '2026-10-01T10:00:00.000Z')], ancre: ANCRE }, actionsFactices());
+    const el = vueSemaine({ profil: fictif, fiches: [reel('a', '2026-10-01T10:00:00.000Z'), ...storiesVertes()], ancre: ANCRE }, actionsFactices());
     expect(el.querySelector('details.bandeau-detail').open).toBe(false);
   });
 
@@ -639,5 +641,22 @@ describe('volets de la Semaine : état gardé d’une reconstruction', () => {
     rendre(bulletin);
     rendre({ ...bulletin, bulletin: null });
     expect(racine.querySelector('.sans-bulletin')).not.toBeNull();
+  });
+});
+
+describe('carte : heure de Paris et caption (fiche allégée)', () => {
+  const actions = { ouvrirFiche: () => {} };
+  const regles = fictif.regles_studio;
+  const reelA = (extra = {}) => ({ ...nouvelleFiche({ id: 'a', format: 'reel', date_heure: '2026-10-13T16:00:00.000Z', maintenant: 'x' }), ...extra });
+  it('ajoute « 18:00 FR » après l’heure locale quand le fuseau n’est pas Paris', () => {
+    const el = carte(reelA(), { ...regles, fuseau: 'America/Toronto' }, actions);
+    expect(el.querySelector('.carte-tete').textContent).toBe('Reel · 12:00 · 18:00 FR');
+  });
+  it('rien de plus quand le fuseau est Paris', () => {
+    expect(carte(reelA(), regles, actions).querySelector('.carte-tete').textContent).toBe('Reel · 18:00');
+  });
+  it('montre la première ligne de la caption, « Sans caption » sinon, sans l’accroche', () => {
+    expect(carte(reelA({ accroche: 'Ancienne', caption: '  Première\nSeconde' }), regles, actions).querySelector('.carte-accroche').textContent).toBe('Première');
+    expect(carte(reelA({ accroche: 'Ancienne' }), regles, actions).querySelector('.carte-accroche').textContent).toBe('Sans caption');
   });
 });

@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   partiesLocales, versUtc, ajouterJours, debutJour, debutSemaine, joursDeLaSemaine,
   debutMois, ajouterMois, semainesDuMois, cleJour, heureLocale, depuisSaisieLocale, libelleJour, cleSemaineIso,
+  FUSEAU_FR, heureParis,
 } from '../../src/logique/dates.js';
 
 const FZ = 'Europe/Paris';
@@ -72,5 +73,17 @@ describe('cleSemaineIso', () => {
     expect(cleSemaineIso('2026-10-04T22:30:00.000Z', 'Europe/Paris')).toBe('2026-W41');
     expect(cleSemaineIso('2027-01-01T12:00:00.000Z', 'Europe/Paris')).toBe('2026-W53');
     expect(cleSemaineIso('2027-01-04T12:00:00.000Z', 'Europe/Paris')).toBe('2027-W01');
+  });
+});
+
+describe('heure de Paris', () => {
+  it('fixe le fuseau français', () => {
+    expect(FUSEAU_FR).toBe('Europe/Paris');
+  });
+  it('donne 18:00 à Paris pour 12:00 à Toronto en octobre (Toronto UTC-4, Paris UTC+2)', () => {
+    expect(heureParis('2026-10-13T16:00:00.000Z')).toBe('18:00');
+  });
+  it('donne 17:00 à Paris pour 12:00 à Toronto le 31 octobre (Paris à l’heure d’hiver, Toronto pas encore)', () => {
+    expect(heureParis('2026-10-31T16:00:00.000Z')).toBe('17:00');
   });
 });

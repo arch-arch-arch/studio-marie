@@ -31,15 +31,15 @@ function semaineIdeale() {
 describe('controlerSemaine', () => {
   it('semaine vide', () => {
     const p = controlerSemaine([], R, LUNDI);
-    expect(p.map(x => x.cle)).toEqual(['reels', 'carrousels', 'stories', 'cta', 'roles', 'ragebait', 'porte', 'piliers']);
-    expect(etats(p)).toEqual({ reels: 'rouge', carrousels: 'rouge', stories: 'rouge', cta: 'vert', roles: 'rouge', ragebait: 'vert', porte: 'rouge', piliers: 'orange' });
-    expect(valeurs(p)).toMatchObject({ reels: '0/4', carrousels: '0/2', stories: '0/7', cta: '0/0' });
+    expect(p.map(x => x.cle)).toEqual(['reels', 'carrousels', 'stories']);
+    expect(etats(p)).toEqual({ reels: 'rouge', carrousels: 'rouge', stories: 'rouge' });
+    expect(valeurs(p)).toMatchObject({ reels: '0/4', carrousels: '0/2', stories: '0/7' });
   });
 
   it('semaine idéale : tout au vert', () => {
     const p = controlerSemaine(semaineIdeale(), R, LUNDI);
-    expect(Object.values(etats(p))).toEqual(Array(8).fill('vert'));
-    expect(valeurs(p)).toMatchObject({ reels: '4/4', cta: '1/6', roles: '4/1/1', porte: '2', piliers: '4/4' });
+    expect(Object.values(etats(p))).toEqual(Array(3).fill('vert'));
+    expect(valeurs(p)).toMatchObject({ reels: '4/4', carrousels: '2/2', stories: '7/7' });
   });
 
   it('ignore les fiches hors de la semaine', () => {
@@ -47,29 +47,9 @@ describe('controlerSemaine', () => {
     expect(valeurs(p).reels).toBe('4/4');
   });
 
-  it('juge la part d’appels à l’action', () => {
-    const feed = k => Array.from({ length: k }, (_, i) => fiche('reel', JOURS[i]));
-    const cta = (fiches, k) => fiches.map((f, i) => ({ ...f, cta: i < k }));
-    expect(etats(controlerSemaine(cta(feed(5), 2), R, LUNDI)).cta).toBe('orange');
-    expect(etats(controlerSemaine(cta(feed(4), 3), R, LUNDI)).cta).toBe('rouge');
-    expect(etats(controlerSemaine(cta(feed(4), 0), R, LUNDI)).cta).toBe('orange');
-    expect(etats(controlerSemaine(cta(feed(4), 1), R, LUNDI)).cta).toBe('vert');
-  });
-
-  it('juge les stories, le ragebait et la porte', () => {
+  it('juge les stories', () => {
     const cinqJours = JOURS.slice(0, 5).map(j => fiche('story', j));
     expect(etats(controlerSemaine(cinqJours, R, LUNDI)).stories).toBe('orange');
-    const deuxRage = [fiche('reel', JOURS[0], { ragebait: true }), fiche('reel', JOURS[1], { ragebait: true })];
-    expect(etats(controlerSemaine(deuxRage, R, LUNDI)).ragebait).toBe('rouge');
-    const portes = k => JOURS.slice(0, 7).map((j, i) => fiche('story', j, { porte: i < k }));
-    expect(etats(controlerSemaine(portes(1), R, LUNDI)).porte).toBe('orange');
-    expect(etats(controlerSemaine(portes(4), R, LUNDI)).porte).toBe('orange');
-    expect(etats(controlerSemaine(portes(5), R, LUNDI)).porte).toBe('rouge');
-  });
-
-  it('juge l’équilibre des piliers', () => {
-    const domine = ['socio', 'socio', 'socio', 'nuit'].map((p, i) => fiche('reel', JOURS[i], { pilier: p }));
-    expect(etats(controlerSemaine(domine, R, LUNDI)).piliers).toBe('rouge');
   });
 });
 
@@ -79,5 +59,16 @@ describe('fichesDeLaSemaine', () => {
     const dimanche = fiche('story', '2026-10-25', {}, '23:30');
     const lundiSuivant = fiche('story', '2026-10-26', {}, '00:10');
     expect(fichesDeLaSemaine([dimanche, lundiSuivant], debut, FZ).map(f => f.id)).toEqual([dimanche.id]);
+  });
+});
+
+describe('pastilles de la fiche allégée', () => {
+  it('ne garde que reels, carrousels et stories', () => {
+    expect(controlerSemaine([], R, LUNDI).map(p => p.cle)).toEqual(['reels', 'carrousels', 'stories']);
+  });
+  it('semaine idéale : trois pastilles, toutes vertes', () => {
+    const p = controlerSemaine(semaineIdeale(), R, LUNDI);
+    expect(p.map(x => x.cle)).toEqual(['reels', 'carrousels', 'stories']);
+    expect(etats(p)).toEqual({ reels: 'vert', carrousels: 'vert', stories: 'vert' });
   });
 });

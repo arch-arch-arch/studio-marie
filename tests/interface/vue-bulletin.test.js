@@ -6,7 +6,7 @@ import { vueBulletin } from '../../src/interface/vue-bulletin.js';
 import { creerRendu } from '../../src/interface/rendu.js';
 
 const ANCRE = '2026-10-06T10:00:00.000Z';
-const idee = { ...nouvelleFiche({ id: 'i1', format: 'reel', date_heure: '2026-10-05T10:00:00.000Z', pilier: 'nuit', maintenant: 'x' }), accroche: 'Idée de la veille' };
+const idee = { ...nouvelleFiche({ id: 'i1', format: 'reel', date_heure: '2026-10-05T10:00:00.000Z', pilier: 'nuit', maintenant: 'x' }), caption: 'Idée de la veille' };
 const bulletin = extra => ({
   semaine: '2026-W41', genere_le: '2026-10-04T18:00:00.000Z', statut: 'complet', sources_indisponibles: false,
   retrospective: { type: 'rappel', texte: 'Aucun relevé de statistiques pour la semaine écoulée : saisis-les pour obtenir la rétrospective.' },

@@ -205,7 +205,7 @@ describe('creerControleur', () => {
 describe('relevés de statistiques', () => {
   const avecFiche = statut => {
     const m = monter();
-    const f = { ...nouvelleFiche({ id: 'f1', format: 'reel', date_heure: '2026-09-20T10:00:00.000Z', pilier: 'socio', maintenant: T }), statut, accroche: 'Accroche' };
+    const f = { ...nouvelleFiche({ id: 'f1', format: 'reel', date_heure: '2026-09-20T10:00:00.000Z', pilier: 'socio', maintenant: T }), statut, caption: 'Accroche' };
     m.etat.modifier({ fiches: [f] });
     return { ...m, depot: creerDepot(m.db) };
   };
@@ -1287,13 +1287,13 @@ describe('analyse par dossier : retour sans dossier prêt et saisie récente', (
   it('prépare le dossier avec la saisie faite dans la fiche ouverte', async () => {
     const { actions, etat, db, dossier } = await avecFiche();
     const id = etat.lire().fiches[0].id;
-    actions.modifierFiche(id, { accroche: 'Saisie toute fraîche', caption: 'Texte saisi' });
+    actions.modifierFiche(id, { caption: 'Saisie toute fraîche' });
     expect(etat.lire().ficheOuverte).toBe(id);
     await actions.ouvrirAnalyse();
     expect(etat.lire().ficheOuverte).toBeNull();
     const { code } = etat.lire().analyse;
     expect(db.lire(`analyses/${code}`).fiches[0].empreinte).toBe(empreinte(etat.lire().fiches[0]));
-    expect(etat.lire().fiches[0].accroche).toBe('Saisie toute fraîche');
+    expect(etat.lire().fiches[0].caption).toBe('Saisie toute fraîche');
     expect(JSON.stringify(dossier.appels.contenu)).toContain('Saisie toute fraîche');
   });
 });

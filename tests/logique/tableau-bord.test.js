@@ -79,7 +79,7 @@ describe('seriesTableau', () => {
 });
 
 describe('retrospective', () => {
-  const fiche = (id, date_heure, statut = 'publie') => ({ id, statut, date_heure, accroche: `Accroche ${id}` });
+  const fiche = (id, date_heure, statut = 'publie') => ({ id, statut, date_heure, caption: `Légende ${id}` });
   it('sans aucun relevé sur les 2 semaines : rappel, avec les relevés manquants', () => {
     const r = retrospective({
       stats: [], relevesCompte: [], fiches: [fiche('f1', '2026-09-22T10:00:00.000Z')], cibles: undefined,
@@ -87,7 +87,7 @@ describe('retrospective', () => {
     });
     expect(r.type).toBe('rappel');
     expect(r.texte).toBe(RAPPEL_RETROSPECTIVE);
-    expect(r.manquants).toEqual([{ fiche: 'f1', releve: '48h', accroche: 'Accroche f1' }]);
+    expect(r.manquants).toEqual([{ fiche: 'f1', releve: '48h', accroche: 'Légende f1' }]);
   });
   it('avec des relevés : meilleur, pire, écarts et manquants, sur les 2 semaines avant la semaine visée', () => {
     const r = retrospective({
@@ -127,7 +127,7 @@ describe('retrospective', () => {
   });
   it('la fenêtre et les manquants partent de la date réelle de publication', () => {
     const r = retrospective({
-      stats: [], relevesCompte: [], fiches: [{ id: 'p', statut: 'publie', date_heure: '2026-09-30T10:00:00.000Z', publie_le: '2026-09-22T10:00:00.000Z', accroche: 'Réelle' }],
+      stats: [], relevesCompte: [], fiches: [{ id: 'p', statut: 'publie', date_heure: '2026-09-30T10:00:00.000Z', publie_le: '2026-09-22T10:00:00.000Z', caption: 'Réelle' }],
       cibles: undefined, fuseau: FZ, debutSemaineVisee: W40, maintenant: '2026-09-27T18:00:00.000Z',
     });
     expect(r.manquants).toEqual([{ fiche: 'p', releve: '48h', accroche: 'Réelle' }]);
@@ -161,5 +161,13 @@ describe('faible volume', () => {
     expect(resumeVolume([])).toBe('Aucun contenu relevé sur 12 semaines.');
     expect(resumeVolume([stat('a', '7j')])).toBe('1 contenu relevé sur 12 semaines (1 Reel).');
     expect(resumeVolume(stats)).toBe('3 contenus relevés sur 12 semaines (2 Reels, 1 carrousel).');
+  });
+});
+
+describe('manquants : caption au lieu de l’accroche (fiche allégée)', () => {
+  it('nomme le contenu manquant par la première ligne de sa caption', () => {
+    const f = { id: 'f1', statut: 'publie', date_heure: '2026-09-30T10:00:00.000Z', publie_le: '2026-09-22T10:00:00.000Z', caption: 'Légende\nsuite', accroche: 'Ancienne' };
+    const r = retrospective({ stats: [], relevesCompte: [], fiches: [f], cibles: {}, fuseau: 'Europe/Paris', debutSemaineVisee: '2026-09-27T22:00:00.000Z', maintenant: '2026-10-01T10:00:00.000Z' });
+    expect(r.manquants).toEqual([{ fiche: 'f1', releve: '48h', accroche: 'Légende' }, { fiche: 'f1', releve: '7j', accroche: 'Légende' }]);
   });
 });

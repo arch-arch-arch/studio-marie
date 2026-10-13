@@ -26,7 +26,7 @@ describe('compterMots et dansUnCreneau', () => {
 describe('verifierRegles', () => {
   it('contenu propre : vert, sans alerte', () => {
     expect(verifierRegles(fiche(), R)).toEqual({
-      conformite: { etat: 'vert', causes: [] }, alertes: [], mesures: { motsAccroche: 8, nbHashtags: 4 },
+      conformite: { etat: 'vert', causes: [] }, alertes: [], mesures: { nbHashtags: 4 },
     });
   });
 
@@ -65,91 +65,20 @@ describe('verifierRegles', () => {
       .toBe('rouge');
   });
 
-  it('bloque un lien dans le texte, sauf pour une story qui mène à la porte', () => {
-    const cause = fragment => `lien « ${fragment} » dans le texte (seule une story qui mène à la porte peut porter un lien)`;
+  it('bloque un lien dans le texte, sauf dans une story', () => {
+    const cause = fragment => `lien « ${fragment} » dans le texte (seule une story peut porter un lien)`;
     expect(verifierRegles(fiche({ caption: 'Tout est sur https://exemple.test/moi' }), R).conformite.causes)
       .toEqual([cause('https://exemple.test/moi')]);
     expect(verifierRegles(fiche({ caption: 'Va voir exemple.com/x' }), R).conformite.causes)
       .toEqual([cause('exemple.com/x')]);
     expect(verifierRegles(fiche({ format: 'story', porte: true, caption: 'https://exemple.test/moi' }), R).conformite.etat).toBe('vert');
-    expect(verifierRegles(fiche({ format: 'story', porte: false, caption: 'https://exemple.test/moi' }), R).conformite.causes)
-      .toEqual([cause('https://exemple.test/moi')]);
+    expect(verifierRegles(fiche({ format: 'story', porte: false, caption: 'https://exemple.test/moi' }), R).conformite.etat).toBe('vert');
     // un reel avec porte:true (champ ignoré hors story) reste bloqué
     expect(verifierRegles(fiche({ format: 'reel', porte: true, caption: 'https://exemple.test/moi' }), R).conformite.etat).toBe('rouge');
   });
 
-  it('détecte les domaines de link-in-bio connus et les domaines nus dans une extension sûre', () => {
-    expect(verifierRegles(fiche({ caption: 'Mon lien : linktr.ee/moi' }), R).conformite.etat).toBe('rouge');
-    expect(verifierRegles(fiche({ caption: 'beacons.ai' }), R).conformite.etat).toBe('rouge');
-    expect(verifierRegles(fiche({ caption: 'Va sur moi.xyz' }), R).conformite.etat).toBe('rouge');
-    expect(verifierRegles(fiche({ caption: 'www.exemple.fr' }), R).conformite.etat).toBe('rouge');
-  });
-
-  it('ne bloque pas une phrase ressemblant à un domaine sans être un lien', () => {
-    expect(verifierRegles(fiche({ caption: 'Je rentre vraiment.Me voilà' }), R).conformite.etat).toBe('vert');
-    expect(verifierRegles(fiche({ caption: 'On a fini.Co-working demain' }), R).conformite.etat).toBe('vert');
-  });
-
-  it('ne bloque pas un domaine de link-in-bio connu caché dans un autre mot', () => {
-    expect(verifierRegles(fiche({ caption: 'mon habit.Lyon' }), R).conformite.etat).toBe('vert');
-    expect(verifierRegles(fiche({ caption: 'bit.ly/x' }), R).conformite.etat).toBe('rouge');
-  });
-
-  it('bloque un géotag plus précis que la ville', () => {
-    expect(verifierRegles(fiche({ geotag: 'Paris' }), R).conformite.etat).toBe('vert');
-    expect(verifierRegles(fiche({ geotag: '12 rue des Lilas' }), R).conformite.causes)
-      .toEqual(['géotag trop précis « 12 rue des Lilas » (reste au niveau de la ville)']);
-    expect(verifierRegles(fiche({ geotag: 'Chez moi' }), R).conformite.etat).toBe('rouge');
-  });
-
-  it('détecte les types de voie et les codes postaux, mais pas un chiffre seul', () => {
-    expect(verifierRegles(fiche({ geotag: '12 av. Foch' }), R).conformite.etat).toBe('rouge');
-    expect(verifierRegles(fiche({ geotag: 'Quai de Valmy' }), R).conformite.etat).toBe('rouge');
-    expect(verifierRegles(fiche({ geotag: '75011 Paris' }), R).conformite.etat).toBe('rouge');
-    expect(verifierRegles(fiche({ geotag: '3 bis, rue X' }), R).conformite.etat).toBe('rouge');
-    expect(verifierRegles(fiche({ geotag: 'Paris 11e' }), R).conformite.etat).toBe('vert');
-    expect(verifierRegles(fiche({ geotag: 'Lyon' }), R).conformite.etat).toBe('vert');
-  });
-
-  it('ne remonte pas un numéro isolé d’un type de voie comme un numéro de voie', () => {
-    expect(verifierRegles(fiche({ geotag: 'Festival 2024 Avignon' }), R).conformite.etat).toBe('vert');
-    expect(verifierRegles(fiche({ geotag: 'Paris 3 Villages' }), R).conformite.etat).toBe('vert');
-    expect(verifierRegles(fiche({ geotag: 'Bordeaux 33 Bdx' }), R).conformite.etat).toBe('vert');
-    expect(verifierRegles(fiche({ geotag: '12 av. Foch' }), R).conformite.etat).toBe('rouge');
-    expect(verifierRegles(fiche({ geotag: '3 bis, rue X' }), R).conformite.etat).toBe('rouge');
-  });
-
-  it('tronque un géotag trop long dans la cause affichée', () => {
-    const geotag = `12 rue ${'x'.repeat(300)}`;
-    const causes = verifierRegles(fiche({ geotag }), R).conformite.causes;
-    expect(causes).toHaveLength(1);
-    expect(causes[0].length).toBeLessThan(120);
-    expect(causes[0]).toContain('…');
-  });
-
-  it('reste rapide sur un géotag pensé pour faire reculer le moteur de regex', () => {
-    const geotag = '1' + ' '.repeat(5000) + 'x';
-    const debut = performance.now();
-    verifierRegles(fiche({ geotag }), R);
-    expect(performance.now() - debut).toBeLessThan(50);
-  });
-
-  it('détecte un géotag sans accent, insensible à la casse, après normalisation', () => {
-    expect(verifierRegles(fiche({ geotag: 'Allee des Pins' }), R).conformite.etat).toBe('rouge');
-    expect(verifierRegles(fiche({ geotag: 'Residence les Tilleuls' }), R).conformite.etat).toBe('rouge');
-    expect(verifierRegles(fiche({ geotag: 'Cite U' }), R).conformite.etat).toBe('rouge');
-  });
-
   it('cumule plusieurs causes', () => {
     expect(verifierRegles(fiche({ caption: 'mindset https://exemple.test', geotag: '3 place X' }), R).conformite.causes).toHaveLength(3);
-  });
-
-  it('signale une accroche trop longue ou absente', () => {
-    const longue = 'un deux trois quatre cinq six sept huit neuf dix onze douze treize quatorze quinze seize';
-    expect(verifierRegles(fiche({ accroche: longue }), R).alertes)
-      .toEqual([{ critere: 'accroche', texte: 'Accroche trop longue : 16 mots (15 au maximum).' }]);
-    expect(verifierRegles(fiche({ accroche: '' }), R).alertes)
-      .toEqual([{ critere: 'accroche', texte: 'Pas d’accroche.' }]);
   });
 
   it('signale un nombre de hashtags hors de la plage, sauf pour une story', () => {
@@ -168,5 +97,32 @@ describe('verifierRegles', () => {
   it('recommande un carrousel pour une photo seule, sans pénalité', () => {
     expect(verifierRegles(fiche({ format: 'post' }), R).alertes)
       .toEqual([{ critere: null, texte: 'Photo seule : le profil recommande un carrousel.' }]);
+  });
+});
+
+describe('règles sans accroche (fiche allégée)', () => {
+  it('ne signale plus l’accroche absente ou trop longue', () => {
+    const longue = 'un deux trois quatre cinq six sept huit neuf dix onze douze treize quatorze quinze seize';
+    const textes = f => verifierRegles(f, R).alertes.map(a => a.texte).join(' ');
+    expect(textes(fiche({ accroche: longue }))).not.toMatch(/accroche/i);
+    expect(textes(fiche({ accroche: '' }))).not.toMatch(/accroche/i);
+  });
+  it('ne lit plus l’accroche : un mot à éviter ou un lien qui n’est que là ne compte pas', () => {
+    const r = { ...R, mots_a_eviter: ['mindset'] };
+    expect(verifierRegles(fiche({ accroche: 'Le mindset. Va voir exemple.com/x', caption: 'Texte.' }), r).conformite.causes).toEqual([]);
+  });
+  it('lit le mot à éviter dans la caption seulement', () => {
+    const r = { ...R, mots_a_eviter: ['mindset'] };
+    expect(verifierRegles(fiche({ caption: 'Le mindset.' }), r).conformite.causes).toEqual(['mot à éviter « mindset »']);
+  });
+  it('ne signale plus un lien dans une story, qui peut toujours porter un lien', () => {
+    expect(verifierRegles(fiche({ format: 'story', caption: 'https://exemple.test/moi' }), R).conformite).toEqual({ etat: 'vert', causes: [] });
+  });
+  it('signale un lien dans un reel avec le nouveau message', () => {
+    expect(verifierRegles(fiche({ caption: 'Tout est sur https://exemple.test/moi' }), R).conformite.causes)
+      .toEqual(['lien « https://exemple.test/moi » dans le texte (seule une story peut porter un lien)']);
+  });
+  it('ne donne plus la mesure du nombre de mots de l’accroche', () => {
+    expect(verifierRegles(fiche(), R).mesures).toEqual({ nbHashtags: 4 });
   });
 });

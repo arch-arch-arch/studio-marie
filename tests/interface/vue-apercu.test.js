@@ -140,14 +140,14 @@ describe('vueApercu : miniatures', () => {
     await vi.waitFor(() => expect(v.getAttribute('src')).toBe('https://stockage.test/b.mp4#t=0.001'));
   });
 
-  it('sans visuel, la case montre l’accroche ou « Sans visuel »', () => {
+  it('sans visuel, la case montre la première ligne de la caption ou « Sans caption »', () => {
     const el = vueApercu(etatApercu([
-      f('a', 'story', '2026-10-12T10:00:00.000Z', { accroche: 'Le matin, sans filtre' }),
+      f('a', 'story', '2026-10-12T10:00:00.000Z', { caption: 'Le matin, sans filtre' }),
       f('b', 'story', '2026-10-13T10:00:00.000Z'),
     ]), actionsFactices());
     const [a, b] = tuiles(el);
     expect(a.querySelector('.miniature-vide').textContent).toBe('Le matin, sans filtre');
-    expect(b.querySelector('.miniature-vide').textContent).toBe('Sans visuel');
+    expect(b.querySelector('.miniature-vide').textContent).toBe('Sans caption');
   });
 
   it('un lien qui échoue ne touche que sa miniature', async () => {
@@ -255,30 +255,30 @@ describe('onglet Aperçu (rendu)', () => {
     expect(racine.querySelector('.periode-libelle').textContent).toBe('octobre 2026');
   });
 
-  it('une frappe dans une fiche ne reconstruit pas la grille : même miniature, même nœud', () => {
+  it('une frappe hors de la première ligne de la caption ne reconstruit pas la grille : même miniature, même nœud', () => {
     const { racine, rendre, e } = monter('apercu');
     const avant = racine.querySelector('button.miniature');
-    rendre({ ...e, fiches: e.fiches.map(x => ({ ...x, caption: 'tapée' })) });
+    rendre({ ...e, fiches: e.fiches.map(x => ({ ...x, geotag: 'tapée', hashtags: ['tapée'] })) });
     expect(racine.querySelector('button.miniature')).toBe(avant);
   });
 
-  it('modifier l’accroche d’une fiche de la période reconstruit la grille', () => {
+  it('modifier la première ligne de la caption d’une fiche de la période reconstruit la grille', () => {
     const { racine, rendre, e } = monter('apercu');
     const avant = racine.querySelector('button.miniature');
-    rendre({ ...e, fiches: e.fiches.map(x => ({ ...x, accroche: 'nouvelle' })) });
+    rendre({ ...e, fiches: e.fiches.map(x => ({ ...x, caption: 'nouvelle' })) });
     expect(racine.querySelector('button.miniature')).not.toBe(avant);
   });
 });
 
 describe('vueApercu : liens, focus, nom accessible (round 1)', () => {
-  it('chaque miniature a un nom accessible : date, format, accroche ou « Sans accroche », « Publié »', () => {
+  it('chaque miniature a un nom accessible : date, format, première ligne de la caption ou « Sans caption », « Publié »', () => {
     const el = vueApercu(etatApercu([
-      f('a', 'reel', '2026-10-12T10:00:00.000Z', { accroche: 'Le café' }),
+      f('a', 'reel', '2026-10-12T10:00:00.000Z', { caption: 'Le café' }),
       f('b', 'story', '2026-10-13T10:00:00.000Z', { statut: 'publie', publie_le: '2026-10-13T10:00:00.000Z' }),
     ]), actionsFactices());
     const [a, b] = tuiles(el);
     expect(a.getAttribute('aria-label')).toBe('lun. 12/10, Reel, Le café');
-    expect(b.getAttribute('aria-label')).toBe('mar. 13/10, Story, Sans accroche, Publié');
+    expect(b.getAttribute('aria-label')).toBe('mar. 13/10, Story, Sans caption, Publié');
   });
 
   it('un lien expiré (plus de 50 minutes) est redemandé, un lien récent non', async () => {

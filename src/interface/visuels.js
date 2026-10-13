@@ -1,4 +1,5 @@
 import { h } from './h.js';
+import { texteCourt } from '../logique/fiche.js';
 
 const LIMITE_DEMANDES = 4;
 // Les liens de stockage expirent au bout d'une heure : on les renouvelle avant.
@@ -51,7 +52,7 @@ export function oublierEchecs(cache, cle) {
 // une reconstruction le réutilise, et ne renouvelle le lien que s'il a expiré.
 // En vignette, la lettre du format est en fond sous le visuel : elle reste seule si le visuel ne charge pas.
 export function visuelMiniature(f, cache, actions, portee = 'apercu') {
-  if (!f.visuel) return h('span', { class: 'miniature-vide' }, f.accroche || 'Sans visuel');
+  if (!f.visuel) return h('span', { class: 'miniature-vide' }, texteCourt(f) || 'Sans caption');
   const cle = `${portee}:${f.id}:${f.visuel}:${f.visuel_type}`;
   const existant = cache.noeuds.get(cle);
   if (existant) {

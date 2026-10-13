@@ -1,5 +1,5 @@
 import { cleSemaineIso } from './dates.js';
-import { datePublication } from './fiche.js';
+import { datePublication, texteCourt } from './fiche.js';
 
 export const RELEVES = ['48h', '7j'];
 export const DELAIS_RELEVE = { '48h': 48 * 3600000, '7j': 7 * 24 * 3600000 };
@@ -69,7 +69,7 @@ export function etatReleves(fiche, releves, maintenant) {
 export function documentReleveContenu(fiche, releve, valeurs, maintenant) {
   return {
     id: idReleve(fiche.id, releve), fiche: fiche.id, releve, ...valeurs, saisi_le: maintenant,
-    date_publication: datePublication(fiche), format: fiche.format, pilier: fiche.pilier ?? '', accroche: fiche.accroche ?? '',
+    date_publication: datePublication(fiche), format: fiche.format, pilier: fiche.pilier ?? '', accroche: texteCourt(fiche),
     score_total: fiche.score?.total ?? null,
   };
 }

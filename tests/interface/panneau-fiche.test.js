@@ -22,8 +22,8 @@ describe('panneauFiche', () => {
   it('transmet chaque saisie', () => {
     const actions = actionsFactices();
     const p = panneauFiche(fiche(), fictif, actions, { assets: true });
-    saisir(p.querySelector('textarea[name="accroche"]'), 'Nouvelle accroche');
-    expect(actions.modifierFiche).toHaveBeenCalledWith('f1', { accroche: 'Nouvelle accroche' });
+    saisir(p.querySelector('textarea[name="caption"]'), 'Nouvelle caption');
+    expect(actions.modifierFiche).toHaveBeenCalledWith('f1', { caption: 'Nouvelle caption' });
     saisir(p.querySelector('input[name="hashtags"]'), '#nuit socio', 'change');
     expect(actions.modifierFiche).toHaveBeenCalledWith('f1', { hashtags: ['nuit', 'socio'] });
   });
@@ -38,14 +38,6 @@ describe('panneauFiche', () => {
     const p = panneauFiche(fiche(), fictif, actions, { assets: true });
     saisir(p.querySelector('input[type="time"]'), '18:30', 'change');
     expect(actions.modifierFiche).toHaveBeenCalledWith('f1', { date_heure: '2026-09-28T16:30:00.000Z' });
-  });
-
-  it('n’affiche « Mène à la porte » que pour une story', () => {
-    const actions = actionsFactices();
-    const p = panneauFiche(fiche(), fictif, actions, { assets: true });
-    expect(p.textContent).not.toContain('Mène à la porte');
-    saisir(p.querySelector('select[name="format"]'), 'story', 'change');
-    expect(p.textContent).toContain('Mène à la porte');
   });
 
   it('affiche la raison d’un changement de statut refusé', async () => {
@@ -215,7 +207,7 @@ describe('évaluation dans le panneau', () => {
     expect(p.textContent).toContain('Conformité : bloquante. mot à éviter « mindset »');
   });
 
-  it('« Utiliser » applique une caption, une accroche ou les hashtags proposés', () => {
+  it('« Utiliser » applique une caption ou les hashtags proposés', () => {
     const actions = actionsFactices();
     const p = panneauFiche(evaluee(), fictif, actions, { assets: true, sample: true });
     const utiliser = [...p.querySelectorAll('.suggestion button')];
@@ -224,9 +216,6 @@ describe('évaluation dans le panneau', () => {
     expect(p.querySelector('textarea[name="caption"]').value).toBe('Variante A');
     bouton(p, 'Utiliser ces hashtags').click();
     expect(actions.modifierFiche).toHaveBeenCalledWith('f1', { hashtags: ['nuit', 'socio'] });
-    const accroche = [...p.querySelectorAll('.suggestion')].find(li => li.textContent.includes('Acc 2')).querySelector('button');
-    accroche.click();
-    expect(actions.modifierFiche).toHaveBeenCalledWith('f1', { accroche: 'Acc 2' });
   });
 
   it('suit le statut renvoyé par l’évaluation, sans message « repassée en Brouillon »', async () => {
@@ -619,10 +608,10 @@ describe('catégorie de la fiche', () => {
     expect(p.textContent).not.toContain('Proposée');
   });
 
-  it('le menu « Catégorie » reste le même élément du DOM après une modification de l’accroche', () => {
+  it('le menu « Catégorie » reste le même élément du DOM après une modification de la caption', () => {
     const p = panneauFiche(fiche(), fictif, actionsFactices(), { assets: true });
     const menu = p.querySelector('select[name="categorie"]');
-    saisir(p.querySelector('textarea[name="accroche"]'), 'Autre accroche');
+    saisir(p.querySelector('textarea[name="caption"]'), 'Autre caption');
     expect(p.querySelector('select[name="categorie"]')).toBe(menu);
   });
 
@@ -664,5 +653,71 @@ describe('avertissements de la fiche', () => {
     const p = panneauFiche(fiche(), fictif, actionsFactices(), { assets: true });
     expect(textes(p).length).toBeGreaterThan(0);
     expect(bouton(p, 'Validé').disabled).toBe(false);
+  });
+});
+
+describe('fiche allégée', () => {
+  const toronto = { ...fictif, regles_studio: { ...fictif.regles_studio, fuseau: 'America/Toronto' } };
+  const avecSuggestions = extra => fiche({
+    suggestions: { accroches: ['Acc 1'], hashtags: [] },
+    variantes: [{ role: 'engagement', texte: 'Caption proposée' }],
+    ...extra,
+  });
+
+  it('n’affiche ni Pilier, ni Format validé, ni Rôle de la caption, ni les cases, ni Accroche', () => {
+    const p = panneauFiche(fiche({ format: 'story' }), fictif, actionsFactices(), { assets: true });
+    for (const sel of ['select[name="pilier"]', 'input[name="format_valide"]', 'select[name="role_caption"]', 'input[name="cta"]', 'input[name="ragebait"]', 'input[name="porte"]', 'textarea[name="accroche"]', '.cases']) {
+      expect(p.querySelector(sel), sel).toBeNull();
+    }
+    for (const retire of ['Pilier', 'Format validé', 'Rôle de la caption', 'Ragebait', 'Mène à la porte', 'Accroche']) {
+      expect(p.textContent, retire).not.toContain(retire);
+    }
+  });
+
+  it('garde le format et les textes : caption, hashtags, géotag, copie', () => {
+    const p = panneauFiche(fiche(), fictif, actionsFactices(), { assets: true });
+    expect(p.querySelector('select[name="format"]')).not.toBeNull();
+    expect(p.querySelector('textarea[name="caption"]')).not.toBeNull();
+    expect(p.querySelector('input[name="hashtags"]')).not.toBeNull();
+    expect(p.querySelector('input[name="geotag"]')).not.toBeNull();
+    expect(bouton(p, 'Copier la caption et les hashtags')).toBeDefined();
+  });
+
+  it('changer de format ne touche pas à porte', () => {
+    const actions = actionsFactices();
+    const p = panneauFiche(fiche({ format: 'story' }), fictif, actions, { assets: true });
+    saisir(p.querySelector('select[name="format"]'), 'post', 'change');
+    expect(actions.modifierFiche).toHaveBeenCalledWith('f1', { format: 'post' });
+  });
+
+  it('sous l’heure, « 18:00 à Paris » quand le fuseau du profil n’est pas Paris, et le libellé nomme la ville', () => {
+    const p = panneauFiche(fiche({ date_heure: '2026-10-13T16:00:00.000Z' }), toronto, actionsFactices(), { assets: true });
+    expect(p.querySelector('p.heure-paris').textContent).toBe('18:00 à Paris');
+    expect(p.querySelector('input[name="heure"]').closest('label').textContent).toContain('Heure (Toronto)');
+  });
+
+  it('met à jour « à Paris » quand l’heure change', () => {
+    const p = panneauFiche(fiche({ date_heure: '2026-10-13T16:00:00.000Z' }), toronto, actionsFactices(), { assets: true });
+    saisir(p.querySelector('input[type="time"]'), '13:00', 'change');
+    expect(p.querySelector('p.heure-paris').textContent).toBe('19:00 à Paris');
+  });
+
+  it('n’ajoute aucune ligne quand le fuseau du profil est Paris', () => {
+    const p = panneauFiche(fiche(), fictif, actionsFactices(), { assets: true });
+    expect(p.querySelector('p.heure-paris')).toBeNull();
+  });
+
+  it('une accroche proposée se copie (« Copier »), une caption proposée s’utilise toujours (« Utiliser »)', async () => {
+    const actions = actionsFactices();
+    const p = panneauFiche(avecSuggestions(), fictif, actions, { assets: true });
+    const ligneAccroche = [...p.querySelectorAll('.suggestion')].find(li => li.textContent.includes('Acc 1'));
+    const boutonAccroche = ligneAccroche.querySelector('button');
+    expect(boutonAccroche.textContent).toBe('Copier');
+    boutonAccroche.click();
+    await vi.waitFor(() => expect(p.querySelector('.panneau-message').textContent).toBe('Accroche copiée.'));
+    expect(navigator.clipboard.writeText).toHaveBeenCalledWith('Acc 1');
+    expect(actions.modifierFiche).not.toHaveBeenCalledWith('f1', { accroche: 'Acc 1' });
+    const ligneCaption = [...p.querySelectorAll('.suggestion')].find(li => li.textContent.includes('Caption proposée'));
+    expect(ligneCaption.querySelector('button').textContent).toBe('Utiliser');
   });
 });

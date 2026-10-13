@@ -29,7 +29,7 @@ describe('vueTableau', () => {
     expect(v.querySelector('line.cible')).toBeNull();
   });
   it('liste les relevés à saisir et ouvre la fiche', () => {
-    const f = { id: 'p1', statut: 'publie', date_heure: '2026-09-25T10:00:00.000Z', format: 'reel', accroche: 'Publiée' };
+    const f = { id: 'p1', statut: 'publie', date_heure: '2026-09-25T10:00:00.000Z', format: 'reel', caption: 'Publiée' };
     const a = actions();
     const v = vueTableau(etat({ fichesRecentes: [f] }), a);
     expect(v.querySelector('.a-saisir').textContent).toContain('Publiée');

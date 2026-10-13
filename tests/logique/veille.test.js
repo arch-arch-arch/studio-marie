@@ -166,7 +166,7 @@ describe('construireVeille', () => {
     expect(r.bulletin).toMatchObject({ semaine: '2026-W41', genere_le: MAINTENANT, statut: 'complet', sources_indisponibles: false });
     expect(r.bulletin.retrospective.type).toBe('rappel');
     expect(r.bulletin.idees).toEqual(r.fichesCreees.map(f => f.id));
-    expect(r.bulletin.controle.map(p => p.cle)).toEqual(['reels', 'carrousels', 'stories', 'cta', 'roles', 'ragebait', 'porte', 'piliers']);
+    expect(r.bulletin.controle.map(p => p.cle)).toEqual(['reels', 'carrousels', 'stories']);
     expect(r.ecritures.at(-1)).toMatchObject({ op: 'set', collection: 'bulletins', doc_id: '2026-W41' });
     expect(r.ecritures.filter(e => e.op === 'set' && e.collection === 'fiches').every(e => !('id' in e.data))).toBe(true);
   });

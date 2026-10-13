@@ -1,6 +1,7 @@
 import { h } from './h.js';
 import { nomAssistant } from '../logique/score.js';
 import { nomCategorie } from '../logique/categories.js';
+import { texteCourt } from '../logique/fiche.js';
 
 const s = n => (n > 1 ? 's' : '');
 const MO = 1024 * 1024;
@@ -116,7 +117,7 @@ export function sectionAvis(analyses, periode, fiches, fuseau, avisOuverts) {
   if (!dernier) return null;
   const r = dernier.retour;
   const parRef = new Map((dernier.fiches ?? []).map(f => [f.ref, (fiches ?? []).find(x => x.id === f.id)]));
-  const libelle = ref => { const f = parRef.get(ref); return f ? `${ref} · ${f.accroche || 'sans accroche'}` : `${ref} · fiche absente de cette vue`; };
+  const libelle = ref => { const f = parRef.get(ref); return f ? `${ref} · ${texteCourt(f) || 'sans caption'}` : `${ref} · fiche absente de cette vue`; };
   const date = (() => {
     if (Number.isNaN(Date.parse(r.recu_le))) return null;
     try { return new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'long', ...(fuseau ? { timeZone: fuseau } : {}) }).format(new Date(r.recu_le)); } catch { return null; }

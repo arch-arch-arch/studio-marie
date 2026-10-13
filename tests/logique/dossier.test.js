@@ -134,7 +134,7 @@ describe('contenuDossier', () => {
     expect(lignes[0]).toBe('<fiche id="F01">');
     expect(lignes.at(-1)).toBe('</fiche>');
     const texte = lignes.join('\n');
-    for (const attendu of ['date : lundi 5 octobre 2026, 12:00', 'format : Reel', `pilier : ${profil.regles_studio.piliers[0].nom}`, 'rôle de caption : cta', "appel vers l'offre : oui", 'mène à la porte : non', 'accroche : Accroche a', 'caption : Feu [U+1F525]', 'hashtags : nuit, club', 'visuel : image', 'alertes calculées :', 'blocages calculés :']) {
+    for (const attendu of ['date : lundi 5 octobre 2026, 12:00', 'format : Reel', 'caption : Feu [U+1F525]', 'hashtags : nuit, club', 'visuel : image', 'alertes calculées :', 'blocages calculés :']) {
       expect(texte).toContain(attendu);
     }
     expect(c.fiches[1].lignes.join('\n')).toContain('visuel : aucun');
@@ -142,7 +142,7 @@ describe('contenuDossier', () => {
   });
   it('termine par la consigne, le code et la forme de la réponse', () => {
     const consigne = c.consigne.join('\n');
-    for (const attendu of ['"dossier": "D-abc123"', 'engagement, cta, deadpan', 'Bloc à coller dans le studio :', '"periode"', '"ordre_conseille"', 'F01', '[U+', "une simple question au public n'est pas un appel vers l'offre", 'exactement 3 recommandations']) {
+    for (const attendu of ['"dossier": "D-abc123"', 'engagement, cta, deadpan', 'Bloc à coller dans le studio :', '"periode"', '"ordre_conseille"', 'F01', '[U+', 'exactement 3 recommandations']) {
       expect(consigne).toContain(attendu);
     }
   });
@@ -164,7 +164,8 @@ describe('correction 1 : règles de la période lisibles', () => {
   it('utilise une légende et des libellés propres au dossier', () => {
     expect(c.regles[0]).toBe("Pour chaque semaine, l'état (vert, orange ou rouge) dit si la cadence prévue est tenue. Ces états ne concernent pas la conformité d'un contenu.");
     const texte = c.regles.join('\n');
-    expect(texte).toContain("- Appels vers l'offre : ");
+    expect(texte).toContain('- Reels : ');
+    expect(texte).not.toContain("Appels vers l'offre");
     expect(JSON.stringify(c)).not.toContain("Appels à l'action");
     expect(JSON.stringify(c)).not.toContain('compté/objectif');
   });
@@ -186,11 +187,6 @@ describe('passe finale A : une ligne exacte par règle', () => {
     '- Reels : 1 sur 4 attendus (rouge)',
     '- Carrousels : 1 sur 2 attendus (orange)',
     '- Jours avec stories : 2 sur 7 (rouge)',
-    "- Appels vers l'offre : 1 sur 3 contenus du fil, maximum 25 % (orange)",
-    '- Rôles des captions : engagement 2, cta 1, deadpan 0 ; objectifs 2, 1, 1 (orange)',
-    '- Ragebait : 1, maximum 1 (vert)',
-    '- Stories vers la porte : 0, objectif 2 à 3 (rouge)',
-    '- Piliers présents : 3 sur 4 (orange)',
   ])('écrit « %s »', attendue => {
     expect(lignes).toContain(attendue);
   });
@@ -205,19 +201,17 @@ describe('passe finale A : retrait et troncature', () => {
     const f = fiche('a', '2026-10-05T10:00:00.000Z', plus);
     return contenuDossier({ profil, periode, code: 'D-abc123', toutesLesFiches: [f], entrees: [{ ref: 'F01', fiche: f, etat: etatVisuel(f, null) }] }).fiches[0].lignes;
   };
-  it('met en retrait les lignes de suite d’une caption ou d’une accroche', () => {
-    const l = bloc({ caption: 'une\nPS : deux\r\ntrois', accroche: 'haut\nbas' });
+  it('met en retrait les lignes de suite d’une caption', () => {
+    const l = bloc({ caption: 'une\nPS : deux\r\ntrois' });
     expect(l).toContain('caption : une');
     expect(l).toContain('  PS : deux');
     expect(l).toContain('  trois');
-    expect(l).toContain('accroche : haut');
-    expect(l).toContain('  bas');
   });
   it('ne laisse jamais une demi-paire de substitution après la coupe', () => {
-    const l = bloc({ accroche: `${'a'.repeat(299)}🔥`, caption: `${'b'.repeat(2199)}🔥`, geotag: `${'g'.repeat(199)}🔥` });
+    const l = bloc({ caption: `${'b'.repeat(2199)}🔥`, geotag: `${'g'.repeat(199)}🔥` });
     const texte = l.join('\n');
     expect(texte).not.toMatch(/\[U\+D8/);
-    expect(texte).toContain(`accroche : ${'a'.repeat(299)}`);
+    expect(texte).toContain(`caption : ${'b'.repeat(2199)}`);
   });
 });
 
@@ -298,31 +292,9 @@ describe('correction 1 : bloc de fiche', () => {
     expect(lignes[i + 3]).toMatch(/^hashtags : /);
   });
   it('applique les mêmes limites que le prompt existant', () => {
-    expect(lignes).toContain(`accroche : ${'A'.repeat(300)}`);
     expect(lignes).toContain(`géotag : ${'G'.repeat(200)}`);
     expect(lignes.find(l => l.startsWith('hashtags : ')).split(', ')).toHaveLength(30);
     expect(c.fiches[1].lignes).toContain(`caption : ${'C'.repeat(2200)}`);
-  });
-});
-
-describe('retouche : causes des états qui ne se déduisent pas des nombres', () => {
-  const periode = periodeAffichee('semaine', '2026-10-07T10:00:00.000Z', FZ);
-  const p = profil.regles_studio.piliers.map(x => x.cle);
-  const regles = fiches => contenuDossier({
-    profil, periode, code: 'D-abc123', toutesLesFiches: fiches,
-    entrees: fiches.map((f, i) => ({ ref: `F0${i + 1}`, fiche: f, etat: etatVisuel(f, null) })),
-  }).regles;
-  it('dit « aucun appel » pour un orange à 0 sur 4 contenus du fil ou plus', () => {
-    const fiches = [0, 1, 2, 3].map(i => fiche(`r${i}`, `2026-10-0${5 + (i % 3)}T10:00:00.000Z`, { pilier: p[i] }));
-    expect(regles(fiches)).toContain("- Appels vers l'offre : 0 sur 4 contenus du fil, maximum 25 % (orange : aucun appel vers l'offre cette semaine)");
-  });
-  it('n’ajoute pas de cause sous 4 contenus du fil', () => {
-    const fiches = [fiche('a', '2026-10-05T10:00:00.000Z'), fiche('b', '2026-10-06T10:00:00.000Z', { pilier: p[1] })];
-    expect(regles(fiches)).toContain("- Appels vers l'offre : 0 sur 2 contenus du fil, maximum 25 % (vert)");
-  });
-  it('dit qu’un pilier domine plus de la moitié du fil', () => {
-    const fiches = [0, 1, 2].map(i => fiche(`d${i}`, `2026-10-0${5 + i}T10:00:00.000Z`, { pilier: p[0] })).concat(fiche('e', '2026-10-08T10:00:00.000Z', { pilier: p[1] }));
-    expect(regles(fiches)).toContain('- Piliers présents : 2 sur 4 (rouge : un pilier domine plus de la moitié du fil)');
   });
 });
 
@@ -347,10 +319,10 @@ describe('plan 9 tâche 5 : catégories, rangement et grilles', () => {
     expect(dossier(sansSection).strategie.map(s => s.titre)).not.toContain('categories de contenu');
   });
 
-  it('écrit la catégorie de chaque fiche après le pilier : choisie, proposée ou non rangée', () => {
+  it('écrit la catégorie de chaque fiche après le format : choisie, proposée ou non rangée', () => {
     const ligne = i => {
       const l = c.fiches[i].lignes;
-      return l[l.findIndex(x => x.startsWith('pilier : ')) + 1];
+      return l[l.findIndex(x => x.startsWith('format : ')) + 1];
     };
     expect(ligne(0)).toBe('catégorie : Attraction (choisie)');
     expect(ligne(1)).toBe('catégorie : Autorité (proposée par l\'analyse)');
@@ -460,5 +432,35 @@ describe('plan 9 tâche 5 : catégories, rangement et grilles', () => {
     for (const p of [profil, sansSection]) {
       expect(dossier(p).consigne.join('\n')).toContain('"categorie" parmi attraction, autorite, connexion, desir, preuve, conversion, ou null');
     }
+  });
+});
+
+describe('dossier allégé', () => {
+  const periode = periodeAffichee('semaine', '2026-10-07T10:00:00.000Z', FZ);
+  const f = fiche('a', '2026-10-05T10:00:00.000Z', { role_caption: 'cta', cta: true, ragebait: true, porte: true, format_valide: 'x', caption: 'Ma caption', accroche: 'Accroche retirée' });
+  const c = contenuDossier({ profil, periode, code: 'D-abc123', toutesLesFiches: [f], entrees: [{ ref: 'F01', fiche: f, etat: etatVisuel(f, null) }] });
+  const texte = c.fiches[0].lignes.join('\n');
+  it('le bloc de fiche ne montre plus pilier, rôle, appel, porte ni accroche', () => {
+    for (const retire of ['pilier :', 'rôle de caption :', "appel vers l'offre", 'mène à la porte', 'accroche :', 'Accroche retirée']) {
+      expect(texte, retire).not.toContain(retire);
+    }
+  });
+  it('le bloc garde date, format, catégorie, caption, hashtags, géotag, visuel, alertes et blocages', () => {
+    for (const garde of ['date : ', 'format : Reel', 'catégorie : ', 'caption : Ma caption', 'hashtags : ', 'géotag : ', 'visuel : ', 'alertes calculées : ', 'blocages calculés : ']) {
+      expect(texte, garde).toContain(garde);
+    }
+  });
+  it('les règles de la période ne listent plus les pastilles retirées', () => {
+    const regles = c.regles.join('\n');
+    for (const retire of ['Appels vers l’offre', "Appels vers l'offre", 'Rôles des captions', 'Ragebait', 'Stories vers la porte', 'Piliers présents']) {
+      expect(regles, retire).not.toContain(retire);
+    }
+    expect(regles).toContain('Reels : ');
+  });
+  it('la consigne situe l’accroche sur la première ligne de la caption ou le texte à l’écran, sans pilier ni appel vers l’offre', () => {
+    const consigne = c.consigne.join('\n');
+    expect(consigne).toContain("la première ligne de la caption, ou le texte à l'écran si le visuel est joint");
+    expect(consigne).not.toContain('cohérence avec le pilier');
+    expect(consigne).not.toContain('Le champ « appel vers l\'offre » ne concerne');
   });
 });

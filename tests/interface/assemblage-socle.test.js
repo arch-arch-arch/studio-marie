@@ -39,9 +39,9 @@ describe('assemblage du socle Supabase et de l’interface', () => {
     await vi.waitFor(() => expect(app.etat.lire().profil).toBeTruthy());
 
     const f = await app.actions.creerFiche({ format: 'reel', date_heure: '2026-09-28T10:00:00.000Z' });
-    app.actions.modifierFiche(f.id, { accroche: 'Accroche visible' });
+    app.actions.modifierFiche(f.id, { caption: 'Accroche visible' });
     await app.actions.fermerPanneau();
-    await vi.waitFor(() => expect(client._lignes.get(`fiches/${f.id}`)?.data.accroche).toBe('Accroche visible'));
+    await vi.waitFor(() => expect(client._lignes.get(`fiches/${f.id}`)?.data.caption).toBe('Accroche visible'));
     await vi.waitFor(() => expect(racine.textContent).toContain('Accroche visible'));
 
     // Décrochage bref : CHANNEL_ERROR puis SUBSCRIBED avant le délai de grâce.

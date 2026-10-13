@@ -3,7 +3,7 @@ import fictif from '../../exemples/profil-fictif.json';
 import {
   FORMATS, STATUTS, nouvelId, nouvelleFiche, empreinte, aReevaluer, modifierFiche, peutPasserA,
   changerStatut, deplacerFiche, analyserHashtags, formaterHashtags, texteAPublier, appliquerEvaluation,
-  datePublication, effacementsPour, confirmerProgrammation, confirmerPublication, avertissementsFiche,
+  datePublication, effacementsPour, confirmerProgrammation, confirmerPublication, avertissementsFiche, texteCourt,
 } from '../../src/logique/fiche.js';
 
 const T0 = '2026-09-27T20:00:00.000Z';
@@ -340,12 +340,25 @@ describe('avertissementsFiche : sans règles, analyse rouge, ordre', () => {
   });
 
   it('ordre : visuel, caption, cause calculée, puis pas encore analysée', () => {
-    expect(avertissementsFiche({ ...base(), accroche: 'Le mindset.' }, R))
-      .toEqual(['Pas de visuel', 'Pas de caption', 'mot à éviter « mindset »', 'Pas encore analysée']);
+    expect(avertissementsFiche({ ...base(), caption: 'Le mindset.' }, R))
+      .toEqual(['Pas de visuel', 'mot à éviter « mindset »', 'Pas encore analysée']);
   });
 
   it('ordre : cause calculée, puis analyse dépassée', () => {
     const f = { ...avec({ ...base(), visuel: 'a1', caption: 'Le mindset.' }, []), caption: 'Le mindset du soir.' };
     expect(avertissementsFiche(f, R)).toEqual(['mot à éviter « mindset »', 'Analyse dépassée : la fiche a changé depuis']);
+  });
+});
+
+describe('texteCourt (fiche allégée)', () => {
+  it('prend la première ligne non vide de la caption, sans l’accroche', () => {
+    expect(texteCourt({ accroche: 'Ancienne', caption: '\n  Première ligne  \nSeconde' })).toBe('Première ligne');
+    expect(texteCourt({ accroche: 'Ancienne', caption: '' })).toBe('');
+    expect(texteCourt({ accroche: 'Ancienne' })).toBe('');
+    expect(texteCourt({ caption: '   \n  ' })).toBe('');
+  });
+  it('avertissementsFiche ne signale plus un lien dans une story', () => {
+    expect(avertissementsFiche({ ...base(), format: 'story', visuel: 'a1', caption: 'Va sur https://exemple.test/moi' }, fictif.regles_studio))
+      .not.toEqual(expect.arrayContaining([expect.stringContaining('lien')]));
   });
 });

@@ -76,6 +76,11 @@ export function heureLocale(iso, fuseau) {
   return `${deux(p.heure)}:${deux(p.minute)}`;
 }
 
+export const FUSEAU_FR = 'Europe/Paris';
+export function heureParis(iso) {
+  return heureLocale(iso, FUSEAU_FR);
+}
+
 export function depuisSaisieLocale(date, heure, fuseau) {
   const [annee, mois, jour] = date.split('-').map(Number);
   const [h, m] = heure.split(':').map(Number);

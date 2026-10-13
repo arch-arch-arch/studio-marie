@@ -42,6 +42,12 @@ const TOLERANCE_PUBLICATION_MS = 5 * 60000;
 
 export const datePublication = f => f.publie_le ?? f.date_heure;
 
+// Ce qui s’affiche à la place de l’accroche : la première ligne non vide de la caption.
+export function texteCourt(f) {
+  const ligne = (f.caption ?? '').split('\n').map(l => l.trim()).find(Boolean);
+  return ligne ?? '';
+}
+
 export function effacementsPour(cible) {
   if (cible === 'publie') return {};
   if (cible === 'programme') return { publie_le: null };

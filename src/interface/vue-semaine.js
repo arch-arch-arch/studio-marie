@@ -3,7 +3,7 @@ import { carte, bandeau, LIBELLES_ETAT } from './carte.js';
 import { controlerSemaine, fichesDeLaSemaine } from '../logique/controle.js';
 import { creneauxLibres } from '../logique/creneaux.js';
 import { debutSemaine, joursDeLaSemaine, cleJour, heureLocale, libelleJour, depuisSaisieLocale } from '../logique/dates.js';
-import { LIBELLES_FORMAT } from '../logique/fiche.js';
+import { LIBELLES_FORMAT, texteCourt } from '../logique/fiche.js';
 import { prochaineAction, ACTIONS_SANS_SUITE } from '../logique/parcours.js';
 import { periodeAffichee } from '../logique/dossier.js';
 import { rangeeAnalyse, sectionAvis } from './panneau-analyse.js';
@@ -123,8 +123,8 @@ function aFaire(semaine, actionsParId, fz, actions, volets) {
   } },
     h('summary', {}, h('h3', { class: 'a-faire-titre' }, `À faire (${lignes.length}${retard ? `, dont ${nRetards} en retard` : ''})`)),
     h('ul', {}, lignes.map(({ f, a }) => h('li', { class: a.retard ? 'action-retard' : null },
-      h('span', {}, `${LIBELLES_FORMAT[f.format]} · ${libelleJour(f.date_heure, fz)} ${heureLocale(f.date_heure, fz)} · ${f.accroche || 'Sans accroche'}`),
+      h('span', {}, `${LIBELLES_FORMAT[f.format]} · ${libelleJour(f.date_heure, fz)} ${heureLocale(f.date_heure, fz)} · ${texteCourt(f) || 'Sans caption'}`),
       h('strong', {}, a.libelle),
       a.detail ? h('span', { class: 'aide' }, a.detail) : null,
-      h('button', { type: 'button', class: 'bouton-lien', 'aria-label': `Ouvrir « ${f.accroche || 'Sans accroche'} »`, onclick: () => actions.ouvrirFiche(f.id) }, 'Ouvrir')))));
+      h('button', { type: 'button', class: 'bouton-lien', 'aria-label': `Ouvrir « ${texteCourt(f) || 'Sans caption'} »`, onclick: () => actions.ouvrirFiche(f.id) }, 'Ouvrir')))));
 }

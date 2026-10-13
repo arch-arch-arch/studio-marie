@@ -1,6 +1,6 @@
 import { RELEVES, CIBLES, LIBELLES_CIBLES, tauxAbonnesParVue, etatReleves } from './indicateurs.js';
 import { ajouterJours, cleSemaineIso } from './dates.js';
-import { datePublication, FORMATS } from './fiche.js';
+import { datePublication, FORMATS, texteCourt } from './fiche.js';
 
 export const RAPPEL_RETROSPECTIVE = 'Aucun relevé de statistiques sur les 2 dernières semaines : saisis-les pour obtenir la rétrospective.';
 const moyenne = xs => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
@@ -77,7 +77,7 @@ export function retrospective({ stats, relevesCompte, fiches, cibles, fuseau, de
     .filter(f => f.statut === 'publie' && dansPeriode(datePublication(f)))
     .flatMap(f => {
       const e = etatReleves(f, stats.filter(s => s.fiche === f.id), maintenant);
-      return RELEVES.filter(r => e[r].etat === 'a_saisir').map(r => ({ fiche: f.id, releve: r, accroche: f.accroche ?? '' }));
+      return RELEVES.filter(r => e[r].etat === 'a_saisir').map(r => ({ fiche: f.id, releve: r, accroche: texteCourt(f) }));
     });
   const comptes = relevesCompte.filter(r => r.debut < debutSemaineVisee);
   if (periode.length === 0 && !comptes.some(r => dansPeriode(r.debut))) return { type: 'rappel', texte: RAPPEL_RETROSPECTIVE, manquants };

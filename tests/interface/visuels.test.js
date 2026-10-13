@@ -64,3 +64,10 @@ describe('visuels : portée vignette (C2, C3)', () => {
     expect(visuelMiniature(video, creerCacheVisuels(), actions, 'apercu').querySelector('video').getAttribute('preload')).toBe('metadata');
   });
 });
+
+describe('miniature sans visuel (fiche allégée)', () => {
+  it('montre la première ligne de la caption, « Sans caption » sinon', () => {
+    expect(visuelMiniature(fiche({ visuel: null, caption: 'Première\nseconde', accroche: 'Ancienne' }), creerCacheVisuels(), {}).textContent).toBe('Première');
+    expect(visuelMiniature(fiche({ visuel: null, accroche: 'Ancienne' }), creerCacheVisuels(), {}).textContent).toBe('Sans caption');
+  });
+});

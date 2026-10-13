@@ -1,5 +1,5 @@
 import { h } from './h.js';
-import { LIBELLES_FORMAT } from '../logique/fiche.js';
+import { LIBELLES_FORMAT, texteCourt } from '../logique/fiche.js';
 import { heureLocale, libelleJour } from '../logique/dates.js';
 import { bandeau } from './carte.js';
 import { formaterValeur } from '../logique/indicateurs.js';
@@ -39,7 +39,7 @@ const source = s => (/^https?:\/\//.test(s) ? h('a', { href: s, target: '_blank'
 
 const pct = v => formaterValeur('taux_abonnes_par_vue', v);
 const contenu = (libelle, c) => (c
-  ? h('p', {}, `${libelle} : « ${c.accroche || 'Sans accroche'} » (${pct(c.taux)} d’abonnés par vue, ${formaterValeur('partages_par_post', c.partages_envois)} partages et envois).`)
+  ? h('p', {}, `${libelle} : « ${c.accroche || 'Sans caption'} » (${pct(c.taux)} d’abonnés par vue, ${formaterValeur('partages_par_post', c.partages_envois)} partages et envois).`)
   : null);
 
 function sectionRetrospective(retro) {
@@ -52,7 +52,7 @@ function sectionRetrospective(retro) {
       retro.ecarts?.length ? h('ul', { class: 'ecarts' }, retro.ecarts.map(e => h('li', { class: e.atteinte ? 'ecart-atteint' : 'ecart-sous' },
         `${e.libelle} : ${formaterValeur(e.indicateur, e.valeur)} pour une cible de ${formaterValeur(e.indicateur, e.cible)} (${e.atteinte ? 'atteinte' : 'en dessous'}).`))) : null,
     ] : null,
-    manquants.length ? h('p', { class: 'aide' }, `Relevés manquants : ${manquants.map(m => `${m.accroche || 'Sans accroche'} (${m.releve === '48h' ? '48 h' : '7 jours'})`).join(', ')}.`) : null);
+    manquants.length ? h('p', { class: 'aide' }, `Relevés manquants : ${manquants.map(m => `${m.accroche || 'Sans caption'} (${m.releve === '48h' ? '48 h' : '7 jours'})`).join(', ')}.`) : null);
 }
 
 export function vueBulletin({ profil, fiches, bulletin, configVeille, veille, volets }, actions, capacites = {}) {
@@ -91,7 +91,7 @@ export function vueBulletin({ profil, fiches, bulletin, configVeille, veille, vo
         if (!f) return h('li', { class: 'aide' }, 'Idée supprimée ou hors de cette semaine.');
         return h('li', { class: 'idee' },
           h('span', {}, `${LIBELLES_FORMAT[f.format]} · ${libelleJour(f.date_heure, fz)} ${heureLocale(f.date_heure, fz)}`),
-          h('span', { class: 'idee-accroche' }, f.accroche || 'Sans accroche'),
+          h('span', { class: 'idee-accroche' }, texteCourt(f) || 'Sans caption'),
           (bulletin.hors_creneau ?? []).includes(id) ? h('span', { class: 'etiquette' }, 'Hors créneau') : null,
           h('button', { type: 'button', class: 'bouton-lien', onclick: () => actions.ouvrirFiche(id) }, 'Ouvrir'));
       }))),

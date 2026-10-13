@@ -64,7 +64,8 @@ export function verifierRegles(fiche, regles) {
   const causes = [];
   const alertes = [];
 
-  const texteNormalise = normaliser(`${fiche.accroche ?? ''} ${fiche.caption ?? ''}`);
+  // Seule la caption est lue : l’accroche n’existe plus dans la fiche.
+  const texteNormalise = normaliser(fiche.caption ?? '');
   const hashtagsNormalises = (fiche.hashtags ?? []).map(normaliser);
   for (const mot of regles.mots_a_eviter ?? []) {
     const cherche = normaliser(mot);
@@ -76,22 +77,16 @@ export function verifierRegles(fiche, regles) {
     if (dansLeTexte || dansLesHashtags) causes.push(`mot à éviter « ${mot.trim()} »`);
   }
 
-  const lienAutorise = fiche.format === 'story' && fiche.porte;
-  const fragmentLien = detecterLien(`${fiche.accroche ?? ''}\n${fiche.caption ?? ''}`);
-  if (!lienAutorise && fragmentLien) {
-    causes.push(`lien « ${fragmentLien} » dans le texte (seule une story qui mène à la porte peut porter un lien)`);
+  // Une story peut porter un lien ; ailleurs, le lien reste bloquant.
+  const fragmentLien = fiche.format === 'story' ? null : detecterLien(fiche.caption ?? '');
+  if (fragmentLien) {
+    causes.push(`lien « ${fragmentLien} » dans le texte (seule une story peut porter un lien)`);
   }
 
   if (fiche.geotag?.trim() && geotagTropPrecis(fiche.geotag)) {
     const g = fiche.geotag.trim();
     const affiche = g.length > 60 ? `${g.slice(0, 60)}…` : g;
     causes.push(`géotag trop précis « ${affiche} » (reste au niveau de la ville)`);
-  }
-
-  const motsAccroche = compterMots(fiche.accroche);
-  if (motsAccroche === 0) alertes.push({ critere: 'accroche', texte: 'Pas d’accroche.' });
-  else if (motsAccroche > regles.accroche_mots_max) {
-    alertes.push({ critere: 'accroche', texte: `Accroche trop longue : ${motsAccroche} mots (${regles.accroche_mots_max} au maximum).` });
   }
 
   const nbHashtags = (fiche.hashtags ?? []).length;
@@ -107,5 +102,5 @@ export function verifierRegles(fiche, regles) {
     alertes.push({ critere: null, texte: 'Photo seule : le profil recommande un carrousel.' });
   }
 
-  return { conformite: { etat: causes.length ? 'rouge' : 'vert', causes }, alertes, mesures: { motsAccroche, nbHashtags } };
+  return { conformite: { etat: causes.length ? 'rouge' : 'vert', causes }, alertes, mesures: { nbHashtags } };
 }

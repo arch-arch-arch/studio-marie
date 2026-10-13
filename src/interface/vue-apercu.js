@@ -1,5 +1,5 @@
 import { h } from './h.js';
-import { datePublication, LIBELLES_FORMAT } from '../logique/fiche.js';
+import { datePublication, LIBELLES_FORMAT, texteCourt } from '../logique/fiche.js';
 import { periodeAffichee } from '../logique/dossier.js';
 import { categoriesDuProfil, categorieAffichee } from '../logique/categories.js';
 import { couleurCategorie } from './carte.js';
@@ -34,7 +34,7 @@ export function cleApercu(etat) {
   const periode = periodeAffichee(apercu.periode === 'mois' ? 'mois' : 'semaine', etat.ancre, etat.profil.regles_studio.fuseau);
   const visibles = filtrerApercu(etat.fiches, periode, apercu.filtres).map(f => {
     const cat = categorieAffichee(f);
-    return [f.id, f.visuel ?? null, f.visuel_type ?? null, f.format, datePublication(f), f.statut, cat.etat === 'choisie' ? cat.cle : null, f.accroche ?? ''];
+    return [f.id, f.visuel ?? null, f.visuel_type ?? null, f.format, datePublication(f), f.statut, cat.etat === 'choisie' ? cat.cle : null, texteCourt(f)];
   });
   return JSON.stringify([etat.ancre, apercu.periode, periode.debut, periode.fin, apercu.filtres.story, apercu.filtres.reel, apercu.filtres.post, visibles]);
 }
@@ -42,7 +42,7 @@ export function cleApercu(etat) {
 const dateCourte = (iso, fz) => new Intl.DateTimeFormat('fr-FR', { timeZone: fz, weekday: 'short', day: 'numeric', month: 'numeric' }).format(new Date(iso));
 
 function libelleMiniature(f, fz) {
-  return [dateCourte(datePublication(f), fz), LIBELLES_FORMAT[f.format], f.accroche || 'Sans accroche', f.statut === 'publie' ? 'Publié' : null]
+  return [dateCourte(datePublication(f), fz), LIBELLES_FORMAT[f.format], texteCourt(f) || 'Sans caption', f.statut === 'publie' ? 'Publié' : null]
     .filter(Boolean).join(', ');
 }
 

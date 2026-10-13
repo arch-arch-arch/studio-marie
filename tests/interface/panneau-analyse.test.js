@@ -152,14 +152,14 @@ describe('panneauAnalyse', () => {
 
 describe('sectionAvis', () => {
   const periode = { type: 'semaine', cle: '2026-W41' };
-  const fiches = [{ id: 'a', accroche: 'Première' }, { id: 'b', accroche: '' }];
+  const fiches = [{ id: 'a', caption: 'Première' }, { id: 'b', caption: '' }];
   const doc = (id, recu_le, plus = {}) => ({ id, periode, assistant: 'chatgpt', fiches: [{ ref: 'F01', id: 'a' }, { ref: 'F02', id: 'b' }, { ref: 'F03', id: 'z' }], retour: { recu_le, avis: `Avis ${id}`, points_forts: ['fort'], risques: ['risque'], ordre_conseille: ['F02', 'F01', 'F03'], ...plus } });
   it('montre le retour le plus récent de la période', () => {
     const el = sectionAvis([doc('D-1', '2026-10-05T10:00:00.000Z'), doc('D-2', '2026-10-06T10:00:00.000Z'), { id: 'D-3', periode, fiches: [] }, { ...doc('D-4', '2026-10-07T10:00:00.000Z'), periode: { type: 'semaine', cle: '2026-W42' } }], periode, fiches);
     expect(el.querySelector('summary').textContent).toBe('Avis sur la semaine');
     expect(el.textContent).toContain('Avis D-2');
     expect(el.textContent).toContain('ChatGPT');
-    expect([...el.querySelectorAll('ol li')].map(li => li.textContent)).toEqual(['F02 · sans accroche', 'F01 · Première', 'F03 · fiche absente de cette vue']);
+    expect([...el.querySelectorAll('ol li')].map(li => li.textContent)).toEqual(['F02 · sans caption', 'F01 · Première', 'F03 · fiche absente de cette vue']);
     expect(el.textContent).toContain('fort');
     expect(el.textContent).toContain('risque');
   });

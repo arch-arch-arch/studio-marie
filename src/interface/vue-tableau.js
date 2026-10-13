@@ -3,7 +3,7 @@ import { svgBarres, svgCourbe, svgNuage, figure } from './graphiques.js';
 import { seriesTableau, croissancesNettes, SEUIL_COMPARAISON, resultatsParContenu, resultatsParFormat, nombreComparable, resumeVolume } from '../logique/tableau-bord.js';
 import { CHAMPS_COMPTE, etatReleves, formaterValeur } from '../logique/indicateurs.js';
 import { debutSemaine, ajouterJours, cleSemaineIso, libelleJour } from '../logique/dates.js';
-import { LIBELLES_FORMAT } from '../logique/fiche.js';
+import { LIBELLES_FORMAT, texteCourt } from '../logique/fiche.js';
 
 const VIDE = 'Pas encore de relevé.';
 const pct = v => formaterValeur('taux_abonnes_par_vue', v);
@@ -17,7 +17,7 @@ function aSaisir(fichesRecentes, stats, maintenant, fz, actions) {
   return h('section', { class: 'a-saisir' }, h('h3', {}, 'Relevés à saisir'),
     lignes.length
       ? h('ul', {}, lignes.map(({ f, releves }) => h('li', {},
-        h('span', {}, `${LIBELLES_FORMAT[f.format]} · ${libelleJour(f.date_heure, fz)} · ${f.accroche || 'Sans accroche'} · ${releves.map(r => (r === '48h' ? '48 h' : '7 jours')).join(' et ')}`),
+        h('span', {}, `${LIBELLES_FORMAT[f.format]} · ${libelleJour(f.date_heure, fz)} · ${texteCourt(f) || 'Sans caption'} · ${releves.map(r => (r === '48h' ? '48 h' : '7 jours')).join(' et ')}`),
         h('button', { type: 'button', class: 'bouton-lien', onclick: () => actions.allerAFiche(f.id, f.date_heure) }, 'Ouvrir'))))
       : h('p', { class: 'aide' }, 'Tous les relevés dus sont saisis.'));
 }
@@ -70,7 +70,7 @@ function releveCompte(relevesCompteInitial, maintenant, fz, actions) {
 
 function classement({ meilleurs, pires }) {
   if (!meilleurs.length) return figure('Meilleurs et pires contenus', '', VIDE);
-  const ligne = s => h('li', {}, `${s.accroche || 'Sans accroche'} : ${pct(s.taux)} d’abonnés par vue, ${entier(s.partages_envois)} partages et envois`);
+  const ligne = s => h('li', {}, `${s.accroche || 'Sans caption'} : ${pct(s.taux)} d’abonnés par vue, ${entier(s.partages_envois)} partages et envois`);
   const f = figure('Meilleurs et pires contenus', '', '');
   f.querySelector('.graphique-corps').replaceChildren(
     ...[h('h4', {}, 'Meilleurs'), h('ol', {}, meilleurs.map(ligne)), ...(pires.length ? [h('h4', {}, 'Pires'), h('ol', {}, pires.map(ligne))] : [])]);
@@ -86,9 +86,9 @@ function tableaux(stats, fz) {
     h('section', { class: 'resultats-contenus' }, h('h3', {}, 'Résultats par contenu'),
       lignes.length
         ? h('table', {},
-          h('thead', {}, h('tr', {}, ['Date', 'Format', 'Accroche', 'Vues', 'Nouveaux abonnés', 'Abonnés par vue', 'Partages et envois', 'Relevé'].map(t => h('th', {}, t)))),
+          h('thead', {}, h('tr', {}, ['Date', 'Format', 'Caption', 'Vues', 'Nouveaux abonnés', 'Abonnés par vue', 'Partages et envois', 'Relevé'].map(t => h('th', {}, t)))),
           h('tbody', {}, lignes.map(l => h('tr', {}, cellules([
-            jour(l.date), LIBELLES_FORMAT[l.format] ?? l.format, l.accroche || 'Sans accroche', entier(l.vues), entier(l.nouveaux_abonnes),
+            jour(l.date), LIBELLES_FORMAT[l.format] ?? l.format, l.accroche || 'Sans caption', entier(l.vues), entier(l.nouveaux_abonnes),
             pct(l.taux), entier(l.partages_envois), l.releve === '48h' ? '48 h' : '7 jours',
           ])))))
         : h('p', { class: 'aide' }, VIDE)),

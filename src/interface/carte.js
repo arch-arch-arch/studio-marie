@@ -1,6 +1,6 @@
 import { h } from './h.js';
-import { LIBELLES_FORMAT, LIBELLES_STATUT, aReevaluer } from '../logique/fiche.js';
-import { heureLocale } from '../logique/dates.js';
+import { LIBELLES_FORMAT, LIBELLES_STATUT, aReevaluer, texteCourt } from '../logique/fiche.js';
+import { heureLocale, heureParis, FUSEAU_FR } from '../logique/dates.js';
 import { CATEGORIES, categorieAffichee } from '../logique/categories.js';
 
 export const LIBELLES_ETAT = { vert: 'conforme à la cible', orange: 'à surveiller', rouge: 'hors cible' };
@@ -45,8 +45,9 @@ export function carte(f, regles, actions, action = null, categories = CATEGORIES
   h('div', { class: 'carte-tete' },
     h('span', { class: 'format' }, LIBELLES_FORMAT[f.format]),
     ' · ',
-    h('span', { class: 'heure' }, heureLocale(f.date_heure, regles.fuseau))),
-  h('p', { class: 'carte-accroche' }, f.accroche || 'Sans accroche'),
+    // L’heure de Paris ne s’ajoute que si le profil n’est pas en Paris.
+    h('span', { class: 'heure' }, heureLocale(f.date_heure, regles.fuseau), regles.fuseau === FUSEAU_FR ? null : ` · ${heureParis(f.date_heure)} FR`)),
+  h('p', { class: 'carte-accroche' }, texteCourt(f) || 'Sans caption'),
   action?.retard ? h('p', { class: 'carte-action action-retard' }, action.libelle) : null,
   h('div', { class: 'carte-pied' },
     h('span', { class: `point-statut statut-${f.statut}`, title: LIBELLES_STATUT[f.statut] },

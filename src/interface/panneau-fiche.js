@@ -3,12 +3,11 @@ import {
   FORMATS, LIBELLES_FORMAT, STATUTS, LIBELLES_STATUT, analyserHashtags, formaterHashtags, texteAPublier, aReevaluer, effacementsPour, avertissementsFiche,
 } from '../logique/fiche.js';
 import { CATEGORIES, propositionCategorie } from '../logique/categories.js';
-import { cleJour, heureLocale, depuisSaisieLocale } from '../logique/dates.js';
+import { cleJour, heureLocale, heureParis, depuisSaisieLocale, FUSEAU_FR } from '../logique/dates.js';
 import { RELEVES, CHAMPS_CONTENU, etatReleves, tauxAbonnesParVue, formaterValeur } from '../logique/indicateurs.js';
 import { prochaineAction, ACTIONS_SANS_SUITE } from '../logique/parcours.js';
 import { lignesExamen, nomAssistant } from '../logique/score.js';
 
-const ROLES = [['', '—'], ['engagement', 'Engagement'], ['cta', "Appel à l'action"], ['deadpan', 'Deadpan']];
 const LIBELLES_ROLE = { engagement: 'Engagement', cta: "Appel à l'action", deadpan: 'Deadpan' };
 const LIBELLES_CONFORMITE = { vert: 'conforme', orange: 'à surveiller', rouge: 'bloquante' };
 const LIBELLES_RELEVE = { '48h': 'Relevé à 48 h', '7j': 'Relevé à 7 jours' };
@@ -90,7 +89,7 @@ export function panneauFiche(fiche, profil, actions, capacites, releves = []) {
     afficher(resultat.annule ? 'Évaluation arrêtée.' : resultat.raison);
   }
 
-  const SELECTEURS_CHAMP = { caption: 'textarea[name="caption"]', accroche: 'textarea[name="accroche"]', hashtags: 'input[name="hashtags"]' };
+  const SELECTEURS_CHAMP = { caption: 'textarea[name="caption"]', hashtags: 'input[name="hashtags"]' };
   const valeurChamp = champ => (champ === 'hashtags' ? formaterHashtags(brouillon.hashtags) : brouillon[champ]);
 
   const utiliser = (changements, messageFait, champ) => {
@@ -122,21 +121,17 @@ export function panneauFiche(fiche, profil, actions, capacites, releves = []) {
   const champ = (libelle, controle) => h('label', { class: 'champ' }, h('span', { class: 'champ-libelle' }, libelle), controle);
   const selection = (nom, valeur, options, surChange) => h('select', { name: nom, onchange: e => surChange(e.target.value) },
     options.map(([v, t]) => h('option', { value: v, selected: v === (valeur ?? '') }, t)));
-  const caseACocher = (libelle, cle) => h('label', { class: 'case' },
-    h('input', { type: 'checkbox', name: cle, checked: !!brouillon[cle], onchange: e => changer({ [cle]: e.target.checked }) }),
-    libelle);
-
-  async function copier() {
-    const texte = texteAPublier(brouillon);
+  async function copierTexte(texte, messageFait) {
     try {
       await navigator.clipboard.writeText(texte);
-      afficher('Copié. Colle-le dans Meta Business Suite.');
+      afficher(messageFait);
     } catch {
       const secours = h('textarea', { class: 'secours-copie', readonly: true, rows: 5, value: texte });
       message.replaceChildren('La copie automatique est bloquée : sélectionne le texte ci-dessous.', secours);
       secours.select();
     }
   }
+  const copier = () => copierTexte(texteAPublier(brouillon), 'Copié. Colle-le dans Meta Business Suite.');
 
   async function envoyer(fichier) {
     if (!fichier) return;
@@ -239,25 +234,22 @@ export function panneauFiche(fiche, profil, actions, capacites, releves = []) {
   };
 
   const sectionType = () => h('div', { class: 'grille-champs' },
-    champ('Format', selection('format', brouillon.format, FORMATS.map(f => [f, LIBELLES_FORMAT[f]]), v => {
-      changer(v === 'story' ? { format: v } : { format: v, porte: false });
-      construire();
-    })),
-    champ('Pilier', selection('pilier', brouillon.pilier, r.piliers.map(p => [p.cle, p.nom]), v => changer({ pilier: v }))),
-    champ('Format validé', h('input', { type: 'text', name: 'format_valide', value: brouillon.format_valide, oninput: e => changer({ format_valide: e.target.value }) })),
-    champ('Rôle de la caption', selection('role_caption', brouillon.role_caption, ROLES, v => changer({ role_caption: v || null }))),
-    h('div', { class: 'cases' },
-      caseACocher("Appel à l'action", 'cta'),
-      caseACocher('Ragebait', 'ragebait'),
-      brouillon.format === 'story' ? caseACocher('Mène à la porte', 'porte') : null));
+    champ('Format', selection('format', brouillon.format, FORMATS.map(f => [f, LIBELLES_FORMAT[f]]), v => changer({ format: v }))));
 
+  // Le fuseau du profil donne le libellé de l’heure ; « Paris » n’est répété en dessous que si le profil n’est pas à Paris.
   const sectionDate = () => {
     const date = h('input', { type: 'date', name: 'date', value: cleJour(brouillon.date_heure, fz), required: true });
     const heure = h('input', { type: 'time', name: 'heure', value: heureLocale(brouillon.date_heure, fz), required: true });
-    const maj = () => { if (date.value && heure.value) changer({ date_heure: depuisSaisieLocale(date.value, heure.value, fz) }); };
+    const enParis = fz === FUSEAU_FR ? null : h('p', { class: 'heure-paris' }, `${heureParis(brouillon.date_heure)} à Paris`);
+    const maj = () => {
+      if (!date.value || !heure.value) return;
+      changer({ date_heure: depuisSaisieLocale(date.value, heure.value, fz) });
+      if (enParis) enParis.textContent = `${heureParis(brouillon.date_heure)} à Paris`;
+    };
     date.addEventListener('change', maj);
     heure.addEventListener('change', maj);
-    return h('div', { class: 'grille-champs' }, champ('Date', date), champ(`Heure (${fz})`, heure));
+    const ville = fz.split('/').pop().replace(/_/g, ' ');
+    return h('div', { class: 'grille-champs' }, champ('Date', date), h('div', {}, champ(`Heure (${ville})`, heure), enParis));
   };
 
   const sectionVisuel = () => {
@@ -299,7 +291,6 @@ export function panneauFiche(fiche, profil, actions, capacites, releves = []) {
   };
 
   const sectionTexte = () => h('div', { class: 'textes' },
-    champ('Accroche', h('textarea', { name: 'accroche', rows: 2, value: brouillon.accroche, oninput: e => changer({ accroche: e.target.value }) })),
     champ('Caption', h('textarea', { name: 'caption', rows: 6, value: brouillon.caption, oninput: e => changer({ caption: e.target.value }) })),
     champ('Hashtags', h('input', { type: 'text', name: 'hashtags', placeholder: '#mot #autre', value: formaterHashtags(brouillon.hashtags), oninput: e => changer({ hashtags: analyserHashtags(e.target.value) }), onchange: e => changer({ hashtags: analyserHashtags(e.target.value) }) })),
     champ('Géotag (ville)', h('input', { type: 'text', name: 'geotag', maxlength: 200, value: brouillon.geotag, oninput: e => changer({ geotag: e.target.value }) })),
@@ -338,7 +329,7 @@ export function panneauFiche(fiche, profil, actions, capacites, releves = []) {
     if (brouillon.suggestions?.accroches?.length) {
       enfants.push(h('h4', {}, 'Accroches proposées'), h('ul', { class: 'suggestions' }, brouillon.suggestions.accroches.map(a => h('li', { class: 'suggestion' },
         h('span', { class: 'suggestion-texte' }, a),
-        h('button', { type: 'button', class: 'bouton-lien', onclick: () => utiliser({ accroche: a }, 'Accroche remplacée.', 'accroche') }, 'Utiliser')))));
+        h('button', { type: 'button', class: 'bouton-lien', onclick: () => copierTexte(a, 'Accroche copiée.') }, 'Copier')))));
     }
     if (brouillon.suggestions?.hashtags?.length) {
       enfants.push(h('p', { class: 'suggestion-hashtags' }, formaterHashtags(brouillon.suggestions.hashtags), ' ',

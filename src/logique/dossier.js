@@ -1,7 +1,7 @@
 import { debutSemaine, ajouterJours, debutMois, ajouterMois, cleSemaineIso, heureLocale, partiesLocales } from './dates.js';
 import { empreinte, LIBELLES_FORMAT } from './fiche.js';
 import { verifierRegles } from './regles-score.js';
-import { controlerSemaine, fichesDeLaSemaine } from './controle.js';
+import { controlerSemaine } from './controle.js';
 import { CATEGORIES, categorieAffichee, categoriesDuProfil, nomCategorie } from './categories.js';
 import { extraireProfilDetaille } from '../claude/evaluation.js';
 
@@ -133,31 +133,12 @@ export function enListes(valeur, niveau = 0) {
 }
 
 // Une ligne exacte par pastille de controlerSemaine : ce que chacune compte, et par rapport à quoi.
-export function ligneRegle(p, regles, fichesSemaine = []) {
-  const feed = fichesSemaine.filter(f => ['reel', 'carrousel', 'post'].includes(f.format));
+export function ligneRegle(p) {
   const [n, total] = String(p.valeur).split('/');
   const fin = `(${p.etat})`;
   switch (p.cle) {
     case 'reels': case 'carrousels': return `${p.libelle} : ${n} sur ${total} attendus ${fin}`;
     case 'stories': return `${p.libelle} : ${n} sur 7 ${fin}`;
-    case 'cta': {
-      // Orange sans dépassement : aucun appel sur au moins 4 contenus du fil (voir controlerSemaine).
-      const cause = p.etat === 'orange' && n === '0' && Number(total) >= 4 ? ' : aucun appel vers l\'offre cette semaine' : '';
-      return `Appels vers l'offre : ${n} sur ${total} contenus du fil, maximum ${Math.round(regles.cta_ratio_max * 100)} % (${p.etat}${cause})`;
-    }
-    case 'roles': {
-      const [e, c, d] = String(p.valeur).split('/');
-      const o = regles.roles_caption;
-      return `Rôles des captions : engagement ${e}, cta ${c}, deadpan ${d} ; objectifs ${o.engagement}, ${o.cta}, ${o.deadpan} ${fin}`;
-    }
-    case 'ragebait': return `${p.libelle} : ${n}, maximum ${total} ${fin}`;
-    case 'porte': return `${p.libelle} : ${p.valeur}, objectif ${regles.stories_porte.min} à ${regles.stories_porte.max} ${fin}`;
-    case 'piliers': {
-      const parPilier = new Map();
-      for (const f of feed) parPilier.set(f.pilier, (parPilier.get(f.pilier) ?? 0) + 1);
-      const domine = feed.length >= 4 && [...parPilier.values()].some(k => k / feed.length > 0.5);
-      return `Piliers présents : ${n} sur ${total} (${p.etat}${domine ? ' : un pilier domine plus de la moitié du fil' : ''})`;
-    }
     default: return `${p.libelle} : ${p.valeur} ${fin}`;
   }
 }
@@ -179,19 +160,13 @@ function ligneCategorie(fiche) {
 function blocFiche({ ref, fiche, etat }, profil) {
   const regles = profil.regles_studio;
   const fz = regles.fuseau;
-  const pilier = regles.piliers.find(p => p.cle === fiche.pilier)?.nom ?? fiche.pilier ?? '';
   const v = verifierRegles(fiche, regles);
   const liste = (xs, vide) => (xs.length ? xs.join(' ; ') : vide);
   return [
     `<fiche id="${ref}">`,
     `date : ${date(fiche.date_heure, fz, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}, ${heureLocale(fiche.date_heure, fz)}`,
     `format : ${LIBELLES_FORMAT[fiche.format] ?? fiche.format}`,
-    `pilier : ${pilier}`,
     ligneCategorie(fiche),
-    `rôle de caption : ${fiche.role_caption ?? 'non choisi'}`,
-    `appel vers l'offre : ${fiche.cta ? 'oui' : 'non'}`,
-    `mène à la porte : ${fiche.porte ? 'oui' : 'non'}`,
-    `accroche : ${enRetrait(couper(fiche.accroche, 300))}`,
     `caption : ${enRetrait(couper(fiche.caption, 2200))}`,
     `hashtags : ${liste((fiche.hashtags ?? []).slice(0, 30), 'aucun').replace(/ ; /g, ', ')}`,
     `géotag : ${couper(fiche.geotag, 200) || 'aucun'}`,
@@ -290,13 +265,12 @@ function consigne(entrees, code, profil) {
     'Tu notes chaque contenu sans le modifier ; tes captions et tes accroches sont des variantes à part, dans la voix du profil. N’invente aucune donnée.',
     '',
     'Ce que tu notes, de 0 à 10, pour chaque fiche :',
-    '- accroche : force de l’accroche (lisible en moins d’une seconde, paradoxe ou question), potentiel d’envoi et de sauvegarde, visage face caméra si le visuel est joint ;',
-    '- voix : test de voix et vocabulaire du profil, esthétique si le visuel est joint, cohérence avec le pilier ;',
+    '- accroche : force de l’accroche, qui est la première ligne de la caption, ou le texte à l’écran si le visuel est joint (lisible en moins d’une seconde, paradoxe ou question), potentiel d’envoi et de sauvegarde, visage face caméra si le visuel est joint ;',
+    '- voix : test de voix et vocabulaire du profil, esthétique si le visuel est joint ;',
     '- mecanique : première ligne qui provoque avant « …plus », une seule micro-action, structure attendue pour ce format.',
     "Quand le visuel n'est pas joint, juge le texte seul et dis-le dans la phrase du critère.",
     'Conformité : "rouge" si la surface n’est pas SFW, si un groupe ou une identité est visé, si l’âge adulte est ambigu ou si un boost payant est suggéré ; "orange" si un risque mérite attention ; sinon "vert". Causes courtes et précises.',
     'Les alertes et blocages calculés par le studio font autorité : tu ne peux pas lever un blocage.',
-    "Le champ « appel vers l'offre » ne concerne que le renvoi vers l'offre : une simple question au public n'est pas un appel vers l'offre.",
     'Les caractères que ce document ne sait pas écrire (émojis) sont notés par leur code entre crochets, par exemple [U+1F525].',
     'Dans tes captions et tes accroches, écris de vrais émojis si tu en utilises, jamais leur code entre crochets.',
     '',
@@ -327,7 +301,7 @@ export function contenuDossier({ profil, entrees, periode, code, toutesLesFiches
   const strategie = sections.map(cle => ({ titre: versLatin1(titreSection(cle)), lignes: enListes(valeurs[cle]).map(versLatin1) }));
   const regles = [LEGENDE_REGLES, ...semainesDeLaPeriode(periode, fz).flatMap(debut => [
     `Semaine ${cleSemaineIso(debut, fz)} :`,
-    ...controlerSemaine(toutesLesFiches, profil.regles_studio, debut).map(p => `- ${ligneRegle(p, profil.regles_studio, fichesDeLaSemaine(toutesLesFiches, debut, fz))}`),
+    ...controlerSemaine(toutesLesFiches, profil.regles_studio, debut).map(p => `- ${ligneRegle(p)}`),
   ])].map(versLatin1);
   return {
     titre: versLatin1(`Dossier d'analyse : ${periode.libelle}`),

@@ -1,6 +1,6 @@
 import { h } from './h.js';
 import { semainesDuMois, joursDeLaSemaine, debutMois, partiesLocales, cleJour } from '../logique/dates.js';
-import { LIBELLES_FORMAT } from '../logique/fiche.js';
+import { LIBELLES_FORMAT, texteCourt } from '../logique/fiche.js';
 import { periodeAffichee } from '../logique/dossier.js';
 import { rangeeAnalyse, sectionAvis } from './panneau-analyse.js';
 import { categoriesDuProfil } from '../logique/categories.js';
@@ -24,7 +24,7 @@ function libelleCase(jour, duJour, fz) {
 // Vignette d’une fiche : son visuel, ou sa lettre de format quand elle n’en a pas. Un span, jamais un bouton : la case en est un.
 function vignette(f, cache, actions, categories) {
   return h('span', {
-    class: 'vignette', title: `${LIBELLES_FORMAT[f.format]} · ${f.accroche || 'sans accroche'}`,
+    class: 'vignette', title: `${LIBELLES_FORMAT[f.format]} · ${texteCourt(f) || 'sans caption'}`,
     style: { '--categorie': couleurCategorie(f, categories, 'var(--texte-2)') },
   },
   f.visuel ? visuelMiniature(f, cache, actions, 'vignette') : h('span', { class: 'vignette-lettre', 'aria-hidden': 'true' }, LETTRES[f.format]));
