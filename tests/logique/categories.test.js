@@ -122,8 +122,8 @@ describe('controlerCategories', () => {
 
   it('pastilles exactes : cibles, non rangées ; proposée et hors semaine non comptées', () => {
     expect(controlerCategories(semaine(), profil, LUNDI)).toEqual([
-      { cle: 'attraction_fil', libelle: 'Attraction', valeur: '1 sur 3 contenus du fil', etat: 'rouge' },
-      { cle: 'conversion_stories', libelle: 'Conversion', valeur: '2 stories, objectif 2 à 3', etat: 'vert' },
+      { cle: 'attraction_fil', libelle: 'Attraction', valeur: '1 sur 3 contenus du fil', etat: 'rouge', n: 1, cible: 3 },
+      { cle: 'conversion_stories', libelle: 'Conversion', valeur: '2 stories, objectif 2 à 3', etat: 'vert', n: 2, min: 2, max: 3 },
       { cle: 'non_rangees', libelle: 'Non rangées', valeur: '2', etat: 'orange' },
     ]);
   });
@@ -145,8 +145,8 @@ describe('controlerCategories', () => {
   it('une catégorie avec les deux cibles donne deux pastilles', () => {
     const p = avecSection([{ cle: 'preuve', cible_fil: 1, cible_stories: { min: 1, max: 1 } }]);
     expect(controlerCategories([], p, LUNDI)).toEqual([
-      { cle: 'preuve_fil', libelle: 'Preuve', valeur: '0 sur 1 contenu du fil', etat: 'orange' },
-      { cle: 'preuve_stories', libelle: 'Preuve', valeur: '0 story, objectif 1', etat: 'orange' },
+      { cle: 'preuve_fil', libelle: 'Preuve', valeur: '0 sur 1 contenu du fil', etat: 'orange', n: 0, cible: 1 },
+      { cle: 'preuve_stories', libelle: 'Preuve', valeur: '0 story, objectif 1', etat: 'orange', n: 0, min: 1, max: 1 },
     ]);
   });
 
@@ -159,7 +159,7 @@ describe('controlerCategories', () => {
 
   it('cible 0 : singulier, « 0 sur 0 contenu du fil »', () => {
     const p = avecSection([{ cle: 'desir', cible_fil: 0 }]);
-    expect(controlerCategories([], p, LUNDI)).toEqual([{ cle: 'desir_fil', libelle: 'Désir', valeur: '0 sur 0 contenu du fil', etat: 'vert' }]);
+    expect(controlerCategories([], p, LUNDI)).toEqual([{ cle: 'desir_fil', libelle: 'Désir', valeur: '0 sur 0 contenu du fil', etat: 'vert', n: 0, cible: 0 }]);
   });
 
   it('Non rangées garde son libellé et sa valeur', () => {

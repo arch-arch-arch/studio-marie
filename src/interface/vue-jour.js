@@ -2,8 +2,8 @@ import { h } from './h.js';
 import { carte } from './carte.js';
 import { cleJour, heureLocale, depuisSaisieLocale } from '../logique/dates.js';
 import { categoriesDuProfil } from '../logique/categories.js';
-import { APERCU_PAR_DEFAUT, creerCacheVisuels } from './vue-apercu.js';
-import { oublierEchecs, visuelMiniature } from './visuels.js';
+import { APERCU_PAR_DEFAUT } from './vue-apercu.js';
+import { creerCacheVisuels, oublierEchecs, visuelMiniature } from './visuels.js';
 import { formatVisible, barreFormats } from './filtre-formats.js';
 
 export function vueJour({ profil, fiches, ancre, apercu, cacheVisuels }, actions) {
@@ -14,13 +14,15 @@ export function vueJour({ profil, fiches, ancre, apercu, cacheVisuels }, actions
   oublierEchecs(cache, `jour|${cle}`);
   const categories = categoriesDuProfil(profil);
   const duJour = fiches.filter(f => cleJour(f.date_heure, r.fuseau) === cle && formatVisible(f, filtres)).sort((a, b) => a.date_heure.localeCompare(b.date_heure));
+  const aucunFormat = !(filtres.story || filtres.reel || filtres.post);
   return h('div', { class: 'jour-vue' },
     barreFormats(filtres, actions),
     duJour.length
       ? h('ol', { class: 'frise' }, duJour.map(f => h('li', { class: 'frise-ligne' },
         h('span', { class: 'frise-heure' }, heureLocale(f.date_heure, r.fuseau)),
         carte(f, r, actions, null, categories, f.visuel ? visuelMiniature(f, cache, actions, 'carte') : null))))
-      : h('p', { class: 'aide' }, 'Rien de prévu ce jour-là.'),
+      // Sans format coché, la barre seule parle (A7).
+      : aucunFormat ? null : h('p', { class: 'aide' }, 'Rien de prévu ce jour-là.'),
     h('button', {
       type: 'button', class: 'bouton-secondaire',
       onclick: () => actions.creerFiche({ format: 'reel', date_heure: depuisSaisieLocale(cle, '12:00', r.fuseau) }),

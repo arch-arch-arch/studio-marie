@@ -5,13 +5,11 @@ import { periodeAffichee } from '../logique/dossier.js';
 import { rangeeAnalyse, sectionAvis } from './panneau-analyse.js';
 import { categoriesDuProfil } from '../logique/categories.js';
 import { couleurCategorie } from './carte.js';
-import { APERCU_PAR_DEFAUT, creerCacheVisuels } from './vue-apercu.js';
-import { oublierEchecs, visuelMiniature } from './visuels.js';
+import { APERCU_PAR_DEFAUT } from './vue-apercu.js';
+import { creerCacheVisuels, oublierEchecs, visuelMiniature, LETTRES } from './visuels.js';
 import { formatVisible, barreFormats } from './filtre-formats.js';
 
 const ENTETES = ['lun.', 'mar.', 'mer.', 'jeu.', 'ven.', 'sam.', 'dim.'];
-// Lettre lue sur la vignette sans visuel : le format ne doit pas dépendre du survol (title) ni de la couleur.
-const LETTRES = { reel: 'R', carrousel: 'C', story: 'S', post: 'P' };
 // Au plus trois vignettes par jour, le reste en « +N ».
 const VIGNETTES_MAX = 3;
 

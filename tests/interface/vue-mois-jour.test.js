@@ -5,6 +5,7 @@ import { nouvelleFiche } from '../../src/logique/fiche.js';
 import { vueMois } from '../../src/interface/vue-mois.js';
 import { vueJour } from '../../src/interface/vue-jour.js';
 import { creerCacheVisuels } from '../../src/interface/vue-apercu.js';
+import { creerRendu } from '../../src/interface/rendu.js';
 
 const f = (id, format, date_heure, accroche = '') => ({ ...nouvelleFiche({ id, format, date_heure, pilier: 'socio', maintenant: 'x' }), accroche });
 const actionsFactices = () => ({ changerVue: vi.fn(), creerFiche: vi.fn(), ouvrirFiche: vi.fn() });
@@ -131,7 +132,6 @@ describe('coller un retour (Mois)', () => {
 
 describe('vueMois : vignettes, formats et visuels', () => {
   const ancre = '2026-10-15T10:00:00.000Z';
-  const TOUS = { story: true, reel: true, post: true };
   const avecUrls = () => ({ ...actionsFactices(), urlVisuel: vi.fn(async id => `https://stockage.test/${id}`) });
   const jour = el => el.querySelectorAll('.mois-jour')[3];
   const vignettes = el => [...jour(el).querySelectorAll('.vignette')];
@@ -155,7 +155,8 @@ describe('vueMois : vignettes, formats et visuels', () => {
     const el = vueMois(etat([{ ...f('a', 'post', '2026-10-01T10:00:00.000Z'), visuel: 'a.png', visuel_type: 'image' }]), actions);
     const v = vignettes(el)[0];
     expect(v.querySelector('img')).not.toBeNull();
-    expect(v.querySelector('.vignette-lettre')).toBeNull();
+    // Adapté : la lettre du format reste en fond, sous l’image (C3) ; elle est masquée aux lecteurs d’écran.
+    expect(v.querySelector('.vignette-lettre').getAttribute('aria-hidden')).toBe('true');
     expect(actions.urlVisuel).toHaveBeenCalledWith('a.png');
     await vi.waitFor(() => expect(v.querySelector('img').getAttribute('src')).toBe('https://stockage.test/a.png'));
   });
@@ -188,6 +189,30 @@ describe('vueMois : vignettes, formats et visuels', () => {
     expect(vignettes(el)).toHaveLength(0);
   });
 
+  it('une case avec une vignette qui a un visuel ne contient aucun bouton', () => {
+    const el = vueMois(etat([{ ...f('a', 'post', '2026-10-01T10:00:00.000Z'), visuel: 'a.png', visuel_type: 'image' }]), avecUrls());
+    expect(vignettes(el)).toHaveLength(1);
+    expect(jour(el).querySelectorAll('button')).toHaveLength(0);
+  });
+
+  it('une vignette vidéo ne porte pas de marque de lecture, et son préchargement est « none » (C2, C3)', () => {
+    const el = vueMois(etat([{ ...f('v', 'reel', '2026-10-01T10:00:00.000Z'), visuel: 'v.mp4', visuel_type: 'video' }]), avecUrls());
+    expect(vignettes(el)[0].querySelector('.marque-lecture')).toBeNull();
+    expect(vignettes(el)[0].querySelector('video').getAttribute('preload')).toBe('none');
+  });
+
+  it('changer le filtre dans l’état reconstruit la vue Mois (rendu)', () => {
+    const racine = document.createElement('div');
+    const actions = { ...avecUrls(), changerVue: vi.fn(), naviguer: vi.fn(), allerAujourdhui: vi.fn(), changerFiltresApercu: vi.fn() };
+    const rendre = creerRendu(racine, actions, {}, () => ancre);
+    const fiches = [f('r', 'reel', '2026-10-01T10:00:00.000Z'), f('s', 'story', '2026-10-01T11:00:00.000Z')];
+    const e = { profil: fictif, fiches, vue: 'mois', ancre, apercu: { periode: 'semaine', filtres: { story: true, reel: true, post: true } }, sauvegarde: 'ok', erreur: null, ficheOuverte: null };
+    rendre(e);
+    expect(racine.querySelectorAll('.mois-jour')[3].querySelectorAll('.vignette')).toHaveLength(2);
+    rendre({ ...e, apercu: { periode: 'semaine', filtres: { story: false, reel: true, post: true } } });
+    expect(racine.querySelectorAll('.mois-jour')[3].querySelectorAll('.vignette')).toHaveLength(1);
+  });
+
   it('réutilise le même nœud image quand la vue est reconstruite après une frappe', () => {
     const cache = creerCacheVisuels();
     const actions = avecUrls();
@@ -203,6 +228,24 @@ describe('vueMois : vignettes, formats et visuels', () => {
 describe('vueJour : formats et visuels', () => {
   const ancre = '2026-09-28T08:00:00.000Z';
   const avecUrls = () => ({ ...actionsFactices(), urlVisuel: vi.fn(async id => `https://stockage.test/${id}`) });
+
+  it('changer le filtre dans l’état reconstruit la vue Jour (rendu)', () => {
+    const racine = document.createElement('div');
+    const actions = { ...avecUrls(), changerVue: vi.fn(), naviguer: vi.fn(), allerAujourdhui: vi.fn(), changerFiltresApercu: vi.fn() };
+    const rendre = creerRendu(racine, actions, {}, () => ancre);
+    const fiches = [f('r', 'reel', '2026-09-28T10:00:00.000Z'), f('s', 'story', '2026-09-28T17:00:00.000Z')];
+    const e = { profil: fictif, fiches, vue: 'jour', ancre, apercu: { periode: 'semaine', filtres: { story: true, reel: true, post: true } }, sauvegarde: 'ok', erreur: null, ficheOuverte: null };
+    rendre(e);
+    expect(racine.querySelectorAll('.carte')).toHaveLength(2);
+    rendre({ ...e, apercu: { periode: 'semaine', filtres: { story: false, reel: true, post: true } } });
+    expect([...racine.querySelectorAll('.carte')].map(c => c.dataset.id)).toEqual(['r']);
+  });
+
+  it('sans format coché, la vue Jour n’affiche pas « Rien de prévu ce jour-là. »', () => {
+    const el = vueJour({ profil: fictif, fiches: [], ancre, apercu: { periode: 'semaine', filtres: { story: false, reel: false, post: false } } }, actionsFactices());
+    expect(el.textContent).not.toContain('Rien de prévu');
+    expect(el.textContent).toContain('Coche au moins un format.');
+  });
 
   it('n’affiche que les formats cochés, et la barre est en haut de la vue', () => {
     const actions = { ...actionsFactices(), changerFiltresApercu: vi.fn() };

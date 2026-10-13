@@ -3,6 +3,8 @@ import { h } from './h.js';
 const LIMITE_DEMANDES = 4;
 // Les liens de stockage expirent au bout d'une heure : on les renouvelle avant.
 const DUREE_LIEN_MS = 50 * 60000;
+// Lettre lue sur la vignette sans visuel ou dont le visuel est indisponible : le format ne dépend ni du survol ni de la couleur.
+export const LETTRES = { reel: 'R', carrousel: 'C', story: 'S', post: 'P' };
 
 // Les liens signés sont demandés un par un, au plus LIMITE_DEMANDES à la fois. Le cache garde, par visuel,
 // la demande (en cours ou obtenue) et sa date ; une demande en échec reste marquée jusqu'au changement de période.
@@ -47,14 +49,16 @@ export function oublierEchecs(cache, cle) {
 
 // Visuel d'une fiche (image, ou vidéo avec sa première image). Le nœud est gardé par portée (carte, vignette, apercu) :
 // une reconstruction le réutilise, et ne renouvelle le lien que s'il a expiré.
+// En vignette, la lettre du format est en fond sous le visuel : elle reste seule si le visuel ne charge pas.
 export function visuelMiniature(f, cache, actions, portee = 'apercu') {
   if (!f.visuel) return h('span', { class: 'miniature-vide' }, f.accroche || 'Sans visuel');
   const cle = `${portee}:${f.id}:${f.visuel}:${f.visuel_type}`;
   const existant = cache.noeuds.get(cle);
   if (existant) {
-    existant.charger();
+    existant.reparer();
     return existant.zone;
   }
+  const vignette = portee === 'vignette';
   const video = f.visuel_type === 'video';
   const media = video ? h('video') : h('img');
   media.setAttribute('alt', '');
@@ -62,12 +66,17 @@ export function visuelMiniature(f, cache, actions, portee = 'apercu') {
     media.muted = true;
     media.setAttribute('muted', '');
     media.setAttribute('playsinline', '');
-    media.setAttribute('preload', 'metadata');
+    // En vignette, la première image n'est pas exigée : pas de téléchargement tant que la vue ne le demande pas.
+    media.setAttribute('preload', vignette ? 'none' : 'metadata');
   } else {
     media.setAttribute('loading', 'lazy');
   }
-  const zone = h('span', { class: 'miniature-media' }, media, video ? h('span', { class: 'marque-lecture', 'aria-hidden': 'true' }) : null);
-  const indisponible = () => zone.replaceChildren(h('span', { class: 'miniature-indisponible' }, 'Visuel indisponible'));
+  const lettre = () => h('span', { class: 'vignette-lettre', 'aria-hidden': 'true' }, LETTRES[f.format]);
+  const zone = h('span', { class: 'miniature-media' },
+    vignette ? lettre() : null,
+    media,
+    video && !vignette ? h('span', { class: 'marque-lecture', 'aria-hidden': 'true' }) : null);
+  const indisponible = () => zone.replaceChildren(vignette ? lettre() : h('span', { class: 'miniature-indisponible' }, 'Visuel indisponible'));
   // Safari n'affiche souvent rien d'une vidéo avant la lecture : le fragment #t=0.001 force la première image.
   // Une source déjà en place n'est pas réaffectée (un média réaffecté se recharge), sauf après une erreur.
   const charger = (nouvelEssai = false) => lienVisuel(cache, id => actions.urlVisuel(id), f.visuel).then(
@@ -79,10 +88,9 @@ export function visuelMiniature(f, cache, actions, portee = 'apercu') {
   );
   // Une erreur de chargement du média refait un seul essai avec un lien neuf ; si elle revient, le visuel est marqué en échec.
   let essais = 0;
-  media.addEventListener(video ? 'loadeddata' : 'load', () => { essais = 0; });
-  media.addEventListener('error', () => {
-    // Un média remplacé par une reconstruction n'a plus rien à réparer : le cache reste intact.
-    if (!media.isConnected) return;
+  // Une erreur arrivée pendant que le nœud est hors écran est notée : la réutilisation fait alors l’essai.
+  let erreurHorsEcran = false;
+  const essaiSuivant = () => {
     if (essais === 0) {
       essais = 1;
       cache.urls.delete(f.visuel);
@@ -92,8 +100,19 @@ export function visuelMiniature(f, cache, actions, portee = 'apercu') {
     const entree = cache.urls.get(f.visuel);
     if (entree) entree.echec = true;
     indisponible();
+  };
+  media.addEventListener(video ? 'loadeddata' : 'load', () => { essais = 0; });
+  media.addEventListener('error', () => {
+    if (!media.isConnected) { erreurHorsEcran = true; return; }
+    essaiSuivant();
   });
-  cache.noeuds.set(cle, { zone, charger });
+  // Réutilisation : une erreur notée hors écran compte pour le seul essai ; sinon le lien n’est renouvelé qu’après expiration.
+  const reparer = () => {
+    if (!erreurHorsEcran) { charger(); return; }
+    erreurHorsEcran = false;
+    essaiSuivant();
+  };
+  cache.noeuds.set(cle, { zone, reparer });
   charger();
   return zone;
 }

@@ -72,6 +72,8 @@ export function controlerCategories(fiches, profil, debutIso) {
         libelle: c.nom,
         valeur: contenusFil(n, c.cible_fil),
         etat: selonFil(n, c.cible_fil),
+        n,
+        cible: c.cible_fil,
       });
     }
     if (c.cible_stories !== null) {
@@ -81,6 +83,9 @@ export function controlerCategories(fiches, profil, debutIso) {
         libelle: c.nom,
         valeur: libelleStories(n, c.cible_stories),
         etat: selonStories(n, c.cible_stories),
+        n,
+        min: c.cible_stories.min,
+        max: c.cible_stories.max,
       });
     }
   }

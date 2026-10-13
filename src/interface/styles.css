@@ -58,7 +58,11 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .bouton-lien { background: none; border: 0; padding: 0; color: var(--accent); cursor: pointer; text-decoration: underline; }
 
 /* Bandeau de contrôle */
-.bandeau { list-style: none; margin: 0 0 12px; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.bandeau { list-style: none; margin: 0 0 6px; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.bandeau-zone { margin: 0 0 12px; }
+.bandeau-resume { margin: 0 0 6px; font-size: 12px; color: var(--texte-2); }
+.bandeau-detail summary { cursor: pointer; font-size: 12px; color: var(--texte-2); }
+.bandeau-complet { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
 .pastille { display: inline-flex; align-items: center; gap: 8px; padding: 4px 10px; border-radius: 999px; background: var(--surface); border: 1px solid var(--trait); font-size: 13px; }
 .pastille::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--etat); }
 .pastille-vert { --etat: var(--vert); } .pastille-orange { --etat: var(--orange); } .pastille-rouge { --etat: var(--rouge); }
@@ -67,6 +71,10 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .pastille-rouge { border-color: var(--rouge); } .pastille-rouge .pastille-valeur { font-weight: 700; }
 .legende-categories { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin: -4px 0 12px; font-size: 12px; color: var(--texte-2); }
 .legende-titre { font-weight: 600; }
+.legende-nom { white-space: nowrap; }
+.legende-valeur { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.legende-item.etat-orange .legende-valeur { text-decoration: underline dashed var(--orange); text-underline-offset: 3px; }
+.legende-item.etat-rouge .legende-valeur { text-decoration: underline var(--rouge); text-underline-offset: 3px; font-weight: 700; }
 .legende-item { display: inline-flex; align-items: center; gap: 4px; }
 .legende-pastille { width: 10px; height: 10px; border-radius: 2px; background: var(--categorie, var(--trait)); }
 .visuellement-masque { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
@@ -81,12 +89,17 @@ button, input, select, textarea { font: inherit; color: inherit; }
 /* Sur fond sombre, le bord de catégorie est éclairci pour rester visible. */
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .carte { border-left-color: color-mix(in srgb, var(--categorie, var(--trait)) 65%, #ffffff); } }
 :root[data-theme="dark"] .carte { border-left-color: color-mix(in srgb, var(--categorie, var(--trait)) 65%, #ffffff); }
-.carte-pilier { margin: 0; font-size: 12px; color: var(--texte-2); }
 .carte.statut-publie { opacity: .7; }
-.carte-tete, .carte-pied { display: flex; justify-content: space-between; align-items: center; gap: 6px; font-size: 12px; color: var(--texte-2); }
+.carte-tete { font-size: 12px; color: var(--texte-2); }
+.carte-pied { display: flex; justify-content: space-between; align-items: center; gap: 6px; font-size: 12px; color: var(--texte-2); }
+.point-statut { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--texte-2); }
+.point-statut.statut-idee { background: transparent; border: 1px solid var(--texte-2); }
+.point-statut.statut-programme { background: var(--accent); }
+.point-statut.statut-publie { background: var(--vert); }
+.point-statut.statut-valide { background: var(--orange); }
 .format { font-weight: 600; color: var(--texte); }
 .heure { font-family: var(--mono); }
-.carte-accroche { margin: 0; font-size: 13px; overflow-wrap: anywhere; }
+.carte-accroche { margin: 0; font-size: 13px; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 /* Visuel en haut de la carte : pleine largeur, hauteur bornée à 120px, sans débordement. */
 .carte-visuel { position: relative; width: 100%; height: 120px; overflow: hidden; border-radius: 6px; background: var(--surface-2); }
 .badge { font-family: var(--mono); font-size: 12px; padding: 1px 6px; border-radius: 4px; background: var(--surface-2); display: inline-flex; align-items: center; gap: 4px; }
@@ -106,6 +119,9 @@ button, input, select, textarea { font: inherit; color: inherit; }
 /* Vignette du Mois : carré, bord de la couleur de catégorie, visuel ou lettre du format. */
 .vignette { position: relative; display: block; flex: 0 0 auto; width: 22px; height: 22px; box-sizing: border-box; border: 2px solid var(--categorie, var(--texte-2)); border-radius: 4px; overflow: hidden; background: var(--surface-2); }
 .vignette-lettre { display: grid; place-items: center; height: 100%; color: var(--texte); font: 700 11px/1 var(--mono); }
+/* En vignette, la lettre est en fond ; le visuel, posé par-dessus, la couvre quand il charge. */
+.vignette .miniature-media, .vignette .vignette-lettre, .vignette .miniature-media img, .vignette .miniature-media video { position: absolute; inset: 0; }
+.vignette .miniature-media img, .vignette .miniature-media video { width: 100%; height: 100%; object-fit: cover; }
 .vignette-plus { align-self: center; font: 600 11px/1 var(--mono); color: var(--texte-2); }
 /* Sur fond sombre, les bords de catégorie sont éclaircis comme ceux des cartes. */
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .vignette { border-color: color-mix(in srgb, var(--categorie, var(--texte-2)) 65%, #ffffff); } }
@@ -230,9 +246,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
 
 .carte-action { margin: 0; font-size: 12px; font-weight: 600; color: var(--accent); }
 .carte-action.action-retard { color: var(--orange); }
-.carte-action.action-calme { font-weight: 400; color: var(--texte-2); }
 .a-faire { margin: 0 0 12px; padding: 10px 12px; border: 1px solid var(--trait); border-radius: var(--rayon); background: var(--surface); }
-.a-faire h3 { margin: 0 0 6px; font-size: 14px; }
+.a-faire summary { cursor: pointer; margin: 0 0 6px; font-size: 14px; font-weight: 600; }
 .a-faire ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
 .a-faire li { display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; }
 .a-faire li.action-retard strong { color: var(--orange); }

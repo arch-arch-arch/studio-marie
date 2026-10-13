@@ -1,10 +1,9 @@
 import { h } from './h.js';
 import { LIBELLES_FORMAT, LIBELLES_STATUT, aReevaluer } from '../logique/fiche.js';
 import { heureLocale } from '../logique/dates.js';
-import { ACTIONS_SANS_SUITE } from '../logique/parcours.js';
 import { CATEGORIES, categorieAffichee } from '../logique/categories.js';
 
-const LIBELLES_ETAT = { vert: 'conforme à la cible', orange: 'à surveiller', rouge: 'hors cible' };
+export const LIBELLES_ETAT = { vert: 'conforme à la cible', orange: 'à surveiller', rouge: 'hors cible' };
 
 function cadenas() {
   const span = h('span', { 'aria-hidden': 'true' });
@@ -12,8 +11,9 @@ function cadenas() {
   return span;
 }
 
+// Sans score, rien : la note ne s’affiche que pour une fiche évaluée.
 export function badgeScore(f) {
-  if (!f.score) return h('span', { class: 'badge', title: 'Pas encore évaluée' }, '—');
+  if (!f.score) return null;
   const bloquee = f.score.conformite?.etat === 'rouge';
   const perimee = aReevaluer(f);
   const titre = bloquee ? 'Conformité au rouge' : perimee ? 'À réévaluer' : 'Score';
@@ -32,8 +32,8 @@ export function couleurCategorie(f, categories = CATEGORIES, neutre = 'var(--tra
 }
 
 // Le visuel (media) de la fiche, s’il existe, est en haut de la carte.
+// Format et heure sur une ligne ; le statut est un point, son libellé est masqué visuellement et en infobulle.
 export function carte(f, regles, actions, action = null, categories = CATEGORIES, media = null) {
-  const pilier = regles.piliers.find(p => p.cle === f.pilier);
   return h('article', {
     class: `carte statut-${f.statut}`, draggable: true, tabindex: '0', 'data-id': f.id,
     style: { '--categorie': couleurCategorie(f, categories) },
@@ -44,21 +44,28 @@ export function carte(f, regles, actions, action = null, categories = CATEGORIES
   media ? h('div', { class: 'carte-visuel' }, media) : null,
   h('div', { class: 'carte-tete' },
     h('span', { class: 'format' }, LIBELLES_FORMAT[f.format]),
+    ' · ',
     h('span', { class: 'heure' }, heureLocale(f.date_heure, regles.fuseau))),
   h('p', { class: 'carte-accroche' }, f.accroche || 'Sans accroche'),
-  pilier ? h('p', { class: 'carte-pilier' }, pilier.nom) : null,
-  action ? h('p', {
-    class: ['carte-action', action.retard ? 'action-retard' : '', ACTIONS_SANS_SUITE.has(action.cle) ? 'action-calme' : ''].filter(Boolean).join(' '),
-  }, action.libelle) : null,
+  action?.retard ? h('p', { class: 'carte-action action-retard' }, action.libelle) : null,
   h('div', { class: 'carte-pied' },
-    h('span', {}, LIBELLES_STATUT[f.statut]),
+    h('span', { class: `point-statut statut-${f.statut}`, title: LIBELLES_STATUT[f.statut] },
+      h('span', { class: 'visuellement-masque' }, LIBELLES_STATUT[f.statut])),
     badgeScore(f)));
 }
 
+// Contrôle de la semaine : seules les pastilles orange et rouges sont montrées ; les vertes sont dans « Tout voir ».
 export function bandeau(pastilles) {
-  return h('ul', { class: 'bandeau', 'aria-label': 'Contrôle de la semaine' },
-    pastilles.map(p => h('li', { class: `pastille pastille-${p.etat}`, title: LIBELLES_ETAT[p.etat] },
-      h('span', {}, p.libelle),
-      h('span', { class: 'pastille-valeur' }, p.valeur),
-      h('span', { class: 'visuellement-masque' }, ` : ${LIBELLES_ETAT[p.etat]}`))));
+  const alertes = pastilles.filter(p => p.etat !== 'vert');
+  const vertes = pastilles.length - alertes.length;
+  const pastille = p => h('li', { class: `pastille pastille-${p.etat}`, title: LIBELLES_ETAT[p.etat] },
+    h('span', {}, p.libelle),
+    h('span', { class: 'pastille-valeur' }, p.valeur),
+    h('span', { class: 'visuellement-masque' }, ` : ${LIBELLES_ETAT[p.etat]}`));
+  return h('div', { class: 'bandeau-zone' },
+    h('p', { class: 'bandeau-resume' }, `${vertes} sur ${pastilles.length} au vert`),
+    h('ul', { class: 'bandeau', 'aria-label': 'Contrôle de la semaine' }, alertes.map(pastille)),
+    vertes > 0
+      ? h('details', { class: 'bandeau-detail' }, h('summary', {}, 'Tout voir'), h('ul', { class: 'bandeau-complet' }, pastilles.map(pastille)))
+      : null);
 }

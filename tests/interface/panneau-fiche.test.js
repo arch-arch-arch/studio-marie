@@ -536,6 +536,38 @@ describe('score venu d’un dossier', () => {
   });
 });
 
+describe('avis : détail replié (B)', () => {
+  const score = {
+    total: 64, conformite: { etat: 'vert', causes: [] }, alertes: ['Lien détecté.'],
+    criteres: [{ nom: 'Accroche', points: 8, max: 10, phrase: 'Claire.' }],
+    examen: { visuel: 'non_joint', raison_visuel: 'video', version_profil: 2, sections_profil: [], contenus_semaine: 3, alertes_calculees: 1, blocages_calcules: 0 },
+  };
+  const avis = () => {
+    const f = fiche({ caption: 'Une caption.', recommandations: [{ texte: 'Raccourcis.', pourquoi: '18 mots.' }] });
+    return panneauFiche({ ...f, score: { ...score, empreinte: empreinte(f) } }, fictif, actionsFactices(), { assets: true });
+  };
+
+  it('le détail (critères, alertes, examen) est replié par défaut sous « Détail de l’avis »', () => {
+    const p = avis();
+    const d = p.querySelector('details.detail-avis');
+    expect(d).not.toBeNull();
+    expect(d.open).toBe(false);
+    expect(d.querySelector('summary').textContent).toBe('Détail de l’avis');
+    expect(d.querySelector('.criteres')).not.toBeNull();
+    expect(d.querySelector('.alertes')).not.toBeNull();
+    expect(d.querySelector('details.examen')).not.toBeNull();
+  });
+
+  it('le titre, l’avis d’expert et les recommandations restent visibles hors du détail', () => {
+    const p = avis();
+    const d = p.querySelector('details.detail-avis');
+    expect(p.querySelector('.score > h3').textContent).toBe('Avis de Claude : 64/100');
+    expect(p.querySelector('.score').textContent).toContain('Avis d’expert, pas une prédiction de performance.');
+    expect(d.querySelector('.recommandations')).toBeNull();
+    expect(p.querySelector('.recommandations')).not.toBeNull();
+  });
+});
+
 describe('catégorie de la fiche', () => {
   const NOMS = ['Non rangée', 'Attraction', 'Autorité', 'Connexion', 'Désir', 'Preuve', 'Conversion'];
 

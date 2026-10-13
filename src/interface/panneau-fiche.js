@@ -318,10 +318,12 @@ export function panneauFiche(fiche, profil, actions, capacites, releves = []) {
       const causes = s.conformite?.causes ?? [];
       enfants.push(h('p', { class: `conformite conformite-${etat}` },
         `Conformité : ${LIBELLES_CONFORMITE[etat] ?? 'non évaluée'}.`, causes.length ? ` ${causes.join(' ; ')}` : ''));
-      enfants.push(h('ul', { class: 'criteres' }, (s.criteres ?? []).map(c => h('li', {}, `${c.nom} : ${c.points}/${c.max}. ${c.phrase ?? ''}`))));
-      if (s.alertes?.length) enfants.push(h('h4', {}, 'Alertes'), h('ul', { class: 'alertes' }, s.alertes.map(a => h('li', {}, a))));
-      enfants.push(h('details', { class: 'examen' }, h('summary', {}, s.examen?.source === 'dossier' ? 'Ce que l’assistant a examiné' : 'Ce que Claude a examiné'),
+      // Le détail (critères, alertes, examen) est replié : l’avis, ses recommandations et ses propositions restent en vue.
+      const detail = [h('ul', { class: 'criteres' }, (s.criteres ?? []).map(c => h('li', {}, `${c.nom} : ${c.points}/${c.max}. ${c.phrase ?? ''}`)))];
+      if (s.alertes?.length) detail.push(h('h4', {}, 'Alertes'), h('ul', { class: 'alertes' }, s.alertes.map(a => h('li', {}, a))));
+      detail.push(h('details', { class: 'examen' }, h('summary', {}, s.examen?.source === 'dossier' ? 'Ce que l’assistant a examiné' : 'Ce que Claude a examiné'),
         h('ul', {}, lignesExamen(s.examen).map(l => h('li', {}, l)))));
+      enfants.push(h('details', { class: 'detail-avis' }, h('summary', {}, 'Détail de l’avis'), detail));
     }
     if (brouillon.recommandations?.length) {
       enfants.push(h('h4', {}, 'Recommandations'), h('ol', { class: 'recommandations' }, brouillon.recommandations.map(r => (typeof r === 'string'

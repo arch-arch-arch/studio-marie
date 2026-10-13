@@ -5,6 +5,11 @@ import { nouvelleFiche, empreinte } from '../../src/logique/fiche.js';
 import { vueSemaine } from '../../src/interface/vue-semaine.js';
 import { creerCacheVisuels } from '../../src/interface/vue-apercu.js';
 import { creerRendu } from '../../src/interface/rendu.js';
+import { creerCacheVisuels as creerCacheDeVisuels } from '../../src/interface/visuels.js';
+import { bandeau } from '../../src/interface/carte.js';
+import { libelleJour } from '../../src/logique/dates.js';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 const ANCRE = '2026-09-30T10:00:00.000Z';
 const actionsFactices = () => ({ ouvrirFiche: vi.fn(), creerFiche: vi.fn(), deplacerFiche: vi.fn() });
@@ -13,7 +18,8 @@ const reel = (id, date_heure, extra = {}) => ({ ...nouvelleFiche({ id, format: '
 describe('vueSemaine', () => {
   it('affiche le bandeau et 7 colonnes', () => {
     const el = vueSemaine({ profil: fictif, fiches: [], ancre: ANCRE }, actionsFactices());
-    expect(el.querySelectorAll('.bandeau .pastille')).toHaveLength(15);
+    // Le bandeau ne porte que le contrôle de la semaine (8 pastilles) ; les catégories sont dans la légende.
+    expect(el.querySelectorAll('.bandeau-complet .pastille')).toHaveLength(8);
     expect([...el.querySelectorAll('.jour')].map(j => j.dataset.jour)).toEqual(['2026-09-28', '2026-09-29', '2026-09-30', '2026-10-01', '2026-10-02', '2026-10-03', '2026-10-04']);
   });
 
@@ -77,19 +83,42 @@ describe('vueSemaine', () => {
     expect(vides[0].closest('[data-jour]').dataset.jour).toBe('2026-10-01');
   });
 
-  it('signale l’absence de bulletin et mène à l’onglet Bulletin', () => {
+  // Adapté : la mention « Pas de bulletin » et son bouton sont retirés de la Semaine (A3).
+  it('n’affiche plus « Pas de bulletin » ni le bouton « Voir l’onglet Bulletin », même sans bulletin', () => {
     const actions = { ...actionsFactices(), changerVue: vi.fn() };
     const el = vueSemaine({ profil: fictif, fiches: [], ancre: ANCRE, bulletin: null }, actions);
-    expect(el.querySelector('.sans-bulletin').textContent).toContain('Pas de bulletin pour cette semaine.');
-    [...el.querySelectorAll('button')].find(b => b.textContent === 'Voir l’onglet Bulletin').click();
-    expect(actions.changerVue).toHaveBeenCalledWith('bulletin');
-    expect(vueSemaine({ profil: fictif, fiches: [], ancre: ANCRE, bulletin: undefined }, actionsFactices()).querySelector('.sans-bulletin')).toBeNull();
+    expect(el.textContent).not.toContain('Pas de bulletin');
+    expect(el.querySelector('.sans-bulletin')).toBeNull();
+    expect([...el.querySelectorAll('button')].some(b => b.textContent === 'Voir l’onglet Bulletin')).toBe(false);
+  });
+});
+
+describe('contrôle de la semaine (A1)', () => {
+  const p = (cle, etat) => ({ cle, libelle: cle, valeur: '0/1', etat });
+  const pastilles = [p('a', 'vert'), p('b', 'orange'), p('c', 'rouge'), p('d', 'vert')];
+  const visibles = el => [...el.querySelectorAll('.bandeau > .pastille')].map(li => li.children[0].textContent);
+
+  it('ne montre que les pastilles orange et rouges, avec « N sur M au vert » et « Tout voir »', () => {
+    const el = bandeau(pastilles);
+    expect(el.querySelector('.bandeau-resume').textContent).toBe('2 sur 4 au vert');
+    expect(visibles(el)).toEqual(['b', 'c']);
+    expect(el.querySelector('.bandeau').getAttribute('aria-label')).toBe('Contrôle de la semaine');
+    const detail = el.querySelector('details.bandeau-detail');
+    expect(detail.querySelector('summary').textContent).toBe('Tout voir');
+    expect(detail.querySelectorAll('.bandeau-complet .pastille')).toHaveLength(4);
   });
 
-  it('n’affiche pas le bandeau sans bulletin pour une semaine déjà passée', () => {
-    const semainePassee = '2026-09-02T10:00:00.000Z';
-    const el = vueSemaine({ profil: fictif, fiches: [], ancre: semainePassee, maintenant: ANCRE, bulletin: null }, actionsFactices());
-    expect(el.querySelector('.sans-bulletin')).toBeNull();
+  it('toutes vertes : « M sur M au vert » et le détail complet', () => {
+    const el = bandeau([p('a', 'vert'), p('b', 'vert')]);
+    expect(el.querySelector('.bandeau-resume').textContent).toBe('2 sur 2 au vert');
+    expect(visibles(el)).toEqual([]);
+    expect(el.querySelectorAll('.bandeau-complet .pastille')).toHaveLength(2);
+  });
+
+  it('sans pastille verte : pas de détail', () => {
+    const el = bandeau([p('b', 'orange'), p('c', 'rouge')]);
+    expect(el.querySelector('.bandeau-resume').textContent).toBe('0 sur 2 au vert');
+    expect(el.querySelector('details.bandeau-detail')).toBeNull();
   });
 });
 
@@ -111,24 +140,40 @@ describe('catégories dans la semaine', () => {
     expect(el.querySelector('.carte[data-id="a"]').style.getPropertyValue('--categorie')).toBe('#123456');
   });
 
-  it('le nom du pilier reste écrit sur la carte', () => {
-    const el = vueSemaine({ profil: fictif, fiches: [jour('a', '10', { categorie: 'desir' })], ancre: ANCRE }, actionsFactices());
-    expect(el.querySelector('.carte[data-id="a"]').textContent).toContain('Nuit');
+  // Adapté : les pastilles de catégories ne sont plus dans le bandeau ; la légende porte leur valeur courte (A2).
+  it('la légende porte une valeur courte par catégorie : « n/cible », « n/min-max », deux séparées par « · »', () => {
+    const el = vueSemaine({ profil: fictif, fiches: [jour('a', '10', { categorie: 'attraction' })], ancre: ANCRE }, actionsFactices());
+    const legende = el.querySelector('.legende-categories');
+    const valeur = cle => legende.querySelector(`[data-categorie="${cle}"] .legende-valeur`)?.textContent;
+    expect(valeur('attraction')).toBe('1/3');
+    expect(valeur('autorite')).toBe('0/2');
+    expect(valeur('connexion')).toBe('0/3-5');
+    expect(valeur('conversion')).toBe('0/1 · 0/2-3');
+    expect(el.querySelector('.bandeau').textContent).not.toContain('contenus du fil');
   });
 
-  it('ajoute une pastille par cible après les pastilles existantes, nom seul en libellé', () => {
+  it('un état orange ou rouge se voit par une classe et un texte masqué ; le title donne la valeur longue', () => {
     const el = vueSemaine({ profil: fictif, fiches: [jour('a', '10', { categorie: 'attraction' })], ancre: ANCRE }, actionsFactices());
-    const pastilles = [...el.querySelectorAll('.bandeau .pastille')].map(p => [p.children[0].textContent, p.children[1].textContent]);
-    expect(pastilles).toHaveLength(15);
-    expect(pastilles.slice(8)).toEqual([
-      ['Attraction', '1 sur 3 contenus du fil'],
-      ['Autorité', '0 sur 2 contenus du fil'],
-      ['Connexion', '0 story, objectif 3 à 5'],
-      ['Désir', '0 sur 1 contenu du fil'],
-      ['Preuve', '0 sur 1 contenu du fil'],
-      ['Conversion', '0 sur 1 contenu du fil'],
-      ['Conversion', '0 story, objectif 2 à 3'],
-    ]);
+    const attraction = el.querySelector('[data-categorie="attraction"]');
+    expect(attraction.classList.contains('etat-rouge')).toBe(true);
+    expect(attraction.title).toBe('1 sur 3 contenus du fil');
+    expect(attraction.querySelector('.visuellement-masque').textContent).toBe('1 sur 3 contenus du fil : hors cible');
+    const preuve = el.querySelector('[data-categorie="preuve"]');
+    expect(preuve.classList.contains('etat-orange')).toBe(true);
+    expect(preuve.querySelector('.visuellement-masque').textContent).toBe('0 sur 1 contenu du fil : à surveiller');
+  });
+
+  it('sans cible, la catégorie n’a que son nom', () => {
+    const perso = structuredClone(fictif);
+    perso.categories_de_contenu.categories = [];
+    const el = vueSemaine({ profil: perso, fiches: [], ancre: ANCRE }, actionsFactices());
+    expect(el.querySelector('[data-categorie="desir"]').textContent).toBe('Désir');
+    expect(el.querySelector('[data-categorie="desir"] .legende-valeur')).toBeNull();
+  });
+
+  it('la légende compte les fiches non rangées par « Non rangées N »', () => {
+    const el = vueSemaine({ profil: fictif, fiches: [jour('a', '10')], ancre: ANCRE }, actionsFactices());
+    expect(el.querySelector('[data-categorie="non_rangees"] .legende-valeur').textContent).toBe('1');
   });
 
   it('légende « Catégories » sous le contrôle, avec les six noms et les couleurs du profil', () => {
@@ -138,14 +183,14 @@ describe('catégories dans la semaine', () => {
     for (const nom of NOMS) expect(legende.textContent).toContain(nom);
     expect(legende.querySelector('[data-categorie="attraction"]').style.getPropertyValue('--categorie')).toBe('#d9622b');
     expect(legende.querySelector('[data-categorie="desir"]').style.getPropertyValue('--categorie')).toBe('#b3125a');
-    expect(el.querySelector('.bandeau').nextElementSibling).toBe(legende);
+    expect(el.querySelector('.bandeau-zone').nextElementSibling).toBe(legende);
   });
 
-  it('profil sans section : ni pastille ni légende quand aucune fiche de la semaine n’est rangée', () => {
+  it('profil sans section : ni légende quand aucune fiche de la semaine n’est rangée', () => {
     const sans = structuredClone(fictif);
     delete sans.categories_de_contenu;
     const el = vueSemaine({ profil: sans, fiches: [jour('a', '10')], ancre: ANCRE }, actionsFactices());
-    expect(el.querySelectorAll('.bandeau .pastille')).toHaveLength(8);
+    expect(el.querySelectorAll('.bandeau-complet .pastille')).toHaveLength(8);
     expect(el.querySelector('.legende-categories')).toBeNull();
   });
 
@@ -156,7 +201,102 @@ describe('catégories dans la semaine', () => {
     const legende = el.querySelector('.legende-categories');
     expect(legende).not.toBeNull();
     expect(legende.querySelector('[data-categorie="desir"]')).not.toBeNull();
-    expect(el.querySelectorAll('.bandeau .pastille')).toHaveLength(8);
+    expect(el.querySelectorAll('.bandeau-complet .pastille')).toHaveLength(8);
+  });
+
+  it('une fiche masquée compte toujours dans la légende', () => {
+    const apercu = { periode: 'semaine', filtres: { story: true, reel: false, post: true } };
+    const el = vueSemaine({ profil: fictif, fiches: [jour('a', '10', { categorie: 'attraction' })], ancre: ANCRE, apercu }, actionsFactices());
+    expect(el.querySelector('.carte[data-id="a"]')).toBeNull();
+    expect(el.querySelector('[data-categorie="attraction"] .legende-valeur').textContent).toBe('1/3');
+  });
+});
+
+describe('cartes épurées (A5)', () => {
+  it('la carte n’écrit plus le nom du pilier, et sa ligne tient « Format · heure »', () => {
+    const el = vueSemaine({ profil: fictif, fiches: [reel('a', '2026-10-01T16:00:00.000Z', { categorie: 'desir' })], ancre: ANCRE }, actionsFactices());
+    const c = el.querySelector('.carte[data-id="a"]');
+    expect(c.querySelector('.carte-pilier')).toBeNull();
+    expect(c.textContent).not.toContain('Nuit');
+    expect(c.querySelector('.carte-tete').textContent).toBe('Reel · 18:00');
+  });
+
+  it('le statut est un point, avec son libellé masqué visuellement et en infobulle', () => {
+    const el = vueSemaine({ profil: fictif, fiches: [reel('a', '2026-10-01T16:00:00.000Z')], ancre: ANCRE }, actionsFactices());
+    const point = el.querySelector('.carte[data-id="a"] .point-statut');
+    expect(point.classList.contains('statut-idee')).toBe(true);
+    expect(point.title).toBe('Idée');
+    expect(point.querySelector('.visuellement-masque').textContent).toBe('Idée');
+    expect(el.querySelector('.carte[data-id="a"] .carte-pied').textContent).toBe('Idée');
+  });
+
+  it('sans score, la note n’apparaît pas : ni badge ni « — »', () => {
+    const el = vueSemaine({ profil: fictif, fiches: [reel('a', '2026-10-01T16:00:00.000Z')], ancre: ANCRE }, actionsFactices());
+    expect(el.querySelector('.carte[data-id="a"] .badge')).toBeNull();
+    expect(el.querySelector('.carte[data-id="a"]').textContent).not.toContain('—');
+  });
+
+  it('la ligne d’action n’apparaît que pour une action en retard', () => {
+    const el = vueSemaine({ profil: fictif, fiches: [reel('a', '2026-10-02T10:00:00.000Z')], ancre: ANCRE, maintenant: '2026-09-30T08:00:00.000Z', stats: [] }, actionsFactices());
+    expect(el.querySelector('.carte[data-id="a"] .carte-action')).toBeNull();
+  });
+
+  it('l’accroche tient sur deux lignes au plus (CSS)', () => {
+    const css = readFileSync(resolve(process.cwd(), 'src/interface/styles.css'), 'utf8');
+    expect(css).toMatch(/\.carte-accroche\s*\{[^}]*-webkit-line-clamp:\s*2/);
+  });
+});
+
+describe('à faire et créneaux (A4, A6, A7)', () => {
+  const M = '2026-09-30T08:00:00.000Z';
+  const sansFormat = { periode: 'semaine', filtres: { story: false, reel: false, post: false } };
+
+  it('« À faire (N) » est replié, et ouvert quand une ligne est en retard', () => {
+    const el = vueSemaine({ profil: fictif, fiches: [reel('a', '2026-09-29T10:00:00.000Z')], ancre: ANCRE, maintenant: M, stats: [] }, actionsFactices());
+    const d = el.querySelector('details.a-faire');
+    expect(d.querySelector('summary').textContent).toBe('À faire (1)');
+    expect(d.open).toBe(true);
+    const plusTard = vueSemaine({ profil: fictif, fiches: [reel('b', '2026-10-02T10:00:00.000Z')], ancre: ANCRE, maintenant: M, stats: [] }, actionsFactices());
+    expect(plusTard.querySelector('details.a-faire').open).toBe(false);
+  });
+
+  it('sans ligne, pas de section « À faire » du tout', () => {
+    const f = reel('p', '2026-09-29T10:00:00.000Z', { statut: 'publie', publie_le: '2026-09-29T10:00:00.000Z' });
+    const el = vueSemaine({ profil: fictif, fiches: [f], ancre: ANCRE, maintenant: M, stats: [] }, actionsFactices());
+    expect(el.querySelector('.a-faire')).toBeNull();
+    expect(el.textContent).not.toContain('Rien à faire');
+  });
+
+  it('un jour a un seul bouton : le premier créneau visible, sinon « + Ajouter » avec un nom accessible', () => {
+    const el = vueSemaine({ profil: fictif, fiches: [], ancre: ANCRE, apercu: { periode: 'semaine', filtres: { story: true, reel: false, post: false } } }, actionsFactices());
+    for (const colonne of el.querySelectorAll('.jour')) {
+      expect(colonne.querySelectorAll('button.creneau-vide, button.ajouter')).toHaveLength(1);
+    }
+    expect(el.querySelectorAll('.creneau-vide')).toHaveLength(0);
+    const generique = el.querySelector('[data-jour="2026-09-28"] button.ajouter');
+    expect(generique.getAttribute('aria-label')).toBe(`Ajouter un contenu le ${libelleJour('2026-09-28T10:00:00.000Z', fictif.regles_studio.fuseau)}`);
+  });
+
+  it('un créneau visible du jour remplace « + Ajouter » et crée sa fiche', () => {
+    const actions = actionsFactices();
+    const el = vueSemaine({ profil: fictif, fiches: [], ancre: ANCRE }, actions);
+    const bouton = el.querySelector('[data-jour="2026-09-28"] button.creneau-vide');
+    expect(el.querySelector('[data-jour="2026-09-28"] button.ajouter')).toBeNull();
+    expect(bouton.textContent).toBe('+ Reel · 12:00');
+    bouton.click();
+    expect(actions.creerFiche).toHaveBeenCalledWith({ format: 'reel', date_heure: '2026-09-28T10:00:00.000Z' });
+  });
+
+  it('un format masqué n’est jamais proposé en créneau', () => {
+    const el = vueSemaine({ profil: fictif, fiches: [], ancre: ANCRE, apercu: { periode: 'semaine', filtres: { story: true, reel: false, post: false } } }, actionsFactices());
+    expect([...el.querySelectorAll('.creneau-vide')].some(b => b.textContent.includes('Reel'))).toBe(false);
+  });
+
+  it('sans format coché : seule la barre parle, pas de « À faire » ni « Rien de prévu »', () => {
+    const el = vueSemaine({ profil: fictif, fiches: [reel('a', '2026-09-29T10:00:00.000Z')], ancre: ANCRE, maintenant: M, stats: [], apercu: sansFormat }, actionsFactices());
+    expect(el.querySelector('.a-faire')).toBeNull();
+    expect(el.textContent.match(/Coche au moins un format\./g)).toHaveLength(1);
+    expect(el.textContent).not.toContain('Rien de prévu');
   });
 });
 
@@ -167,7 +307,8 @@ describe('parcours dans la semaine', () => {
     const a = el.querySelector('.carte[data-id="a"] .carte-action');
     expect(a.textContent).toBe('Valider la fiche');
     expect(a.classList.contains('action-retard')).toBe(true);
-    expect(el.querySelector('.carte[data-id="b"] .carte-action').classList.contains('action-retard')).toBe(false);
+    // Adapté : la ligne d’action n’apparaît que pour une action en retard (A5).
+    expect(el.querySelector('.carte[data-id="b"] .carte-action')).toBeNull();
   });
 
   it('liste « À faire cette semaine », retards d’abord, et ouvre la fiche', () => {
@@ -182,11 +323,12 @@ describe('parcours dans la semaine', () => {
     expect(actions.ouvrirFiche).toHaveBeenCalledWith('a');
   });
 
-  it('n’inclut pas les fiches sans action et affiche un message si rien n’est à faire', () => {
+  // Adapté : sans ligne « À faire », la section disparaît (A4) et la carte n’a pas de ligne d’action hors retard (A5).
+  it('n’inclut pas les fiches sans action, et n’affiche pas de ligne d’action hors retard', () => {
     const f = reel('p', '2026-09-29T10:00:00.000Z', { statut: 'publie', publie_le: '2026-09-29T10:00:00.000Z' });
     const el = vueSemaine({ profil: fictif, fiches: [f], ancre: ANCRE, maintenant: M, stats: [] }, actionsFactices());
-    expect(el.querySelector('.a-faire').textContent).toContain('Rien à faire cette semaine.');
-    expect(el.querySelector('.carte[data-id="p"] .carte-action').classList.contains('action-calme')).toBe(true);
+    expect(el.querySelector('.a-faire')).toBeNull();
+    expect(el.querySelector('.carte[data-id="p"] .carte-action')).toBeNull();
   });
 
   it('les relevés de l’état comptent pour les fiches publiées', () => {
@@ -194,7 +336,8 @@ describe('parcours dans la semaine', () => {
     const sans = vueSemaine({ profil: fictif, fiches: [f], ancre: ANCRE, maintenant: '2026-10-01T08:00:00.000Z', stats: [] }, actionsFactices());
     expect(sans.querySelector('.carte-action').textContent).toBe('Saisir les stats à 48 h');
     const avec = vueSemaine({ profil: fictif, fiches: [f], ancre: ANCRE, maintenant: '2026-10-01T08:00:00.000Z', stats: [{ fiche: 'p', releve: '48h' }] }, actionsFactices());
-    expect(avec.querySelector('.carte-action').textContent).toContain('Prochain relevé le');
+    expect(avec.querySelector('.carte-action')).toBeNull();
+    expect(avec.textContent).not.toContain('null');
     expect(avec.textContent).not.toContain('null');
   });
 });
@@ -274,7 +417,8 @@ describe('vueSemaine : formats et miniatures', () => {
   const TOUS = { story: true, reel: true, post: true };
   const sansStory = { periode: 'semaine', filtres: { story: false, reel: true, post: true } };
   const DEBUT_SUIVANT = '2026-10-07T10:00:00.000Z';
-  const pastille = (el, libelle) => [...el.querySelectorAll('.bandeau .pastille')].find(p => p.children[0].textContent === libelle)?.children[1].textContent;
+  // Adapté : le détail « Tout voir » porte toutes les pastilles, les visibles seules ne suffisent pas.
+  const pastille = (el, libelle) => [...el.querySelectorAll('.bandeau-complet .pastille')].find(p => p.children[0].textContent === libelle)?.children[1].textContent;
   const avecUrls = (extra = {}) => ({ ...actionsFactices(), urlVisuel: vi.fn(async id => `https://stockage.test/${id}`), ...extra });
   const etat = (fiches, apercu = { periode: 'semaine', filtres: TOUS }, extra = {}) => ({ profil: fictif, fiches, ancre: ANCRE, apercu, ...extra });
   const story = (id, date_heure, extra = {}) => ({ ...nouvelleFiche({ id, format: 'story', date_heure, pilier: 'nuit', maintenant: ANCRE }), ...extra });
@@ -287,7 +431,7 @@ describe('vueSemaine : formats et miniatures', () => {
     expect(el.querySelector('.a-faire').textContent).not.toContain('Story');
     const tout = vueSemaine(etat(fiches), avecUrls());
     expect(pastille(el, 'Jours avec stories')).toBe(pastille(tout, 'Jours avec stories'));
-    expect(el.querySelector('.bandeau').textContent).toContain('Jours avec stories');
+    expect(el.querySelector('.bandeau-complet').textContent).toContain('Jours avec stories');
   });
 
   it('la mention du filtre s’affiche sous la barre quand un format est masqué', () => {
@@ -347,5 +491,15 @@ describe('vueSemaine : formats et miniatures', () => {
     rendre({ ...e, apercu: sansStory });
     expect(racine.querySelector('.carte[data-id="s"]')).toBeNull();
     expect(racine.querySelector('.carte[data-id="r"]')).not.toBeNull();
+  });
+
+  it('le cache créé par visuels.js (C4) garde le même nœud image d’une reconstruction', () => {
+    const cache = creerCacheDeVisuels();
+    const actions = avecUrls();
+    const fiche = reel('a', '2026-09-29T10:00:00.000Z', { visuel: 'a.png', visuel_type: 'image' });
+    const premiere = vueSemaine(etat([fiche], undefined, { cacheVisuels: cache }), actions);
+    const img = premiere.querySelector('img');
+    const seconde = vueSemaine(etat([{ ...fiche, accroche: 'autre' }], undefined, { cacheVisuels: cache }), actions);
+    expect(seconde.querySelector('img')).toBe(img);
   });
 });
