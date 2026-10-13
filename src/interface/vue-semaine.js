@@ -12,7 +12,7 @@ import { APERCU_PAR_DEFAUT } from './vue-apercu.js';
 import { creerCacheVisuels, oublierEchecs, visuelMiniature } from './visuels.js';
 import { formatVisible, barreFormats } from './filtre-formats.js';
 
-export function vueSemaine({ profil, fiches, ancre, maintenant, stats, analyse, analyses, avisOuverts, apercu, cacheVisuels }, actions, capacites = {}) {
+export function vueSemaine({ profil, fiches, ancre, maintenant, stats, analyse, analyses, avisOuverts, apercu, cacheVisuels, volets }, actions, capacites = {}) {
   const r = profil.regles_studio;
   const debut = debutSemaine(ancre, r.fuseau);
   const filtres = (apercu ?? APERCU_PAR_DEFAUT).filtres;
@@ -29,9 +29,9 @@ export function vueSemaine({ profil, fiches, ancre, maintenant, stats, analyse, 
     capacites.dossier ? rangeeAnalyse('Analyser la semaine', analyse, actions) : null,
     barreFormats(filtres, actions),
     sectionAvis(analyses, periodeAffichee('semaine', ancre, r.fuseau), fiches, r.fuseau, avisOuverts),
-    bandeau(controlerSemaine(fiches, r, debut)),
+    bandeau(controlerSemaine(fiches, r, debut), volets),
     legendeCategories(profil, categories, semaine, controlerCategories(fiches, profil, debut)),
-    aFaire(visibles, actionsParId, r.fuseau, actions),
+    aFaire(visibles, actionsParId, r.fuseau, actions, volets),
     h('div', { class: 'colonnes' }, joursDeLaSemaine(debut, r.fuseau).map(jour => colonne(jour, visibles, libres, r, actions, actionsParId, categories, cache, filtres))));
 }
 
@@ -56,9 +56,12 @@ function ligneCategorie(cle, nom, couleur, pastilles) {
   h('span', { class: 'legende-pastille', 'aria-hidden': 'true' }),
   h('span', { class: 'legende-nom' }, nom),
   courte ? h('span', { class: 'legende-valeur', 'aria-hidden': 'true' }, courte) : null,
-  longues ? h('span', { class: 'visuellement-masque' }, etat ? `${longues} : ${LIBELLES_ETAT[etat]}` : longues) : null);
+  longues ? h('span', { class: 'visuellement-masque' }, etat ? etatsDetailles(pastilles) : longues) : null);
 }
 const ORDRE = { vert: 0, orange: 1, rouge: 2 };
+
+// Texte masqué quand l’état n’est pas vert : chaque valeur orange ou rouge porte son état, les vertes restent nues.
+const etatsDetailles = pastilles => pastilles.map(p => (p.etat === 'vert' ? p.valeur : `${p.valeur} : ${LIBELLES_ETAT[p.etat]}`)).join(' ; ');
 
 // Légende sous le contrôle : quand le profil a la section des catégories, ou quand une fiche de la semaine est rangée.
 function legendeCategories(profil, categories, semaine, pastilles) {
@@ -103,15 +106,17 @@ function colonne(jour, semaine, libres, r, actions, actionsParId, categories, ca
 }
 
 // « À faire (N) » replié ; ouvert d’office quand une ligne est en retard. Sans ligne, pas de section.
-function aFaire(semaine, actionsParId, fz, actions) {
+function aFaire(semaine, actionsParId, fz, actions, volets) {
   const lignes = semaine
     .map(f => ({ f, a: actionsParId.get(f.id) }))
     .filter(({ a }) => !ACTIONS_SANS_SUITE.has(a.cle))
     .sort((x, y) => (Number(y.a.retard) - Number(x.a.retard)) || x.f.date_heure.localeCompare(y.f.date_heure));
   if (!lignes.length) return null;
   const retard = lignes.some(({ a }) => a.retard);
-  return h('details', { class: 'a-faire', open: retard },
-    h('summary', {}, `À faire (${lignes.length})`),
+  // Un choix déjà fait (volets) l’emporte sur l’ouverture d’office pour le retard.
+  const ouvert = volets?.has('a-faire') ? volets.get('a-faire') : retard;
+  return h('details', { class: 'a-faire', open: ouvert, ontoggle: e => volets?.set('a-faire', e.currentTarget.open) },
+    h('summary', {}, h('h3', { class: 'a-faire-titre' }, `À faire (${lignes.length})`)),
     h('ul', {}, lignes.map(({ f, a }) => h('li', { class: a.retard ? 'action-retard' : null },
       h('span', {}, `${LIBELLES_FORMAT[f.format]} · ${libelleJour(f.date_heure, fz)} ${heureLocale(f.date_heure, fz)} · ${f.accroche || 'Sans accroche'}`),
       h('strong', {}, a.libelle),

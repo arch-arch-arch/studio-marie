@@ -55,17 +55,21 @@ export function carte(f, regles, actions, action = null, categories = CATEGORIES
 }
 
 // Contrôle de la semaine : seules les pastilles orange et rouges sont montrées ; les vertes sont dans « Tout voir ».
-export function bandeau(pastilles) {
+// « volets » (optionnel) garde l’état ouvert de « Tout voir » d’une reconstruction à l’autre.
+export function bandeau(pastilles, volets = null) {
   const alertes = pastilles.filter(p => p.etat !== 'vert');
   const vertes = pastilles.length - alertes.length;
   const pastille = p => h('li', { class: `pastille pastille-${p.etat}`, title: LIBELLES_ETAT[p.etat] },
     h('span', {}, p.libelle),
     h('span', { class: 'pastille-valeur' }, p.valeur),
     h('span', { class: 'visuellement-masque' }, ` : ${LIBELLES_ETAT[p.etat]}`));
+  const ouvert = volets?.has('bandeau-detail') ? volets.get('bandeau-detail') : false;
   return h('div', { class: 'bandeau-zone' },
     h('p', { class: 'bandeau-resume' }, `${vertes} sur ${pastilles.length} au vert`),
-    h('ul', { class: 'bandeau', 'aria-label': 'Contrôle de la semaine' }, alertes.map(pastille)),
+    // Sans pastille orange ou rouge, la liste visible n’existe pas : rien à lire dans le contrôle, le détail suffit.
+    alertes.length ? h('ul', { class: 'bandeau', 'aria-label': 'Contrôle de la semaine' }, alertes.map(pastille)) : null,
     vertes > 0
-      ? h('details', { class: 'bandeau-detail' }, h('summary', {}, 'Tout voir'), h('ul', { class: 'bandeau-complet' }, pastilles.map(pastille)))
+      ? h('details', { class: 'bandeau-detail', open: ouvert, ontoggle: e => volets?.set('bandeau-detail', e.currentTarget.open) },
+        h('summary', {}, 'Tout voir'), h('ul', { class: 'bandeau-complet' }, pastilles.map(pastille)))
       : null);
 }

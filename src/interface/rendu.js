@@ -69,6 +69,8 @@ export function creerRendu(racine, actions, capacites, horloge) {
   let memo = {};
   // État ouvert de « Avis sur la période », par période : la vue est reconstruite à chaque frappe dans une fiche.
   const avisOuverts = new Map();
+  // État ouvert des volets de la Semaine (« Tout voir », « À faire ») : gardé d’une reconstruction à l’autre, comme l’avis.
+  const volets = new Map();
   // Liens des visuels de l'aperçu : gardés d'une reconstruction à l'autre, pour ne pas recharger toutes les images à chaque frappe.
   const cacheVisuels = creerCacheVisuels();
   let elementVue = null;
@@ -83,7 +85,7 @@ export function creerRendu(racine, actions, capacites, horloge) {
       return;
     }
     tete.replaceChildren(...barre(e, actions));
-    const e2 = { ...e, maintenant: horloge(), avisOuverts, cacheVisuels };
+    const e2 = { ...e, maintenant: horloge(), avisOuverts, cacheVisuels, volets };
     const estVueProfil = !e.profil || e.vue === 'profil';
     const estVueTableau = !estVueProfil && e.vue === 'tableau';
     // vueTableau affiche « Chargement du tableau de bord… » (sans mettreAJour) tant que stats ou
@@ -104,7 +106,8 @@ export function creerRendu(racine, actions, capacites, horloge) {
       cleApercuCourante = cleApercu(e);
       reconstructionRequise = memo.profil !== e.profil || memo.vue !== e.vue || memo.cleApercu !== cleApercuCourante;
     } else {
-      reconstructionRequise = memo.profil !== e.profil || memo.fiches !== e.fiches || memo.vue !== e.vue || memo.ancre !== e.ancre || memo.bulletin !== e.bulletin || memo.configVeille !== e.configVeille || memo.veille !== e.veille
+      // La Semaine ne lit pas le bulletin : seul l’onglet Bulletin (et les autres vues qui le lisent) se reconstruit à son changement.
+      reconstructionRequise = memo.profil !== e.profil || memo.fiches !== e.fiches || memo.vue !== e.vue || memo.ancre !== e.ancre || (e.vue !== 'semaine' && memo.bulletin !== e.bulletin) || memo.configVeille !== e.configVeille || memo.veille !== e.veille
         || (e.vue === 'semaine' && memo.stats !== e.stats)
         // Le filtre de formats est partagé par Semaine, Jour, Mois et Aperçu : cocher un format reconstruit ces vues.
         || ((e.vue === 'semaine' || e.vue === 'jour' || e.vue === 'mois') && memo.apercu !== e.apercu)

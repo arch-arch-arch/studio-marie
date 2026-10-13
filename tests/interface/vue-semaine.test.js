@@ -115,6 +115,12 @@ describe('contrôle de la semaine (A1)', () => {
     expect(el.querySelectorAll('.bandeau-complet .pastille')).toHaveLength(2);
   });
 
+  it('toutes vertes : la liste visible n’est pas rendue du tout', () => {
+    const el = bandeau([p('a', 'vert'), p('b', 'vert')]);
+    expect(el.querySelector('ul[aria-label="Contrôle de la semaine"]')).toBeNull();
+    expect(el.querySelector('.bandeau-resume').textContent).toBe('2 sur 2 au vert');
+  });
+
   it('sans pastille verte : pas de détail', () => {
     const el = bandeau([p('b', 'orange'), p('c', 'rouge')]);
     expect(el.querySelector('.bandeau-resume').textContent).toBe('0 sur 2 au vert');
@@ -161,6 +167,14 @@ describe('catégories dans la semaine', () => {
     const preuve = el.querySelector('[data-categorie="preuve"]');
     expect(preuve.classList.contains('etat-orange')).toBe(true);
     expect(preuve.querySelector('.visuellement-masque').textContent).toBe('0 sur 1 contenu du fil : à surveiller');
+  });
+
+  it('une catégorie à deux pastilles : le texte masqué place l’état après chaque valeur longue en orange ou rouge', () => {
+    const el = vueSemaine({ profil: fictif, fiches: [], ancre: ANCRE }, actionsFactices());
+    const conversion = el.querySelector('[data-categorie="conversion"]');
+    expect(conversion.classList.contains('etat-rouge')).toBe(true);
+    expect(conversion.querySelector('.visuellement-masque').textContent).toBe('0 sur 1 contenu du fil : à surveiller ; 0 story, objectif 2 à 3 : hors cible');
+    expect(conversion.title).toBe('0 sur 1 contenu du fil · 0 story, objectif 2 à 3');
   });
 
   it('sans cible, la catégorie n’a que son nom', () => {
@@ -241,6 +255,18 @@ describe('cartes épurées (A5)', () => {
     expect(el.querySelector('.carte[data-id="a"] .carte-action')).toBeNull();
   });
 
+  it('chaque statut a sa forme et le validé n’est plus orange (CSS)', () => {
+    const css = readFileSync(resolve(process.cwd(), 'src/interface/styles.css'), 'utf8');
+    const regle = s => css.match(new RegExp(`\\.point-statut\\.statut-${s}\\s*\\{([^}]*)\\}`))?.[1] ?? '';
+    expect(css).toMatch(/\.point-statut\s*\{[^}]*width:\s*10px/);
+    expect(regle('idee')).toContain('--texte-2');
+    expect(regle('brouillon')).toContain('--texte-2');
+    expect(regle('valide')).not.toContain('--orange');
+    expect(regle('valide')).toContain('--accent');
+    expect(regle('programme')).toContain('rotate(45deg)');
+    expect(regle('publie')).toContain('--vert');
+  });
+
   it('l’accroche tient sur deux lignes au plus (CSS)', () => {
     const css = readFileSync(resolve(process.cwd(), 'src/interface/styles.css'), 'utf8');
     expect(css).toMatch(/\.carte-accroche\s*\{[^}]*-webkit-line-clamp:\s*2/);
@@ -285,6 +311,23 @@ describe('à faire et créneaux (A4, A6, A7)', () => {
     expect(bouton.textContent).toBe('+ Reel · 12:00');
     bouton.click();
     expect(actions.creerFiche).toHaveBeenCalledWith({ format: 'reel', date_heure: '2026-09-28T10:00:00.000Z' });
+  });
+
+  it('« À faire (N) » est un titre h3 dans le summary, pour la navigation par titres', () => {
+    const el = vueSemaine({ profil: fictif, fiches: [reel('a', '2026-09-29T10:00:00.000Z')], ancre: ANCRE, maintenant: M, stats: [] }, actionsFactices());
+    expect(el.querySelector('details.a-faire summary h3').textContent).toBe('À faire (1)');
+  });
+
+  it('le premier créneau du jour a un format masqué : le bouton propose le créneau visible plus tardif', () => {
+    const profil = structuredClone(fictif);
+    profil.regles_studio.creneaux = [{ jours: [1], debut: '10:00', fin: '11:00' }, { jours: [1], debut: '14:00', fin: '15:00' }];
+    profil.regles_studio.cadence = { ...profil.regles_studio.cadence, reel: 1, carrousel: 1 };
+    const actions = actionsFactices();
+    const el = vueSemaine({ profil, fiches: [], ancre: ANCRE, apercu: { periode: 'semaine', filtres: { story: true, reel: false, post: true } } }, actions);
+    const bouton = el.querySelector('[data-jour="2026-09-28"] button.creneau-vide');
+    expect(bouton.textContent).toBe('+ Carrousel · 14:00');
+    bouton.click();
+    expect(actions.creerFiche).toHaveBeenCalledWith({ format: 'carrousel', date_heure: '2026-09-28T12:00:00.000Z' });
   });
 
   it('un format masqué n’est jamais proposé en créneau', () => {
@@ -337,7 +380,6 @@ describe('parcours dans la semaine', () => {
     expect(sans.querySelector('.carte-action').textContent).toBe('Saisir les stats à 48 h');
     const avec = vueSemaine({ profil: fictif, fiches: [f], ancre: ANCRE, maintenant: '2026-10-01T08:00:00.000Z', stats: [{ fiche: 'p', releve: '48h' }] }, actionsFactices());
     expect(avec.querySelector('.carte-action')).toBeNull();
-    expect(avec.textContent).not.toContain('null');
     expect(avec.textContent).not.toContain('null');
   });
 });
@@ -501,5 +543,62 @@ describe('vueSemaine : formats et miniatures', () => {
     const img = premiere.querySelector('img');
     const seconde = vueSemaine(etat([{ ...fiche, accroche: 'autre' }], undefined, { cacheVisuels: cache }), actions);
     expect(seconde.querySelector('img')).toBe(img);
+  });
+});
+
+describe('volets de la Semaine : état gardé d’une reconstruction', () => {
+  const M = '2026-09-30T08:00:00.000Z';
+  const TOUS = { story: true, reel: true, post: true };
+  const e0 = (fiches, extra = {}) => ({ profil: fictif, fiches, vue: 'semaine', ancre: ANCRE, apercu: { periode: 'semaine', filtres: TOUS }, sauvegarde: 'ok', erreur: null, ficheOuverte: null, ...extra });
+  const montee = () => {
+    const racine = document.createElement('div');
+    const actions = { ...actionsFactices(), changerVue: vi.fn(), naviguer: vi.fn(), allerAujourdhui: vi.fn(), changerFiltresApercu: vi.fn() };
+    return { racine, rendre: creerRendu(racine, actions, {}, () => M) };
+  };
+  // Simule l’utilisatrice qui ouvre ou ferme un volet : le navigateur met open à jour puis émet toggle.
+  const bascule = (d, ouvert) => { d.open = ouvert; d.dispatchEvent(new Event('toggle')); };
+
+  it('« Tout voir » ouvert par l’utilisatrice reste ouvert quand une fiche change', () => {
+    const { racine, rendre } = montee();
+    const fiche = reel('a', '2026-10-01T10:00:00.000Z');
+    rendre(e0([fiche]));
+    expect(racine.querySelector('details.bandeau-detail').open).toBe(false);
+    bascule(racine.querySelector('details.bandeau-detail'), true);
+    rendre(e0([{ ...fiche, accroche: 'Frappée' }]));
+    expect(racine.querySelector('details.bandeau-detail').open).toBe(true);
+  });
+
+  it('« À faire » fermé par l’utilisatrice reste fermé malgré un retard', () => {
+    const { racine, rendre } = montee();
+    const fiche = reel('a', '2026-09-29T10:00:00.000Z');
+    rendre(e0([fiche], { stats: [] }));
+    expect(racine.querySelector('details.a-faire').open).toBe(true);
+    bascule(racine.querySelector('details.a-faire'), false);
+    rendre(e0([{ ...fiche, accroche: 'Frappée' }], { stats: [] }));
+    expect(racine.querySelector('details.a-faire').open).toBe(false);
+  });
+
+  it('« À faire » sans choix enregistré : fermé sans retard', () => {
+    const { racine, rendre } = montee();
+    rendre(e0([reel('b', '2026-10-02T10:00:00.000Z')], { stats: [] }));
+    expect(racine.querySelector('details.a-faire').open).toBe(false);
+  });
+
+  it('sans volets (vueSemaine seule) : « Tout voir » fermé par défaut', () => {
+    const el = vueSemaine({ profil: fictif, fiches: [reel('a', '2026-10-01T10:00:00.000Z')], ancre: ANCRE }, actionsFactices());
+    expect(el.querySelector('details.bandeau-detail').open).toBe(false);
+  });
+
+  it('Semaine ne se reconstruit pas quand seul le bulletin change ; l’onglet Bulletin, lui, se reconstruit', () => {
+    const { racine, rendre } = montee();
+    const e = e0([reel('a', '2026-10-01T10:00:00.000Z')]);
+    rendre({ ...e, bulletin: undefined });
+    const semaine = racine.querySelector('.semaine');
+    rendre({ ...e, bulletin: null });
+    expect(racine.querySelector('.semaine')).toBe(semaine);
+    const bulletin = { ...e, vue: 'bulletin', bulletin: undefined };
+    rendre(bulletin);
+    rendre({ ...bulletin, bulletin: null });
+    expect(racine.querySelector('.sans-bulletin')).not.toBeNull();
   });
 });
