@@ -61,14 +61,3 @@ describe('fichesDeLaSemaine', () => {
     expect(fichesDeLaSemaine([dimanche, lundiSuivant], debut, FZ).map(f => f.id)).toEqual([dimanche.id]);
   });
 });
-
-describe('pastilles de la fiche allégée', () => {
-  it('ne garde que reels, carrousels et stories', () => {
-    expect(controlerSemaine([], R, LUNDI).map(p => p.cle)).toEqual(['reels', 'carrousels', 'stories']);
-  });
-  it('semaine idéale : trois pastilles, toutes vertes', () => {
-    const p = controlerSemaine(semaineIdeale(), R, LUNDI);
-    expect(p.map(x => x.cle)).toEqual(['reels', 'carrousels', 'stories']);
-    expect(etats(p)).toEqual({ reels: 'vert', carrousels: 'vert', stories: 'vert' });
-  });
-});

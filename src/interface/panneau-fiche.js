@@ -240,6 +240,7 @@ export function panneauFiche(fiche, profil, actions, capacites, releves = []) {
       changer({ format: v });
       // Le titre et la section Statistiques dépendent du format : on reconstruit le panneau.
       construire();
+      racine.querySelector('select[name="format"]')?.focus();
     })));
 
   // Le fuseau du profil donne le libellé de l’heure ; « Paris » n’est répété en dessous que si le profil n’est pas à Paris.
